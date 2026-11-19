@@ -1,0 +1,17 @@
+# Your own data when running from source (contains account IDs)
+/data/
+/backups/
+
+# Game data and art: npm run fetch-gamedata downloads it (published in razingo/rumble-tracker-data)
+/gamedata/
+
+# Build output
+dist/
+node_modules/
+
+# Keys never belong in a repository
+*.pem
+*.key
+
+*.tmp
+Thumbs.db
