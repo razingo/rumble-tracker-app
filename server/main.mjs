@@ -1,17 +1,22 @@
 // Local server: scans the game's save, records changes and serves the page (web/) on 127.0.0.1.
 // Usage: npm start, then open http://localhost:8765
 import http from 'node:http';
-import { readFile, writeFile, mkdir, rename, stat } from 'node:fs/promises';
+import { readFile, mkdir, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRumblePrefs } from './game/prefs.mjs';
 import { currencyInfo as gameCurrencyInfo } from './game/currencies.mjs';
-import { parsePvp, inferMatches } from './game/pvp.mjs';
+import { parsePvp, pvpReading, manualResult } from './game/pvp.mjs';
+import { watchGame, gameRunningOnce } from './game/watch.mjs';
 import { parseUnits, parseCurrencies, parseActiveEvents, parseIncomeBonuses, parseOwnedAvatars, parseStore, parseGameBuild, compareBuilds, storeFieldsForLog, diffSnapshots, updateLearned } from './game/model.mjs';
 import { updateDataPack, allowedUrl, newerVersion } from './datapack/datapack.mjs';
+import { latestAppOf, downloadUpdate, cleanUpdates } from './update/appupdate.mjs';
 import { NOTIFY_TYPES, cleanSettings, dueNotifications, inQuietHours } from './notifications/notify.mjs';
-import { showToast, gameRunning } from './notifications/toast.mjs';
+import { showToast } from './notifications/toast.mjs';
 import { ISSUES_REPO, createErrorLog, diagnostics } from './report.mjs';
+import { readJson as readJsonFile, writeJson, flushWrites } from './store.mjs';
+import { createGuard, requestPath } from './guard.mjs';
+import { buildBackup, restoreBackup, replaceContents } from './backup.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // User data: data/ from source, %APPDATA%\RumbleTracker in the exe (RUMBLE_DATA_DIR).
@@ -20,29 +25,24 @@ const STATE = path.join(DATA, 'state');
 const PUBLIC = path.join(ROOT, 'web');
 const STATIC = path.join(ROOT, 'gamedata'); // served as /static/
 const PORT = Number(process.env.PORT || 8765);
-const SCAN_MS = 5000;
+const SCAN_MS = 5000; // while the game runs
+const SCANS_AFTER_EXIT = 6; // the game may still write its save while closing
 const MAX_EVENTS = 500;
 const MAX_PVP_LOG = 2000; // PvP readings kept per account (about a season of play)
-
-async function readJson(p, fallback) {
-  try {
-    // strip a byte-order mark: JSON.parse rejects it
-    return JSON.parse((await readFile(p, 'utf8')).replace(/^\uFEFF/, ''));
-  } catch (e) {
-    if (e.code === 'ENOENT' && fallback !== undefined) return fallback;
-    throw e;
-  }
-}
-async function writeJson(p, value) {
-  const tmp = `${p}.tmp`;
-  await writeFile(tmp, JSON.stringify(value, null, 2) + '\n');
-  await rename(tmp, p);
-}
 
 await mkdir(STATE, { recursive: true });
 
 // Recent errors for "Report a problem": cleaned of personal details, in memory only.
 const errorLog = createErrorLog();
+// Game tables throw on damaged JSON; the user's own files are moved aside and start empty (see store.mjs).
+const readJson = (p, fallback) => readJsonFile(p, fallback);
+const readUserJson = (p, fallback) => readJsonFile(p, fallback, {
+  onCorrupt: (file, moved) => {
+    const msg = `${path.basename(file)} was damaged and could not be read. It was moved to ${path.basename(moved)} and the tracker started without it; restore a backup to get the data back.`;
+    console.log(msg);
+    errorLog.add('data file', msg);
+  },
+});
 const APP_VERSION = await readJson(path.join(ROOT, 'package.json'), {}).then((p) => p.version || null, () => null);
 process.on('unhandledRejection', (e) => { console.log(`Unexpected error: ${e?.message || e}`); errorLog.add('server', e?.stack || String(e)); });
 // Game data: an installed data pack (DATA/gamedata) takes precedence over the bundled gamedata/ files.
@@ -64,10 +64,10 @@ async function loadTables() {
   gameData = await readJson(await staticPath('gamedata.json'), null); // game build of the tables
 }
 // Data packs: from config.json "dataPackUrl" or RUMBLE_DATA_PACK_URL (the exe sets RUMBLE_DEFAULT_DATA_PACK_URL).
-const config = await readJson(path.join(DATA, 'config.json'), {});
+const config = await readUserJson(path.join(DATA, 'config.json'), {});
 const dataPackUrl = process.env.RUMBLE_DATA_PACK_URL || config.dataPackUrl || process.env.RUMBLE_DEFAULT_DATA_PACK_URL || '';
 // pack check state (also read by notifications, which can run before the first check)
-const dataPack = { url: dataPackUrl, lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false, newVersion: null };
+const dataPack = { url: dataPackUrl, lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false, newVersion: null, latestApp: null };
 
 // Game data is not bundled: from source, npm run fetch-gamedata fills gamedata/; otherwise (the exe) the first start
 // installs the signed data pack into DATA/gamedata.
@@ -82,7 +82,22 @@ if (!(await hasGameData())) {
   }
   await firstRunDownload();
 }
-await loadTables();
+try {
+  await loadTables();
+} catch (e) {
+  // a damaged installed pack: set it aside, then use the bundled tables or download the pack again
+  if (!(await stat(path.join(GAMEDATA, 'gamedata.json')).catch(() => null))) throw e;
+  const moved = `${GAMEDATA}.damaged-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  await rename(GAMEDATA, moved);
+  const msg = `The installed game data could not be read (${e.message}); it was moved to ${path.basename(moved)}.`;
+  console.log(msg);
+  errorLog.add('data pack', msg);
+  if (!(await hasGameData())) {
+    if (!dataPackUrl || !allowedUrl(dataPackUrl)) throw e;
+    await firstRunDownload();
+  }
+  await loadTables();
+}
 
 /** Installs the data pack, serving a self-refreshing progress page on PORT meanwhile; retries every 30 s. */
 async function firstRunDownload() {
@@ -130,26 +145,30 @@ async function firstRunDownload() {
   }
   await new Promise((resolve) => { boot.close(resolve); boot.closeAllConnections(); });
 }
-const names = await readJson(path.join(DATA, 'names.json'), { accounts: {}, units: {} });
+const names = await readUserJson(path.join(DATA, 'names.json'), { accounts: {}, units: {} });
 const unitSlug = (id) => names.units[id] || builtinUnits[id] || null;
-const talents = await readJson(path.join(DATA, 'talents.json'), {});
+const talents = await readUserJson(path.join(DATA, 'talents.json'), {});
 // Army slots, entered by the user: { [account]: { [unitId]: [{ type, tier } x7] } }
-const army = await readJson(path.join(DATA, 'army.json'), {});
+const army = await readUserJson(path.join(DATA, 'army.json'), {});
 // Saved armies: { [account]: [{ id, name, leader, minis: [slug|null x6], talents: { slug: index } }] }
-const savedArmies = await readJson(path.join(DATA, 'armies.json'), {});
+const savedArmies = await readUserJson(path.join(DATA, 'armies.json'), {});
 // Army being edited, per account (auto-saved by the page).
-const drafts = await readJson(path.join(DATA, 'drafts.json'), {});
-const learned = await readJson(path.join(DATA, 'learned.json'), { xpToNext: {}, xpConflicts: [], spending: [] });
+const drafts = await readUserJson(path.join(DATA, 'drafts.json'), {});
+const learned = await readUserJson(path.join(DATA, 'learned.json'), { xpToNext: {}, xpConflicts: [], spending: [] });
 // Observed G.R.I.D.s: { [account]: [{ seen, refresh, items: [{ mini|xpBoost, rarity }] }] }.
 // Used to derive offer cooldowns.
-const gridHistory = await readJson(path.join(DATA, 'grid_history.json'), {});
+const gridHistory = await readUserJson(path.join(DATA, 'grid_history.json'), {});
 const GRID_HISTORY_MAX = 400;
+// PvP readings and the matches inferred from them: { [account]: [entry] } (pvpReading in game/pvp.mjs). Not in the
+// save, so it is backed up. Older versions kept it in state/<account>.json as pvpLog (moved here on first read).
+const pvpHistoryFile = path.join(DATA, 'pvp_history.json');
+const pvpHistory = await readUserJson(pvpHistoryFile, {});
 // Notifications: settings, reward goals ({ [account]: { [eventId]: { cost, label } } }) and delivery state
 // ({ sent: { key: time }, log, pending }; pending holds notifications deferred by quiet hours).
 // Progress history: the first sample and the latest sample of each local day,
 // { [account]: { first, days: [{ day, t, cur: { id: [balance, lifetime] }, lv, xp, stars, rar, n }] } }.
 // Income is derived from lifetime totals, so gaps in tracking don't affect it.
-const progress = await readJson(path.join(DATA, 'progress.json'), {});
+const progress = await readUserJson(path.join(DATA, 'progress.json'), {});
 const PROGRESS_DAYS = 400;
 let progressDirty = false;
 function recordProgress(account, snap, now) {
@@ -177,7 +196,7 @@ function recordProgress(account, snap, now) {
 // Diagnostic log of store record changes (G.R.I.D. excluded), last 300: data/store_changes.json.
 // Not shown in the app.
 const storeChangesFile = path.join(DATA, 'store_changes.json');
-const storeChanges = await readJson(storeChangesFile, []);
+const storeChanges = await readUserJson(storeChangesFile, []);
 const lastStoreFields = new Map(); // account -> fields
 let storeChangesDirty = false;
 function logStoreChanges(account, fields, now) {
@@ -193,10 +212,10 @@ function logStoreChanges(account, fields, now) {
   }
   if (storeChanges.length > 300) storeChanges.splice(0, storeChanges.length - 300);
 }
-const notifySettings = cleanSettings(await readJson(path.join(DATA, 'notifications.json'), {}));
-const plans = await readJson(path.join(DATA, 'plans.json'), {});
+const notifySettings = cleanSettings(await readUserJson(path.join(DATA, 'notifications.json'), {}));
+const plans = await readUserJson(path.join(DATA, 'plans.json'), {});
 const notifiedFile = path.join(DATA, 'notified.json');
-const notified = await readJson(notifiedFile, null);
+const notified = await readUserJson(notifiedFile, null);
 let notifyBaseline = !notified; // first run: record what is already due without notifying
 const sentLog = notified || { sent: {}, log: [], pending: [] };
 
@@ -216,7 +235,8 @@ function logGrid(account, grid, now) {
 
 const accounts = new Map(); // account -> { snapshot, events, lastChange }
 let gameBuildSeen = null; // build that wrote the save, for the outdated-data banner
-let rev = 1;
+// starts from the clock so a restarted server never repeats a revision the page has seen
+let rev = Date.now();
 let lastScan = null;
 let lastError = null;
 let scanning = false;
@@ -252,6 +272,7 @@ async function scan() {
     lastScan = now;
     let learnedChanged = false;
     let gridHistoryChanged = false;
+    let pvpChanged = false;
     for (const entries of Object.values(prefs)) {
       try { const b = parseGameBuild(entries.commerce); if (b) gameBuildSeen = b; } catch { /* caught mid-save */ }
     }
@@ -268,8 +289,12 @@ async function scan() {
       }
       let acc = accounts.get(id);
       if (!acc) {
-        acc = await readJson(path.join(STATE, `${id}.json`), { snapshot: null, events: [] });
+        acc = await readUserJson(path.join(STATE, `${id}.json`), { snapshot: null, events: [] });
         accounts.set(id, acc);
+        if (acc.pvpLog) { // from an older version
+          if (!pvpHistory[id]) { pvpHistory[id] = acc.pvpLog; pvpChanged = true; }
+          delete acc.pvpLog;
+        }
       }
       let changed = !acc.snapshot;
       const events = acc.snapshot ? diffSnapshots(acc.snapshot, cur, rules, now) : [];
@@ -307,7 +332,7 @@ async function scan() {
           changed = true;
         }
       } catch { /* caught mid-save: try again next scan */ }
-      try { if (recordPvp(acc, parsePvp(entries.pvp), now)) changed = true; } catch { /* caught mid-save */ }
+      try { if (recordPvp(id, acc, parsePvp(entries.pvp), now)) { changed = true; pvpChanged = true; } } catch { /* caught mid-save */ }
       if (changed) {
         rev++;
         await writeJson(path.join(STATE, `${id}.json`), acc);
@@ -318,6 +343,7 @@ async function scan() {
       await writeJson(path.join(DATA, 'learned.json'), learned);
     }
     if (gridHistoryChanged) await writeJson(path.join(DATA, 'grid_history.json'), gridHistory);
+    if (pvpChanged) await writeJson(pvpHistoryFile, pvpHistory);
     if (storeChangesDirty) { storeChangesDirty = false; await writeJson(storeChangesFile, storeChanges); }
     if (progressDirty) { progressDirty = false; rev++; await writeJson(path.join(DATA, 'progress.json'), progress); }
   } finally {
@@ -325,23 +351,24 @@ async function scan() {
   }
 }
 
-/**
- * Logs a PvP reading when honor or Victory Points change, with the wins and losses that explain the change
- * (inferMatches). The first reading of a season (or of an account) is a starting point without matches.
- */
-function recordPvp(acc, cur, now) {
-  if (!cur || !cur.season) return false;
-  const prev = acc.pvp;
-  if (prev && prev.season === cur.season && prev.honor === cur.honor && prev.vp === cur.vp && prev.honor2 === cur.honor2) return false;
-  const same = prev && prev.season === cur.season;
-  const m = same ? inferMatches(prev, cur, pvpTable?.victoryPoints) : null;
-  acc.pvpLog = [...(acc.pvpLog || []), {
-    t: now, season: cur.season, honor: cur.honor, vp: cur.vp,
-    ...(same ? { dh: cur.honor - prev.honor, dv: cur.vp - prev.vp } : { start: true }),
-    ...(m || {}),
-  }].slice(-MAX_PVP_LOG);
+/** Logs a PvP reading when honor or Victory Points change (pvpReading). acc.pvp is the last reading. */
+function recordPvp(id, acc, cur, now) {
+  const entry = pvpReading(acc.pvp, cur, now, pvpTable?.victoryPoints);
+  if (!entry) return false;
+  pvpHistory[id] = [...(pvpHistory[id] || []), entry].slice(-MAX_PVP_LOG);
   acc.pvp = cur;
   return true;
+}
+
+/** The player's own result for an unexplained PvP change: { account, t, result: 'win' | 'loss' | null }. */
+async function handlePvpResult(body) {
+  const { account, t, result } = body;
+  if (!isId(account) || typeof t !== 'string') return [400, { error: 'bad request' }];
+  const entry = (pvpHistory[account] || []).find((e) => e.t === t);
+  if (!manualResult(entry, result ?? null)) return [400, { error: 'This change can\'t be set by hand.' }];
+  await writeJson(pvpHistoryFile, pvpHistory);
+  rev++;
+  return [200, { ok: true }];
 }
 
 function accountLabel(id) {
@@ -358,16 +385,36 @@ function withSlugs(shop) {
 
 const currencyInfo = (id, acc) => gameCurrencyInfo(id, { events: eventsTable, rules, activeEvents: acc?.activeEvents || [] });
 
-function buildState(requested) {
+/** The requested account if the tracker knows it, else the first one (null: none yet). */
+function resolveAccount(requested) {
   const ids = [...accounts.keys()];
-  const account = ids.includes(requested) ? requested : ids[0] || null;
+  return ids.includes(requested) ? requested : ids[0] || null;
+}
+
+/** State that changes without a new revision (sent with "unchanged" answers too). */
+function liveState() {
+  return { lastScan, lastError, problems: errorLog.list().length, gameRunning: game.running(), update: updateState() };
+}
+
+/** App update for the page: { version, auto, state, error, later } or null when this is the latest version. */
+function updateState() {
+  if (!dataPack.newVersion) return null;
+  return {
+    version: dataPack.newVersion,
+    auto: STANDALONE && !!dataPack.latestApp, // can download and install itself
+    state: appUpdate.state, error: appUpdate.error,
+    later: appUpdate.later === dataPack.newVersion,
+  };
+}
+
+function buildState(account) {
+  const ids = [...accounts.keys()];
   const acc = account && accounts.get(account);
   const picks = (account && talents[account]) || {};
   const slots = (account && army[account]) || {};
   return {
     rev,
-    lastScan,
-    lastError,
+    ...liveState(),
     account,
     accounts: ids.map((id) => ({ id, label: accountLabel(id), units: accounts.get(id).snapshot?.units.length || 0 })),
     units: acc ? acc.snapshot.units.map((u) => ({ ...u, slug: unitSlug(u.id), talentPicks: picks[u.id] || [], army: slots[u.id] || null })) : [],
@@ -376,7 +423,7 @@ function buildState(requested) {
     events: acc ? acc.events.slice(-200) : [],
     activeEvents: (acc && acc.activeEvents) || [],
     pvp: acc?.pvp || null,
-    pvpLog: acc?.pvp ? (acc.pvpLog || []).filter((e) => e.season === acc.pvp.season) : [],
+    pvpLog: acc?.pvp ? (pvpHistory[account] || []).filter((e) => e.season === acc.pvp.season) : [],
     activeEventsAt: (acc && acc.activeEventsAt) || null,
     incomeBonuses: (acc && acc.incomeBonuses) || [],
     ownedAvatars: (acc && acc.ownedAvatars) || [],
@@ -397,7 +444,6 @@ function buildState(requested) {
     armyTags: tagList((account && savedArmies[account]) || []),
     draft: (account && drafts[account]) || null,
     learned,
-    problems: errorLog.list().length,
     standalone: STANDALONE,
     appVersion: APP_VERSION,
   };
@@ -576,68 +622,43 @@ async function handleSavedArmies(body) {
   return [200, { ok: true, armies: clean }];
 }
 
-// ---- backup: all user-entered data in one JSON file ---------------------------------------------------
-// Scan snapshots (data/state) are excluded: the next scan rebuilds them. grid_history is included because it
-// cannot be rebuilt from the save.
-const BACKUP_FILES = { names, talents, army, armies: savedArmies, drafts, learned, grid_history: gridHistory, notifications: notifySettings, plans, progress };
-const BACKUP_FORMAT = 'rumble-tracker-backup';
-
-function buildBackup() {
-  return { format: BACKUP_FORMAT, version: 1, created: new Date().toISOString(), data: BACKUP_FILES };
-}
-
-/** Replaces an object's contents in place (other code holds references to it). */
-function replaceContents(target, source) {
-  for (const k of Object.keys(target)) delete target[k];
-  Object.assign(target, source);
-}
+// ---- backup: all user-entered data in one JSON file (backup.mjs) ----------------------------------------
+// Scan snapshots (data/state) are excluded: the next scan rebuilds them. grid_history and pvp_history are included
+// because they cannot be rebuilt from the save.
+const BACKUP_FILES = { names, talents, army, armies: savedArmies, drafts, learned, grid_history: gridHistory, pvp_history: pvpHistory, notifications: notifySettings, plans, progress };
 
 async function handleRestore(body) {
   const b = body?.backup;
-  if (!b || b.format !== BACKUP_FORMAT || typeof b.data !== 'object') return [400, { error: 'This is not a Rumble Tracker backup file.' }];
-  const restored = [];
-  for (const [key, obj] of Object.entries(BACKUP_FILES)) {
-    const incoming = b.data[key];
-    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) continue;
-    replaceContents(obj, incoming);
-    await writeJson(path.join(DATA, `${key}.json`), obj);
-    restored.push(key);
-  }
+  const restored = restoreBackup(BACKUP_FILES, b);
+  if (!restored) return [400, { error: 'This is not a Rumble Tracker backup file.' }];
   // older or partial backups may lack required keys
   names.accounts ??= {}; names.units ??= {};
   learned.xpToNext ??= {}; learned.xpConflicts ??= []; learned.spending ??= [];
+  for (const key of restored) await writeJson(path.join(DATA, `${key}.json`), BACKUP_FILES[key]);
   rev++;
   return [200, { ok: true, restored, created: b.created }];
 }
 
-// Requests are accepted only from the tracker's own page. Other sites in the same browser can reach localhost, so
-// (using headers the browser sets and pages cannot forge):
-//  - Host must be this server's address (blocks DNS rebinding);
-//  - Origin, when present, must be ours; Sec-Fetch-Site on API calls must be same-origin or none;
-//  - API writes must be JSON, which a cross-site form cannot send.
 const STANDALONE = !!process.env.RUMBLE_STANDALONE; // set by desktop/launcher.cjs
 const EXTERNAL_LINKS = [`https://github.com/${ISSUES_REPO}`, 'https://buymeacoffee.com/razingo'];
-const LOCAL_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
-const OWN_ORIGINS = new Set([...LOCAL_HOSTS].map((h) => `http://${h}`));
-function refusal(req, p) {
-  if (!LOCAL_HOSTS.has(String(req.headers.host || '').toLowerCase())) return 'unknown host';
-  const origin = req.headers.origin;
-  if (origin && !OWN_ORIGINS.has(origin)) return 'cross-site request';
-  if (p.startsWith('/api/')) {
-    const site = req.headers['sec-fetch-site'];
-    if (site && site !== 'same-origin' && site !== 'none') return 'cross-site request';
-    if (req.method !== 'GET' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return 'JSON requests only';
-  }
-  return null;
-}
+const refusal = createGuard(PORT); // see guard.mjs
 
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
-    const p = decodeURIComponent(url.pathname);
+    const p = requestPath(req.url);
+    if (p === null) return send(res, 400, { error: 'bad address' }); // a malformed % escape: not a server error
     const refused = refusal(req, p);
     if (refused) return send(res, 403, { error: refused });
-    if (req.method === 'GET' && p === '/api/state') return send(res, 200, buildState(url.searchParams.get('account')));
+    if (req.method === 'GET' && p === '/api/state') {
+      // the page sends the revision it has: unchanged state is answered with the few values that change on their own
+      const account = resolveAccount(url.searchParams.get('account'));
+      if (url.searchParams.get('rev') === String(rev) && url.searchParams.get('for') === String(account)) {
+        return send(res, 200, { unchanged: true, rev, ...liveState() });
+      }
+      return send(res, 200, buildState(account));
+    }
+    if (req.method === 'POST' && p === '/api/pvp/result') return send(res, ...(await handlePvpResult(await readBody(req))).slice(0, 2));
     if (req.method === 'POST' && p === '/api/name') return send(res, ...(await handleName(await readBody(req))).slice(0, 2));
     if (req.method === 'POST' && p === '/api/talents') return send(res, ...(await handleTalents(await readBody(req))).slice(0, 2));
     if (req.method === 'GET' && p === '/api/backup') {
@@ -700,11 +721,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && p === '/api/quit' && STANDALONE) {
       send(res, 200, { ok: true });
-      console.log('Quit from the page');
-      // let a running scan finish writing first
-      const stop = () => (scanning ? setTimeout(stop, 100) : process.exit(0));
-      return setTimeout(stop, 200);
+      setTimeout(() => shutdown('Quit from the page'), 200);
+      return;
     }
+    // app update: "Download now" (exe only) and "Later" (hides the pop-up until the tracker restarts)
+    if (req.method === 'POST' && p === '/api/update' && STANDALONE) return send(res, ...(await startAppUpdate()));
+    if (req.method === 'POST' && p === '/api/update/later') { appUpdate.later = dataPack.newVersion; rev++; return send(res, 200, { ok: true }); }
     if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
     if (p.startsWith('/static/')) {
       // an installed data pack takes precedence
@@ -722,8 +744,40 @@ const server = http.createServer(async (req, res) => {
 // page error reports: at most 20 per minute
 const clientErrors = { n: 0, since: Date.now(), allow() { if (Date.now() - this.since > 60000) { this.n = 0; this.since = Date.now(); } return ++this.n <= 20; } };
 
+// ---- scanning: only while the game runs ----------------------------------------------------------------------
+// The save only changes while Warcraft Rumble runs, so it is read every SCAN_MS then, a few more times after the game
+// closes, and not at all otherwise. If the watcher can't run, the save is read all the time as before.
+let scansLeft = 0; // scans still due after the game closed
+let stopping = false;
+const game = watchGame((running) => {
+  console.log(running ? 'Warcraft Rumble started: reading the save' : 'Warcraft Rumble closed: reading paused');
+  if (running) scan();
+  else scansLeft = SCANS_AFTER_EXIT;
+  rev++;
+}, (message) => { console.log(`Game check: ${message}; reading the save all the time`); errorLog.add('game check', message); });
+const gameRunning = async () => game.running() ?? gameRunningOnce();
 await scan();
-setInterval(scan, SCAN_MS);
+setInterval(() => {
+  if (stopping) return;
+  if (game.running() === false) {
+    if (scansLeft <= 0) return;
+    scansLeft--;
+  }
+  scan();
+}, SCAN_MS);
+
+/** Stops after a running scan and every queued write have finished (page Quit, tray Quit, app update). */
+async function shutdown(reason, code = 0) {
+  if (stopping) return;
+  stopping = true;
+  console.log(reason);
+  const deadline = Date.now() + 15000;
+  while (scanning && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
+  await Promise.race([flushWrites(), new Promise((r) => setTimeout(r, Math.max(0, deadline - Date.now())))]);
+  process.exit(code);
+}
+// the launcher's tray Quit (desktop/launcher.cjs)
+process.on('rumble:quit', () => shutdown('Quit from the tray'));
 
 // ---- notifications ------------------------------------------------------------------------------------
 async function notifyTick() {
@@ -776,11 +830,16 @@ setInterval(() => notifyTick().catch(notifyFailed), 30000);
 notifyTick().catch(notifyFailed);
 
 // ---- data packs (address: see dataPackUrl above) ------------------------------------------------------------
-/** Whether dotted version a is newer than b. */
 // Two signature failures in a row (rechecked after 15 minutes) mean packs are signed with a key this version doesn't
 // know: ask the user to download the current version. A verified pack clears it.
 const RECHECK_MS = Number(process.env.RUMBLE_PACK_RECHECK_MS) || 15 * 60 * 1000; // env override for testing
-async function checkDataPack() {
+// one check at a time (start-up, recheck and the 6-hour timer share the staging folder)
+let packCheck = null;
+function checkDataPack() {
+  packCheck ??= runPackCheck().finally(() => { packCheck = null; });
+  return packCheck;
+}
+async function runPackCheck() {
   if (!dataPackUrl) return;
   dataPack.lastCheck = new Date().toISOString();
   try {
@@ -791,6 +850,8 @@ async function checkDataPack() {
     if (dataPack.needsAppUpdate) { dataPack.needsAppUpdate = false; rev++; }
     const newVersion = r.latestAppVersion && APP_VERSION && newerVersion(r.latestAppVersion, APP_VERSION) ? r.latestAppVersion : null;
     if (newVersion !== dataPack.newVersion) { dataPack.newVersion = newVersion; rev++; if (newVersion) notifyTick().catch(notifyFailed); }
+    const latestApp = newVersion ? latestAppOf({ latestApp: r.latestApp }) : null;
+    if (JSON.stringify(latestApp) !== JSON.stringify(dataPack.latestApp)) { dataPack.latestApp = latestApp; rev++; }
     if (r.updated) {
       await loadTables();
       rev++;
@@ -808,6 +869,41 @@ async function checkDataPack() {
   }
 }
 if (dataPackUrl && !allowedUrl(dataPackUrl)) console.log('Data pack address ignored: it must be https.');
+
+// ---- app updates (update/appupdate.mjs) -----------------------------------------------------------------------
+// state: null | 'downloading' | 'restarting' | 'failed'. The launcher swaps the exe in and restarts the tracker.
+const UPDATE_DIR = path.join(DATA, 'update');
+const appUpdate = { state: null, error: null, later: null };
+cleanUpdates(UPDATE_DIR); // a download already copied into place by the launcher
+async function startAppUpdate() {
+  const app = dataPack.latestApp;
+  if (!app || app.version !== dataPack.newVersion) return [409, { error: 'No update to install.' }];
+  if (appUpdate.state === 'downloading' || appUpdate.state === 'restarting') return [200, { ok: true }];
+  Object.assign(appUpdate, { state: 'downloading', error: null });
+  rev++;
+  (async () => {
+    try {
+      console.log(`App update: downloading ${app.version}`);
+      const exe = await downloadUpdate(app, UPDATE_DIR);
+      appUpdate.state = 'restarting';
+      rev++;
+      // give the page a moment to show it, then stop cleanly and let the launcher swap the exe
+      await new Promise((r) => setTimeout(r, 1500));
+      process.emit('rumble:apply-update', { exe, version: app.version, done: (err) => {
+        if (!err) return shutdown(`App update: restarting as ${app.version}`);
+        Object.assign(appUpdate, { state: 'failed', error: err });
+        errorLog.add('app update', err);
+        rev++;
+      } });
+    } catch (e) {
+      console.log(`App update failed: ${e.message}`);
+      errorLog.add('app update', e.message);
+      Object.assign(appUpdate, { state: 'failed', error: e.message });
+      rev++;
+    }
+  })();
+  return [200, { ok: true }];
+}
 checkDataPack();
 setInterval(checkDataPack, 6 * 60 * 60 * 1000);
 server.listen(PORT, '127.0.0.1', () => {

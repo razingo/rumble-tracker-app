@@ -154,7 +154,7 @@ function remainingToLegendary(u) {
 }
 
 // ---- data loading ----------------------------------------------------------------
-async function boot() {
+async function loadTables() {
   [RULES, MINIS] = await Promise.all([
     fetch('/static/rules.json').then((r) => r.json()),
     fetch('/static/minis.json').then((r) => r.json()).then((d) => {
@@ -165,6 +165,18 @@ async function boot() {
     }),
   ]);
   BY_SLUG = new Map(MINIS.map((m) => [m.slug, m]));
+}
+
+/** After a data-pack update: reloads every game table (the tab scripts load theirs again when next needed). */
+async function reloadTables() {
+  try {
+    await loadTables();
+    EVENTS = null; STORE = null; PVP = null; CODE_TABLE = null;
+  } catch { /* keep the old tables; tried again at the next change */ }
+}
+
+async function boot() {
+  await loadTables();
   // tab scripts load after this one and may not have run yet
   await pageScriptsLoaded;
   $('#show').value = ui.show;
@@ -174,6 +186,7 @@ async function boot() {
   bindArmory();
   bindCalendar();
   bindGridTab();
+  bindPvp();
   bindNotify();
   bindReport();
   for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => setTab(b.dataset.tab));
@@ -183,10 +196,30 @@ async function boot() {
   setInterval(renderStatus, 1000);
 }
 
+// state fields that change without a new revision (the server's liveState)
+const LIVE_FIELDS = ['lastScan', 'lastError', 'problems', 'gameRunning', 'update'];
+
 async function poll() {
   try {
-    const r = await fetch(`/api/state${ui.account ? `?account=${encodeURIComponent(ui.account)}` : ''}`);
+    const q = new URLSearchParams();
+    if (ui.account) q.set('account', ui.account);
+    // with the revision the page has, an unchanged state is answered with the live fields only
+    if (state && !state.connError) { q.set('rev', String(state.rev)); q.set('for', String(state.account)); }
+    const r = await fetch(`/api/state?${q}`);
     const s = await r.json();
+    if (s.unchanged && state) {
+      for (const k of LIVE_FIELDS) state[k] = s[k];
+      state.connError = null;
+      renderUpdate();
+      renderStatus();
+      renderReportBadge();
+      return;
+    }
+    // a new tracker version (after an update): load its page
+    if (state?.appVersion && s.appVersion && s.appVersion !== state.appVersion) { location.reload(); return; }
+    // new game data (a data pack arrived): reload the tables before drawing
+    const dataVersion = s.dataStatus?.dataVersion || null;
+    if (state && dataVersion !== state.dataStatus?.dataVersion) await reloadTables();
     for (const m of ALWAYS_OWNED) {
       if (s.account && !s.units.some((u) => u.slug === m.slug)) {
         s.units.push({ id: `always-${m.slug}`, slug: m.slug, synthetic: true, level: 0, xp: 0, xpNeeded: 0, xpLevel: RULES.maxXpLevel, bonus: 0, talents: 0, rarity: 0, stars: 0, talentPicks: [] });
@@ -199,6 +232,7 @@ async function poll() {
     $('#quitBtn').hidden = !s.standalone;
     if (s.appVersion) { $('#appVersion').textContent = `v${s.appVersion}`; $('#appVersion').hidden = false; }
     if (changed) requestRender();
+    renderUpdate();
   } catch (e) {
     if (state) state.connError = 'Tracker server not reachable';
   }
@@ -273,13 +307,6 @@ function renderDataBanner() {
       <button class="chip" data-open-releases>Download the latest version</button>`;
     return;
   }
-  const v = d?.pack?.newVersion;
-  if (v && store.get('dismissedVersion', null) !== v) {
-    el.hidden = false;
-    el.innerHTML = `<b>Version ${esc(v)} is available.</b> Download it from GitHub Releases; your data is kept.
-      <button class="chip" data-open-releases>Download</button> <button class="chip" data-dismiss-version="${esc(v)}">Not now</button>`;
-    return;
-  }
   el.hidden = !d?.stale;
   if (!d?.stale) return;
   el.innerHTML = `<b>The game was updated to ${esc(d.gameBuild)}.</b> The tracker's game data is from ${esc(d.dataBuild)}, so new minis,
@@ -287,12 +314,62 @@ function renderDataBanner() {
     Your own progress is read from the game as usual.`;
 }
 
+/**
+ * Pop-up for a new tracker version (state.update). Download now: the exe downloads, verifies and installs it, then
+ * restarts; from source (or without download checksums) it opens GitHub Releases. Later: hidden until the tracker
+ * restarts.
+ */
+let updateShown = null; // what the dialog shows: '<version>:<state>'
+function renderUpdate() {
+  const dlg = $('#updateDialog');
+  const u = state?.update;
+  // while restarting, the server is gone for a moment: keep showing it
+  const busy = u && (u.state === 'downloading' || u.state === 'restarting');
+  const show = u && (busy || !u.later);
+  if (!show && !(updateShown?.endsWith(':restarting') && state?.connError)) {
+    if (dlg.open) dlg.close();
+    updateShown = null;
+    return;
+  }
+  if (!u) return;
+  const key = `${u.version}:${u.state}:${u.error || ''}`;
+  if (key !== updateShown) {
+    updateShown = key;
+    const head = `<div class="nt-head"><h2>Version ${esc(u.version)} is available</h2></div>`;
+    let body;
+    if (u.state === 'downloading') body = '<p>Downloading and checking the new version…</p>';
+    else if (u.state === 'restarting') body = '<p>Installing: the tracker restarts in a moment and this window reloads by itself.</p>';
+    else {
+      body = `${u.state === 'failed' ? `<p class="cost-no">The update didn't work: ${esc(u.error || 'unknown error')}</p>` : ''}
+        <p>${u.auto ? 'The tracker can download and install it now, then restart. Your data is kept.' : 'Download it from GitHub Releases; your data is kept.'}</p>
+        <div class="nt-actions"><button class="btn" data-update-now>${u.auto && u.state !== 'failed' ? 'Download now' : 'Open GitHub Releases'}</button>
+          <button class="chip" data-update-later>Later</button></div>`;
+    }
+    dlg.innerHTML = `<div class="nt-form">${head}${body}</div>`;
+  }
+  if (!dlg.open) dlg.showModal();
+}
+
+async function updateNow() {
+  const u = state?.update;
+  if (!u) return;
+  if (!u.auto || u.state === 'failed') { openExternal(RELEASES_URL); return updateLater(); }
+  try { await post('/api/update', {}); } catch (e) { alert(`The update could not start: ${e.message}`); }
+  poll();
+}
+async function updateLater() {
+  try { await post('/api/update/later', {}); } catch { /* the server is gone */ }
+  if (state?.update) state.update.later = true;
+  renderUpdate();
+}
+
 function renderStatus() {
   const el = $('#status');
   if (!state) return;
   const err = state.connError || state.lastError;
-  el.className = `status${err ? ' error' : ''}`;
-  el.innerHTML = `<span class="dot"></span><span class="status-text">${err ? esc(err) : `Live · last scan ${ago(state.lastScan)}`}</span>`;
+  const live = state.gameRunning === false ? `Game closed · last read ${ago(state.lastScan)}` : `Live · last scan ${ago(state.lastScan)}`;
+  el.className = `status${err ? ' error' : state.gameRunning === false ? ' idle' : ''}`;
+  el.innerHTML = `<span class="dot"></span><span class="status-text">${err ? esc(err) : live}</span>`;
 }
 
 function renderAccounts() {
@@ -833,8 +910,17 @@ function bindStatic() {
   $('#quitBtn').addEventListener('click', quitTracker);
   $('#dataBanner').addEventListener('click', (e) => {
     if (e.target.closest('[data-open-releases]')) openExternal(RELEASES_URL);
-    const later = e.target.closest('[data-dismiss-version]');
-    if (later) { store.set('dismissedVersion', later.dataset.dismissVersion); renderDataBanner(); }
+  });
+  const upd = $('#updateDialog');
+  upd.addEventListener('click', (e) => {
+    if (e.target.closest('[data-update-now]')) updateNow();
+    if (e.target.closest('[data-update-later]')) updateLater();
+  });
+  // Esc: Later, unless it is busy
+  upd.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    const st = state?.update?.state;
+    if (st !== 'downloading' && st !== 'restarting') updateLater();
   });
   // restore the minimum width after a resize
   let sizeTimer;

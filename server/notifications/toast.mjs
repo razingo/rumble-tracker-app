@@ -1,6 +1,7 @@
 // Windows toast notifications via PowerShell and Windows.UI.Notifications. Title and text are passed as environment
 // variables (never interpolated into the script) and XML-escaped.
 import { execFile } from 'node:child_process';
+import { POWERSHELL } from '../game/watch.mjs';
 
 // Toasts need a registered app identity; PowerShell's is present on Windows 10 and 11.
 const APP_ID = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe';
@@ -20,7 +21,7 @@ $xml.LoadXml("<toast><visual><binding template='ToastGeneric'><text>$t</text><te
 export function showToast(title, body) {
   if (process.platform !== 'win32') return Promise.resolve(false);
   return new Promise((resolve) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', SCRIPT], {
+    execFile(POWERSHELL, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', SCRIPT], {
       windowsHide: true,
       timeout: 15000,
       env: { ...process.env, RT_TITLE: String(title).slice(0, 120), RT_BODY: String(body).slice(0, 400), RT_ATTR: 'Rumble Collection Tracker', RT_APP: APP_ID },
@@ -28,12 +29,3 @@ export function showToast(title, body) {
   });
 }
 
-/** Whether Warcraft Rumble is running. */
-export function gameRunning() {
-  if (process.platform !== 'win32') return Promise.resolve(false);
-  return new Promise((resolve) => {
-    execFile('tasklist', ['/FI', 'IMAGENAME eq WarcraftRumble.exe', '/NH', '/FO', 'CSV'], { windowsHide: true, timeout: 10000 }, (err, out) => {
-      resolve(!err && /WarcraftRumble\.exe/i.test(out || ''));
-    });
-  });
-}

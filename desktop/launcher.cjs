@@ -28,6 +28,11 @@ let PAGE = `http://localhost:${PORT}/`;
 const usePort = (p) => { PORT = p; PAGE = `http://localhost:${p}/`; };
 const DATA_PACK_URL = 'https://razingo.github.io/rumble-tracker-data/';
 const args = new Set(process.argv.slice(2));
+// --after-update=<pid>:<port>: started by an app update; waits for the old instance (pid) to stop
+const afterUpdate = (() => {
+  const m = /^--after-update=(\d+):(\d+)$/.exec(process.argv.slice(2).find((a) => a.startsWith('--after-update=')) || '');
+  return m ? { pid: Number(m[1]), port: Number(m[2]) } : null;
+})();
 const LOCAL = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
 const ROAMING = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
 const DATA = path.resolve(process.env.RUMBLE_DATA_DIR || path.join(ROAMING, 'RumbleTracker'));
@@ -61,6 +66,7 @@ for (const level of ['log', 'info', 'warn', 'error']) {
 
 // ---- PowerShell helpers (message box, tray) -------------------------------------------------------------------
 const POWERSHELL = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+const SYSTEM32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
 const psArgs = (script) => ['-NoProfile', '-NonInteractive', '-Sta', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
 
 /** Shows a start-up error in a message box, then exits. */
@@ -73,7 +79,7 @@ function fatal(message) {
 // ---- app window --------------------------------------------------------------------------------------------------
 function regValue(key, name) {
   return new Promise((resolve) => {
-    execFile('reg', ['query', key, ...(name ? ['/v', name] : ['/ve'])], { windowsHide: true, timeout: 5000 }, (err, out) => {
+    execFile(path.join(SYSTEM32, 'reg.exe'), ['query', key, ...(name ? ['/v', name] : ['/ve'])], { windowsHide: true, timeout: 5000 }, (err, out) => {
       const m = !err && /REG_(?:EXPAND_)?SZ\s+(.*)$/m.exec(out || '');
       resolve(m ? m[1].trim().replace(/^"(.*)"$/, '$1').replace(/%([^%]+)%/g, (s, v) => process.env[v] ?? s) : null);
     });
@@ -123,7 +129,7 @@ function chooseBrowser() {
 
 /** Opens a link in the default browser. */
 function openInDefaultBrowser(url) {
-  execFile('rundll32', ['url.dll,FileProtocolHandler', url], { windowsHide: true }, () => {});
+  execFile(path.join(SYSTEM32, 'rundll32.exe'), ['url.dll,FileProtocolHandler', url], { windowsHide: true }, () => {});
 }
 
 async function openWindow() {
@@ -285,8 +291,50 @@ function unpack() {
   return { dir, index };
 }
 
+/** Waits up to 30 s for a process to stop. */
+async function waitForExit(pid) {
+  for (let i = 0; i < 150; i++) {
+    try { process.kill(pid, 0); } catch { return; }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+// ---- app updates ----------------------------------------------------------------------------------------------------
+// The server downloads and verifies the new exe (server/update/appupdate.mjs). It is swapped in here: a running exe
+// can be renamed but not overwritten, so this one becomes RumbleTracker.exe.old (removed at the next start), the new
+// one is copied to its place and started; it waits for this instance to stop.
+const OLD_EXE = `${process.execPath}.old`;
+function applyUpdate({ exe, version, done }) {
+  const target = process.execPath;
+  try {
+    fs.rmSync(OLD_EXE, { force: true });
+    fs.renameSync(target, OLD_EXE);
+    try { fs.copyFileSync(exe, target); } catch (e) { fs.renameSync(OLD_EXE, target); throw e; }
+  } catch (e) {
+    console.log(`App update: could not replace ${target}: ${e.message}`);
+    return done(`Could not replace the program file (${e.code || e.message}). Download version ${version} from GitHub Releases instead.`);
+  }
+  const child = spawn(target, [`--after-update=${process.pid}:${PORT}`], { detached: true, stdio: 'ignore' });
+  child.once('spawn', () => { child.unref(); console.log(`App update: started ${version}`); done(null); });
+  child.once('error', (e) => {
+    console.log(`App update: could not start the new version: ${e.message}`);
+    try { fs.rmSync(target, { force: true }); fs.renameSync(OLD_EXE, target); } catch { /* keep what is there */ }
+    done(`The new version could not be started (${e.message}). Download it from GitHub Releases instead.`);
+  });
+}
+process.on('rumble:apply-update', applyUpdate);
+
+/** Tray Quit: the server stops once its scan and writes are done (same as Quit on the page). */
+function quitFromTray() {
+  if (!process.listenerCount('rumble:quit')) { console.log('Quit from the tray'); process.exit(0); }
+  process.emit('rumble:quit');
+  setTimeout(() => process.exit(0), 20000).unref(); // in case the server can't finish
+}
+
 async function main() {
   if (process.platform !== 'win32') return fatal(`${TITLE} runs on Windows only.`);
+  if (afterUpdate) await waitForExit(afterUpdate.pid);
+  try { fs.rmSync(OLD_EXE, { force: true }); } catch { /* still in use: removed next time */ }
   const found = await findPort();
   if (found.running) { usePort(found.port); return handOver(); }
   if (!found.port) {
@@ -330,7 +378,9 @@ async function main() {
     if (!failed) fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`);
     return;
   }
-  startTray(() => { console.log('Quit from the tray'); process.exit(0); });
+  startTray(quitFromTray);
+  // after an update on the same port, the open window reconnects and reloads by itself
+  if (afterUpdate && afterUpdate.port === PORT) return;
   await openWindow();
 }
 

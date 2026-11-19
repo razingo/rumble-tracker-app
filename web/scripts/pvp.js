@@ -139,12 +139,14 @@ async function renderPvp() {
   const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
   const seasonRec = pvpRecord(log), todayRec = pvpRecord(log, midnight.getTime());
   const streak = pvpStreak(log);
+  const unexplained = log.filter((e) => e.unexplained && !e.manual).length;
   const rate = seasonRec.wins + seasonRec.losses ? Math.round((seasonRec.wins / (seasonRec.wins + seasonRec.losses)) * 100) : null;
   const recordCard = `<div class="pvp-card">
       <div class="rot-label">Wins / losses${seasonRec.estimated ? ' <span class="flag warn" title="Some changes fit more than one combination of wins and losses: the tracker picked the likeliest">estimated</span>' : ''}</div>
       <div class="pvp-big"><span class="pvp-win">${fmt(seasonRec.wins)}</span> – <span class="pvp-loss">${fmt(seasonRec.losses)}</span>${rate != null ? ` <small class="muted">${rate}%</small>` : ''}</div>
       <div class="small">Today ${fmt(todayRec.wins)} – ${fmt(todayRec.losses)}${streak ? ` · ${streak.n} ${streak.kind === 'win' ? (streak.n === 1 ? 'win' : 'wins') : (streak.n === 1 ? 'loss' : 'losses')} in a row` : ''}</div>
       <div class="small">Counted from honor and Victory Point changes the tracker sees, so matches before it first saw this account aren't included.${seasonRec.honorOnly ? ' Victory Points stopped moving, so some results come from honor alone and losses at a rank floor may be missing.' : ''}</div>
+      ${unexplained ? `<div class="small"><span class="flag warn">${unexplained} unexplained</span> change${unexplained > 1 ? 's' : ''} below: mark ${unexplained > 1 ? 'them' : 'it'} as a win or a loss.</div>` : ''}
     </div>`;
 
   // ---- Victory Road
@@ -199,14 +201,26 @@ async function renderPvp() {
   }
 
   // ---- honor chart and recent matches
-  // every match this season, newest first; the list scrolls with 8 rows in view
-  const recent = log.filter((e) => e.wins || e.losses).reverse();
+  // every match this season, newest first; the list scrolls with 8 rows in view. Changes no win/loss combination
+  // explains are listed too: the player can mark them as a win or a loss.
+  const recent = log.filter((e) => e.wins || e.losses || e.unexplained).reverse();
+  const resultCell = (e) => {
+    if (e.unexplained && !e.manual) {
+      return `<td><span class="flag warn" title="No combination of wins and losses gives this change">unexplained</span>
+        <button class="chip" data-pvp-result="win" data-t="${esc(e.t)}">Win</button> <button class="chip" data-pvp-result="loss" data-t="${esc(e.t)}">Loss</button></td>`;
+    }
+    const cls = e.wins && !e.losses ? 'pvp-win' : e.losses && !e.wins ? 'pvp-loss' : '';
+    const note = e.manual ? ` <span class="muted small" title="Set by you">(set by you)</span> <button class="chip" data-pvp-result="" data-t="${esc(e.t)}" title="Mark as unexplained again">Undo</button>`
+      : e.estimated ? ' <span class="muted small" title="More than one combination fits this change">(est.)</span>' : '';
+    return `<td class="${cls}">${esc(pvpResult(e))}${note}</td>`;
+  };
+  const signed = (n) => `${n > 0 ? '+' : ''}${fmt(n)}`;
   const history = mine && season && !stale ? `<section class="panel">
       <div class="cal-head"><h2>Honor this season</h2></div>
       ${pvpHonorChart(log, season)}
       ${recent.length ? `<div class="pvp-matches"><table class="pg-table"><thead><tr><th>When</th><th>Result</th><th>Honor</th><th>Victory Points</th></tr></thead><tbody>
-        ${recent.map((e) => `<tr><td>${esc(ago(e.t))}</td><td class="${e.wins && !e.losses ? 'pvp-win' : e.losses && !e.wins ? 'pvp-loss' : ''}">${esc(pvpResult(e))}${e.estimated ? ' <span class="muted small" title="More than one combination fits this change">(est.)</span>' : ''}</td>
-          <td>${e.dh > 0 ? '+' : ''}${fmt(e.dh)} → ${fmt(e.honor)}</td><td>+${fmt(e.dv)}</td></tr>`).join('')}
+        ${recent.map((e) => `<tr><td>${esc(ago(e.t))}</td>${resultCell(e)}
+          <td>${signed(e.dh)} → ${fmt(e.honor)}</td><td>${signed(e.dv)} → ${fmt(e.vp)}</td></tr>`).join('')}
       </tbody></table></div>` : '<p class="muted small">No matches seen yet this season.</p>'}
     </section>` : '';
 
@@ -223,4 +237,16 @@ async function renderPvp() {
     ${stale ? `<div class="panel small">This account's save still shows ${esc(mySeason.name)}: the game updates it at the next PvP match.</div>` : ''}
     <section class="pvp-cards">${rankCard}${recordCard}${roadCard}${seasonCard}</section>
     ${rotation}${history}${endRewards}${roadList}`;
+}
+
+function bindPvp() {
+  // Win / Loss for an unexplained change; Undo ("") clears it
+  $('#tab-pvp').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-pvp-result]');
+    if (!b || !state?.account) return;
+    b.disabled = true;
+    try { await post('/api/pvp/result', { account: state.account, t: b.dataset.t, result: b.dataset.pvpResult || null }); }
+    catch (err) { alert(`Could not save: ${err.message}`); }
+    poll();
+  });
 }

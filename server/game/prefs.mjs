@@ -1,9 +1,11 @@
 // Reads Warcraft Rumble's PlayerPrefs from the registry via reg.exe. Only the entries below are decoded;
 // everything else in the key, including login tokens, is ignored and never stored.
 import { execFile } from 'node:child_process';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import net from 'node:net';
 
+const REG = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe');
 const KEY = 'HKCU\\Software\\Blizzard Entertainment, Inc.\\Warcraft Rumble';
 const WANTED = {
   units: /^MiniProgressionManagerState_v\d+_h\d+$/,
@@ -81,7 +83,7 @@ function queryOnce() {
     server.on('error', (e) => finish(reject, new Error(`Could not read the game's saved data (${e.message})`)));
     const timer = setTimeout(() => finish(reject, new Error("Could not read the game's saved data (timed out)")), 30000);
     server.listen(pipe, () => {
-      execFile('reg', ['export', KEY, pipe, '/y'], { windowsHide: true, timeout: 25000 }, (err, stdout, stderr) => {
+      execFile(REG, ['export', KEY, pipe, '/y'], { windowsHide: true, timeout: 25000 }, (err, stdout, stderr) => {
         exited = { err, stderr };
         done();
       });

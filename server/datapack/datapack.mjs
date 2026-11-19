@@ -58,7 +58,9 @@ export async function updateDataPack({ base, current, dir, staticDir, publicKeys
   if (remote.format !== 1 || !remote.files || !remote.dataVersion) throw new Error('not a data pack manifest');
   // latest released app version, announced in the signed manifest
   const latestAppVersion = /^\d+\.\d+\.\d+$/.test(remote.latestAppVersion || '') ? remote.latestAppVersion : null;
-  if (current?.dataVersion && remote.dataVersion <= current.dataVersion) return { updated: false, manifest: current, latestAppVersion, reason: 'up to date' };
+  // its download checksums (see update/appupdate.mjs), when the manifest has them
+  const latestApp = remote.latestApp && remote.latestApp.version === latestAppVersion ? remote.latestApp : null;
+  if (current?.dataVersion && remote.dataVersion <= current.dataVersion) return { updated: false, manifest: current, latestAppVersion, latestApp, reason: 'up to date' };
 
   const entries = Object.entries(remote.files);
   let total = 0;
@@ -106,5 +108,5 @@ export async function updateDataPack({ base, current, dir, staticDir, publicKeys
   try { await stat(dir); await rename(dir, old); } catch { /* no pack installed yet */ }
   await rename(staging, dir);
   await rm(old, { recursive: true, force: true });
-  return { updated: true, manifest: remote, downloaded, latestAppVersion, reason: `installed data for game build ${remote.gameBuild}` };
+  return { updated: true, manifest: remote, downloaded, latestAppVersion, latestApp, reason: `installed data for game build ${remote.gameBuild}` };
 }

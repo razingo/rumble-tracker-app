@@ -67,3 +67,30 @@ export function inferMatches(prev, cur, rules, maxMatches = 12) {
   // certain only when honor leaves one combination
   return { wins: pick.wins, losses: pick.losses, estimated: pool.length > 1 || !fits.length, honorOnly: false };
 }
+
+/**
+ * The log entry for a new PvP reading, or null when nothing changed. The first reading of a season (or of an account)
+ * is a starting point without matches. A change no win/loss combination explains (a VP step that fits no match, or
+ * VP going down) is kept as unexplained; the player can mark it as a win or a loss (manualResult).
+ */
+export function pvpReading(prev, cur, now, rules) {
+  if (!cur || !cur.season) return null;
+  if (prev && prev.season === cur.season && prev.honor === cur.honor && prev.vp === cur.vp && prev.honor2 === cur.honor2) return null;
+  const entry = { t: now, season: cur.season, honor: cur.honor, vp: cur.vp };
+  if (!prev || prev.season !== cur.season) return { ...entry, start: true };
+  entry.dh = cur.honor - prev.honor;
+  entry.dv = cur.vp - prev.vp;
+  const m = inferMatches(prev, cur, rules);
+  if (m) return { ...entry, ...m };
+  // only honor2 moved: not a match
+  if (!entry.dh && !entry.dv) return entry;
+  return { ...entry, unexplained: true };
+}
+
+/** Sets ('win' | 'loss') or clears (null) the player's own result for an unexplained entry. Returns false if not allowed. */
+export function manualResult(entry, result) {
+  if (!entry || !entry.unexplained || ![null, 'win', 'loss'].includes(result)) return false;
+  delete entry.wins; delete entry.losses; delete entry.manual;
+  if (result) Object.assign(entry, { manual: result, wins: result === 'win' ? 1 : 0, losses: result === 'loss' ? 1 : 0 });
+  return true;
+}

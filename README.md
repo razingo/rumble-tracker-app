@@ -44,14 +44,16 @@ Releases are built by GitHub Actions from this repository's source; with the Git
 
 | What | Where |
 |---|---|
-| Your own data: names you gave, armies, talents, G.R.I.D. history, progress, notification settings, downloaded game data | `%APPDATA%\RumbleTracker` |
+| Your own data: names you gave, armies, talents, G.R.I.D. and PvP history, progress, notification settings, downloaded game data and app updates | `%APPDATA%\RumbleTracker` |
 | The tracker's log (`tracker.log`, attach it to a bug report if asked) | `%APPDATA%\RumbleTracker` |
 | The program's files, unpacked from the exe on first start, and the window's browser profile | `%LOCALAPPDATA%\RumbleTracker` |
 
 Paste either path into the Explorer address bar to open it. **Back up** with *Backup → Export backup* in the tracker (one JSON file
 that *Import backup…* restores, also on another PC).
 
-**Updating:** download the new release and replace `RumbleTracker.exe`. Your data stays where it is.
+**Updating:** when a new version is out, the tracker offers to install it (*Download now*): it downloads the release
+from GitHub, checks it against the checksums in the signed data pack, replaces `RumbleTracker.exe` and restarts. You
+can also download the new release yourself and replace `RumbleTracker.exe`. Your data stays where it is.
 
 **Uninstalling:** quit the tracker, then delete `RumbleTracker.exe` and the two `RumbleTracker` folders above.
 
@@ -62,8 +64,8 @@ when it starts and every 6 hours, at <https://razingo.github.io/rumble-tracker-d
 tracker only installs a pack with a valid signature from the key built into the exe, so nobody else can push data to
 your tracker. If the page says its game data is older than your game, a pack for the new build isn't out yet. If it
 says a newer version of the tracker is needed, new packs can only be verified by a newer exe: download the latest
-release (your data is kept). When a new version of the tracker is released, a banner (and one notification) says so;
-*Not now* hides it until the next version.
+release (your data is kept). When a new version of the tracker is released, a pop-up (and one notification) says so;
+*Later* hides it until the tracker restarts.
 
 ## Privacy
 

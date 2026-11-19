@@ -74,3 +74,22 @@ test('game build', () => {
   assert.ok(compareBuilds('16.2.0.1', '16.1.9.9') > 0);
   assert.equal(compareBuilds('16.1.2', '16.1.2.0'), 0);
 });
+
+test('changes between two scans', async () => {
+  const { diffSnapshots } = await import('../server/game/model.mjs');
+  const rules = { xpToNext: { 1: 10, 2: 20 } };
+  const u = (id, o = {}) => ({ id, xpLevel: 1, xp: 0, xpNeeded: 10, rarity: 0, talents: 0, stars: 0, ...o });
+  const prev = { units: [u('a'), u('b')], currencies: [{ id: 'gold', balance: 100 }] };
+  const cur = {
+    units: [u('a', { xpLevel: 2, xp: 5, xpNeeded: 20 }), u('b', { rarity: 1, talents: 1, stars: 2 }), u('c')],
+    currencies: [{ id: 'gold', balance: 40 }, { id: 'gems', balance: 5 }],
+  };
+  const ev = diffSnapshots(prev, cur, rules, 't');
+  const of = (type, id) => ev.find((e) => e.type === type && e.id === id);
+  assert.equal(of('unit_xp', 'a').gained, 15);
+  assert.deepEqual([of('unit_rarity', 'b').to, of('unit_talent', 'b').to, of('unit_stars', 'b').to], [1, 1, 2]);
+  assert.ok(of('unit_new', 'c'));
+  assert.equal(of('currency', 'gold').delta, -60);
+  assert.deepEqual([of('currency', 'gems').from, of('currency', 'gems').to], [0, 5]);
+  assert.equal(diffSnapshots(prev, prev, rules, 't').length, 0);
+});

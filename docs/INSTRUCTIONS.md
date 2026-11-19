@@ -23,14 +23,15 @@ running in the tray, and the window updates whenever you open it.
 
 Always visible, on every tab, in two rows. On top:
 
-- **Tabs**: Collection, Army, Armory, G.R.I.D., Calendar, Progress.
+- **Tabs**: Collection, Army, Armory, G.R.I.D., Calendar, PvP, Progress.
 - **Account** (top right): if more than one Warcraft Rumble account has played on this PC, pick one here. Type a name
   in the box next to it (e.g. "Main") to tell them apart; the name stays on your PC.
 
 Below:
 
-- **Status**: *Live · last scan Xs ago* means the tracker is reading your save. If it says something else, see
-  [Tips](#tips).
+- **Status**: *Live · last scan Xs ago* means the tracker is reading your save. *Game closed* means Warcraft Rumble
+  isn't running: the save can't change then, so the tracker pauses until the game starts. If it says something else,
+  see [Tips](#tips).
 - **🔔 Alerts**: Windows notifications ([below](#notifications)).
 - **🐞 Report a problem**: tell us about a bug ([below](#report-a-problem)). A red dot on it means the tracker noticed
   an error.
@@ -123,7 +124,8 @@ The PvP season, your rank and your matches.
 - **Wins / losses**: this season's record, today's record and your current streak. The game doesn't save match
   results, so the tracker works them out from changes in honor and Victory Points while it runs. Matches played
   while it isn't running still count once it sees the change. Marked *estimated* when a change fits more than one
-  combination of wins and losses.
+  combination of wins and losses. A change no combination explains is listed as *unexplained* under **Honor this
+  season**: mark it as a *Win* or a *Loss* yourself (*Undo* takes it back).
 - **Victory Road**: your Victory Points (every finished match adds some, more for a win) and the next reward.
   Victory Road resets at the end of the season, so claim the rewards in the game before then.
 - **Season**: the season's end date and its maps.
@@ -176,7 +178,8 @@ names, account IDs and other personal details are removed, and your collection a
 ## Backup
 
 **Backup → Export backup** saves everything you entered into one file: account and mini names, talents, army slots,
-saved armies, the army you're editing, G.R.I.D. history, progress history and notification settings.
+saved armies, the army you're editing, G.R.I.D. history, PvP match history, progress history and notification
+settings.
 **Import backup…** restores it, also on another PC. What the tracker reads from the game (levels, currencies…) isn't
 in it: that comes back from your save by itself.
 
@@ -186,6 +189,10 @@ in it: that comes back from your save by itself.
   tracker downloads updated game data by itself (checked at start and every 6 hours) once it's published; nothing to
   install.
 - **"Tracker server not reachable"**: the tracker was stopped (Quit). Start `RumbleTracker.exe` again.
+- **A new version is available**: a pop-up says so. *Download now* downloads it, checks it and restarts the tracker
+  with it; your data is kept. *Later* hides it until the tracker restarts.
+- **A data file was damaged** (shown under *Report a problem*): the tracker moved it aside (`<name>.corrupt-<date>` in
+  the data folder) and started without it. Import a backup to get the data back.
 - **"No Rumble data found on this PC"**: start Warcraft Rumble on this PC at least once, and log in. The tracker reads what
   the game saved on this PC.
 - **The status says the save couldn't be read**: usually the game was saving at that moment; it clears itself within a
