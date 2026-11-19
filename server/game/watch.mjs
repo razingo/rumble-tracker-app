@@ -71,3 +71,24 @@ export function watchGame(onChange, onFail = () => {}) {
   start();
   return { running: () => state };
 }
+
+/**
+ * In the exe the tray icon's PowerShell process reports whether the game runs (desktop/launcher.cjs emits
+ * 'rumble:game' with true/false), so no second process is needed. If the tray can't report ('rumble:game-failed'),
+ * the tracker starts its own watcher. Same interface as watchGame.
+ */
+export function watchGameFromTray(onChange, onFail = () => {}) {
+  let state = null;
+  let own = null;
+  process.on('rumble:game', (running) => {
+    if (own || typeof running !== 'boolean' || running === state) return;
+    state = running;
+    onChange(running);
+  });
+  process.on('rumble:game-failed', () => {
+    if (own) return;
+    state = null;
+    own = watchGame(onChange, onFail);
+  });
+  return { running: () => (own ? own.running() : state) };
+}

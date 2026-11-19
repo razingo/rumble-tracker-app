@@ -1,0 +1,35 @@
+// "Start with Windows": a value in the current user's Run key that starts the exe in the background (tray only, no
+// window). Exe only: from source there is no program to start.
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+
+const REG = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe');
+const KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+const NAME = 'RumbleCollectionTracker';
+
+const reg = (args) => new Promise((resolve) => {
+  execFile(REG, args, { windowsHide: true, timeout: 10000 }, (err, out) => resolve({ ok: !err, out: out || '' }));
+});
+
+/** The command Windows runs at sign-in. */
+export const autostartCommand = (exe) => `"${exe}" --background`;
+
+/** The registered command, or null. */
+export async function readAutostart() {
+  const r = await reg(['query', KEY, '/v', NAME]);
+  const m = r.ok && /REG_SZ\s+(.*)$/m.exec(r.out);
+  return m ? m[1].trim() : null;
+}
+
+/** Turns it on (for this exe) or off. Resolves to true on success. */
+export async function setAutostart(on, exe) {
+  if (on) return (await reg(['add', KEY, '/v', NAME, '/t', 'REG_SZ', '/d', autostartCommand(exe), '/f'])).ok;
+  if (!(await readAutostart())) return true;
+  return (await reg(['delete', KEY, '/v', NAME, '/f'])).ok;
+}
+
+/** If it is on but names another exe (the tracker was moved), points it at this one. */
+export async function refreshAutostart(exe) {
+  const cmd = await readAutostart();
+  if (cmd && cmd !== autostartCommand(exe)) await setAutostart(true, exe);
+}

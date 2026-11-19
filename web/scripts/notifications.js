@@ -1,15 +1,19 @@
 'use strict';
-// Notification settings dialog. Settings are stored and notifications sent by the server, also while the page is
-// closed. Depends on globals from app.js.
+// Settings dialog: general settings (Start with Windows) and notifications. Settings are stored and notifications sent
+// by the server, also while the page is closed. Depends on globals from app.js.
 
 let NOTIFY = null; // { settings, types, log, pending, playing }
+let GENERAL = null; // { startWithWindows: true | false | null (not available: running from source) }
 
 async function loadNotify() {
-  NOTIFY = await fetch('/api/notifications').then((r) => r.json());
+  [NOTIFY, GENERAL] = await Promise.all([
+    fetch('/api/notifications').then((r) => r.json()),
+    fetch('/api/settings').then((r) => r.json()),
+  ]);
 }
 
 function renderNotifyDialog() {
-  const dlg = $('#alertsDialog');
+  const dlg = $('#settingsDialog');
   if (!NOTIFY) { dlg.innerHTML = '<p>Loading…</p>'; return; }
   const s = NOTIFY.settings;
   const accounts = state?.accounts || [];
@@ -22,7 +26,14 @@ function renderNotifyDialog() {
     </tr>`;
   };
   dlg.innerHTML = `<form method="dialog" class="nt-form">
-    <div class="nt-head"><h2>Notifications</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
+    <div class="nt-head"><h2>Settings</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
+    <h3>General</h3>
+    ${GENERAL?.startWithWindows == null
+    ? '<p class="muted small">Start with Windows is available in RumbleTracker.exe.</p>'
+    : `<label class="nt-master"><input type="checkbox" data-general="startWithWindows" ${GENERAL.startWithWindows ? 'checked' : ''}> Start with Windows</label>
+      <p class="muted small">Starts in the tray when you sign in to Windows (no window), so notifications arrive without opening the tracker.</p>`}
+    <span class="nt-msg small" data-general-msg></span>
+    <h3>Notifications</h3>
     <p class="muted small">They keep coming while the tracker runs, even with this window closed.</p>
     <label class="nt-master"><input type="checkbox" data-nt-field="enabled" ${s.enabled ? 'checked' : ''}> Send notifications</label>
     <label class="nt-acc">For <select data-nt-field="account">
@@ -55,8 +66,8 @@ async function saveNotify(msg) {
 }
 
 function bindNotify() {
-  const dlg = $('#alertsDialog');
-  $('#alertsBtn').addEventListener('click', async () => {
+  const dlg = $('#settingsDialog');
+  $('#settingsBtn').addEventListener('click', async () => {
     dlg.showModal();
     renderNotifyDialog();
     await loadNotify();
@@ -64,6 +75,14 @@ function bindNotify() {
   });
   dlg.addEventListener('change', async (e) => {
     const el = e.target;
+    if (el.dataset.general) {
+      const msg = dlg.querySelector('[data-general-msg]');
+      try {
+        GENERAL = await post('/api/settings', { [el.dataset.general]: el.checked });
+        msg.textContent = 'Saved.'; msg.className = 'nt-msg small cost-ok';
+      } catch (err) { el.checked = !el.checked; msg.textContent = `Not saved: ${err.message}`; msg.className = 'nt-msg small cost-no'; }
+      return;
+    }
     const field = el.dataset.ntField;
     if (!field || !NOTIFY) return;
     const s = NOTIFY.settings;
@@ -72,17 +91,17 @@ function bindNotify() {
     else if (field.startsWith('quiet.')) s.quiet[field.slice(6)] = value;
     else if (field === 'account') s.account = value || null;
     else s[field] = value;
-    await saveNotify(dlg.querySelector('.nt-msg'));
+    await saveNotify(dlg.querySelector('.nt-msg:not([data-general-msg])'));
     renderNotifyDialog();
   });
   dlg.addEventListener('click', async (e) => {
     if (e.target === dlg) { dlg.close(); return; } // backdrop click
     if (!e.target.closest('[data-nt-test]')) return;
-    const msg = dlg.querySelector('.nt-msg');
+    const msg = dlg.querySelector('.nt-msg:not([data-general-msg])');
     msg.textContent = 'Sending…'; msg.className = 'nt-msg small';
     try { await post('/api/notifications/test', {}); msg.textContent = 'Sent: check the corner of your screen.'; msg.className = 'nt-msg small cost-ok'; } catch (err) { msg.textContent = err.message; msg.className = 'nt-msg small cost-no'; }
     await loadNotify();
     renderNotifyDialog();
-    dlg.querySelector('.nt-msg').textContent = 'Sent: check the corner of your screen.';
+    dlg.querySelector('.nt-msg:not([data-general-msg])').textContent = 'Sent: check the corner of your screen.';
   });
 }

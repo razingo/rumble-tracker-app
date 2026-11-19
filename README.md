@@ -30,7 +30,8 @@ any of them (e.g. Firefox only) the tracker opens as a normal browser tab.
 **The tray icon:** closing the window doesn't stop the tracker. It keeps running as an icon in the taskbar's
 notification area (click **^** if it's hidden), so notifications still arrive. Click the icon to open the window again;
 right-click it for *Open data folder* and *Quit tracker*. The **⏻ Quit** button at the top of the tracker also stops
-it. Starting the exe again while it's running just brings the window back.
+it. Starting the exe again while it's running just brings the window back. To start it whenever you sign in to
+Windows, tick *Start with Windows* in **⚙ Settings**.
 
 ### "Windows protected your PC"
 
@@ -45,6 +46,7 @@ Releases are built by GitHub Actions from this repository's source; with the Git
 | What | Where |
 |---|---|
 | Your own data: names you gave, armies, talents, G.R.I.D. and PvP history, progress, notification settings, downloaded game data and app updates | `%APPDATA%\RumbleTracker` |
+| Daily backups (the last 7, written when the tracker stops) | `%APPDATA%\RumbleTracker\backups` |
 | The tracker's log (`tracker.log`, attach it to a bug report if asked) | `%APPDATA%\RumbleTracker` |
 | The program's files, unpacked from the exe on first start, and the window's browser profile | `%LOCALAPPDATA%\RumbleTracker` |
 
@@ -53,9 +55,10 @@ that *Import backup…* restores, also on another PC).
 
 **Updating:** when a new version is out, the tracker offers to install it (*Download now*): it downloads the release
 from GitHub, checks it against the checksums in the signed data pack, replaces `RumbleTracker.exe` and restarts. You
-can also download the new release yourself and replace `RumbleTracker.exe`. Your data stays where it is.
+can also download the new release yourself and replace `RumbleTracker.exe`. Your data stays where it is. If a new
+version fails to start, the previous one is put back. What changed: [CHANGELOG.md](CHANGELOG.md).
 
-**Uninstalling:** quit the tracker, then delete `RumbleTracker.exe` and the two `RumbleTracker` folders above.
+**Uninstalling:** untick *Start with Windows* in **⚙ Settings** if you ticked it, quit the tracker, then delete `RumbleTracker.exe` and the two `RumbleTracker` folders above.
 
 ## Game data updates
 
@@ -87,7 +90,7 @@ open an issue yourself with the *Bug report* template.
 Start `RumbleTracker.exe` from a Command Prompt or a shortcut to use these:
 
 - **A normal browser tab** instead of the app window: `RumbleTracker.exe --tab`.
-- **No window at start** (just the tray icon): `RumbleTracker.exe --no-browser`.
+- **No window at start** (just the tray icon): `RumbleTracker.exe --background` (what *Start with Windows* uses).
 - **Port:** the tracker uses <http://localhost:8765>, or the next free port up to 8784 if another program has it. To
   use one specific port: `set PORT=8800` before starting the exe.
 - **Data pack address:** `"dataPackUrl": "https://…/"` in `%APPDATA%\RumbleTracker\config.json` (https only).
@@ -116,15 +119,18 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 
 | Folder | What |
 |---|---|
-| `server/` | the local server (`main.mjs`): scans the save, keeps history, serves the page and its API |
-| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`), currency names (`currencies.mjs`), PvP and match results (`pvp.mjs`) |
-| `server/notifications/` | what's due (`notify.mjs`) and Windows notifications (`toast.mjs`) |
-| `server/datapack/` | signed game-data updates (`datapack.mjs`) and the public key they must be signed with |
+| `server/` | the local server: `main.mjs` starts the parts and runs the timers; `context.mjs` (shared state), `tables.mjs` (game data), `userdata.mjs` and `store.mjs` (the user's files), `state.mjs` (what the page gets), `backup.mjs`, `guard.mjs` (which requests are allowed), `autostart.mjs` (Start with Windows) |
+| `server/scan/` | reading the save on a timer (`scanner.mjs`) and the history kept from it (`history.mjs`) |
+| `server/http/` | the HTTP server and routes (`server.mjs`) and the API handlers (`handlers.mjs`) |
+| `server/update/` | in-app updates: download and checks (`appupdate.mjs`), the *Download now* flow (`updater.mjs`) |
+| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`), currency names (`currencies.mjs`), PvP and match results (`pvp.mjs`), whether the game runs (`watch.mjs`) |
+| `server/notifications/` | what's due (`notify.mjs`), sending it (`runner.mjs`) and Windows notifications (`toast.mjs`) |
+| `server/datapack/` | signed game-data updates (`datapack.mjs`), the checks (`checker.mjs`), the first start's download (`firstrun.mjs`) and the public key packs must be signed with |
 | `web/` | the page: `index.html`, `scripts/` (one file per tab), `styles/` |
 | `gamedata/` | the game data and art (© Blizzard, see NOTICE), filled by `npm run fetch-gamedata`, served as `/static/…`; not in the repository |
 | `desktop/` | the Windows exe's launcher (app window, tray icon) and its icon |
 | `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip; no game data inside, the exe downloads it on first start) |
-| `test/` | tests for save decoding, data packs, notifications, currency names and PvP (`npm test`, Node's built-in test runner) |
+| `test/` | tests for save decoding, scans, the HTTP API and request filtering, backups, data packs, app updates, notifications, currency names and PvP (`npm test`, Node's built-in test runner; `helpers.mjs` builds save values and a tracker in a temporary folder) |
 | `.github/workflows/` | `release.yml`: tests, builds and attests releases on GitHub Actions when a `v<version>` tag is pushed |
 | `docs/` | the player guide and its screenshots |
 

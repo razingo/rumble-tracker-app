@@ -13,8 +13,9 @@ running in the tray, and the window updates whenever you open it.
 - [Armory](#armory)
 - [G.R.I.D.](#grid)
 - [Calendar](#calendar)
+- [PvP](#pvp)
 - [Progress](#progress)
-- [Notifications](#notifications)
+- [Settings](#settings)
 - [Report a problem](#report-a-problem)
 - [Backup](#backup)
 - [Tips](#tips)
@@ -32,7 +33,7 @@ Below:
 - **Status**: *Live · last scan Xs ago* means the tracker is reading your save. *Game closed* means Warcraft Rumble
   isn't running: the save can't change then, so the tracker pauses until the game starts. If it says something else,
   see [Tips](#tips).
-- **🔔 Alerts**: Windows notifications ([below](#notifications)).
+- **⚙ Settings**: Start with Windows and notifications ([below](#settings)).
 - **🐞 Report a problem**: tell us about a bug ([below](#report-a-problem)). A red dot on it means the tracker noticed
   an error.
 - **Backup**: save or restore everything you entered ([below](#backup)).
@@ -148,11 +149,18 @@ How fast you're growing, from one point per day of history.
 History starts the day you first run the tracker. Daily income comes from the game's own lifetime totals, so days you
 play without the tracker running still count. Rates appear after 12 hours, charts after two days.
 
-## Notifications
+## Settings
+
+Click **⚙ Settings**.
+
+**Start with Windows** starts the tracker in the tray when you sign in to Windows (no window opens), so notifications
+arrive without starting it yourself. Untick it to stop that. (Only in `RumbleTracker.exe`.)
+
+### Notifications
 
 ![Notification settings](screenshots/alerts.png)
 
-Click **🔔 Alerts** to choose Windows notifications: free gift ready, daily shop reset, a new G.R.I.D., an event
+Choose Windows notifications: free gift ready, daily shop reset, a new G.R.I.D., an event
 starting or ending soon, a mini ready to upgrade, enough tickets for a reward goal, and more.
 
 - **For**: all accounts or one.
@@ -183,21 +191,26 @@ settings.
 **Import backup…** restores it, also on another PC. What the tracker reads from the game (levels, currencies…) isn't
 in it: that comes back from your save by itself.
 
+The tracker also backs up by itself: each time it stops (Quit, the tray icon's *Quit tracker*, an update, or Windows
+shutting down) it writes the day's backup to the `backups` folder in its data folder (tray icon → *Open data folder*).
+The last 7 days are kept; restore one with **Import backup…**.
+
 ## Tips
 
 - **"Game data is older than your game"**: right after a patch, new events or minis may be missing or unnamed. The
   tracker downloads updated game data by itself (checked at start and every 6 hours) once it's published; nothing to
   install.
 - **"Tracker server not reachable"**: the tracker was stopped (Quit). Start `RumbleTracker.exe` again.
-- **A new version is available**: a pop-up says so. *Download now* downloads it, checks it and restarts the tracker
-  with it; your data is kept. *Later* hides it until the tracker restarts.
+- **A new version is available**: a pop-up says so. *Download now* downloads it (with progress), checks it and
+  restarts the tracker with it; your data is kept. If the new version can't start, the previous one is put back.
+  *Later* hides it until the tracker restarts.
 - **A data file was damaged** (shown under *Report a problem*): the tracker moved it aside (`<name>.corrupt-<date>` in
-  the data folder) and started without it. Import a backup to get the data back.
+  the data folder) and started without it. Import a backup to get the data back: yours, or a daily one from the
+  `backups` folder.
 - **"No Rumble data found on this PC"**: start Warcraft Rumble on this PC at least once, and log in. The tracker reads what
   the game saved on this PC.
 - **The status says the save couldn't be read**: usually the game was saving at that moment; it clears itself within a
   few seconds. If it stays, please [report it](#report-a-problem).
 - **Where's the window?** Click the tracker's icon in the tray (the taskbar's notification area; click **^** if it's
   hidden), or start `RumbleTracker.exe` again.
-- **Start it with Windows**: press `Win + R`, type `shell:startup`, and put a shortcut to `RumbleTracker.exe` there
-  (add `--no-browser` to the shortcut's target to start in the tray without opening the window).
+- **Start it with Windows**: tick *Start with Windows* in **⚙ Settings**.

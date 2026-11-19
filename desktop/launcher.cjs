@@ -28,6 +28,8 @@ let PAGE = `http://localhost:${PORT}/`;
 const usePort = (p) => { PORT = p; PAGE = `http://localhost:${p}/`; };
 const DATA_PACK_URL = 'https://razingo.github.io/rumble-tracker-data/';
 const args = new Set(process.argv.slice(2));
+// --background (Start with Windows): tray icon only, no window; --no-browser: the same, for testing
+const NO_WINDOW = args.has('--background') || args.has('--no-browser');
 // --after-update=<pid>:<port>: started by an app update; waits for the old instance (pid) to stop
 const afterUpdate = (() => {
   const m = /^--after-update=(\d+):(\d+)$/.exec(process.argv.slice(2).find((a) => a.startsWith('--after-update=')) || '');
@@ -69,9 +71,26 @@ const POWERSHELL = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'
 const SYSTEM32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
 const psArgs = (script) => ['-NoProfile', '-NonInteractive', '-Sta', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
 
-/** Shows a start-up error in a message box, then exits. */
-function fatal(message) {
+/**
+ * Shows a start-up error in a message box, then exits. rollback: right after an app update, the new version failed to
+ * start, so the previous exe is put back and started instead.
+ */
+function fatal(message, { rollback = false } = {}) {
   console.log(`Stopped: ${message}`);
+  if (rollback && afterUpdate && fs.existsSync(OLD_EXE)) {
+    try {
+      fs.rmSync(FAILED_EXE, { force: true });
+      fs.renameSync(process.execPath, FAILED_EXE); // a running exe can be renamed
+      fs.renameSync(OLD_EXE, process.execPath);
+      spawn(process.execPath, [`--after-update=${process.pid}:${afterUpdate.port}`], { detached: true, stdio: 'ignore' }).unref();
+      console.log('App update: the new version failed to start; the previous version was restored');
+      message = `The new version could not start, so the previous version was restored and started again.
+
+${message}`;
+    } catch (e) {
+      console.log(`App update: could not restore the previous version: ${e.message}`);
+    }
+  }
   const script = "Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.MessageBox]::Show($env:RT_MSG, $env:RT_TITLE, 'OK', 'Warning')";
   execFile(POWERSHELL, psArgs(script), { windowsHide: true, env: { ...process.env, RT_MSG: message, RT_TITLE: TITLE } }, () => process.exit(1));
 }
@@ -133,7 +152,7 @@ function openInDefaultBrowser(url) {
 }
 
 async function openWindow() {
-  if (args.has('--no-browser')) return;
+  if (NO_WINDOW) return;
   const b = args.has('--tab') ? null : await chooseBrowser();
   if (!b) return openInDefaultBrowser(PAGE);
   const profile = path.join(HOME, 'window', b.id);
@@ -147,6 +166,7 @@ async function openWindow() {
 // ---- tray icon -----------------------------------------------------------------------------------------------------
 const TRAY_SCRIPT = `
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 function Say($m) { [Console]::Out.WriteLine($m); [Console]::Out.Flush() }
 # fallback icon, drawn in code
@@ -175,11 +195,36 @@ $quit.add_Click({ $tray.Visible = $false; Say 'quit'; [System.Windows.Forms.Appl
 $tray.add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Say 'open' } })
 $tray.ContextMenuStrip = $menu
 $tray.Visible = $true
-# exit when the tracker process ends
 $parent = [int]$env:RT_PARENT
+# Windows signing out or shutting down: tell the tracker (it writes its backup and stops), then give it a few
+# seconds. A hidden top-level window receives WM_ENDSESSION; it needs a little C#.
+try {
+  Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+using System; using System.Diagnostics; using System.Windows.Forms;
+public class RtEndSession : NativeWindow {
+  int parent;
+  public RtEndSession(int parent) { this.parent = parent; CreateHandle(new CreateParams()); }
+  protected override void WndProc(ref Message m) {
+    if (m.Msg == 0x16 && m.WParam != IntPtr.Zero) {
+      Console.Out.WriteLine("shutdown"); Console.Out.Flush();
+      var sw = Stopwatch.StartNew();
+      while (sw.ElapsedMilliseconds < 4000) { try { Process.GetProcessById(parent); } catch { break; } System.Threading.Thread.Sleep(100); }
+    }
+    base.WndProc(ref m);
+  }
+}
+'@
+  $endSession = New-Object RtEndSession $parent
+} catch { [Console]::Error.WriteLine("shutdown watch: $_") }
+# every 2 s: exit when the tracker process ends; report whether Warcraft Rumble runs ("game 1" / "game 0") when it changes
+$global:lastGame = ''
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 2000
-$timer.add_Tick({ try { [void][System.Diagnostics.Process]::GetProcessById($parent) } catch { $tray.Visible = $false; [System.Windows.Forms.Application]::Exit() } })
+$timer.add_Tick({
+  try { [void][System.Diagnostics.Process]::GetProcessById($parent) } catch { $tray.Visible = $false; [System.Windows.Forms.Application]::Exit(); return }
+  $game = if ([System.Diagnostics.Process]::GetProcessesByName($env:RT_GAME).Length) { 'game 1' } else { 'game 0' }
+  if ($game -ne $global:lastGame) { $global:lastGame = $game; Say $game }
+})
 $timer.Start()
 if ($env:RT_HINT) { $tray.ShowBalloonTip(8000, $env:RT_TITLE, $env:RT_HINT, 'Info') }
 Say 'ready'
@@ -192,7 +237,7 @@ function startTray(onQuit) {
   const hint = fs.existsSync(hintFile) ? '' : 'The tracker keeps running here when you close its window, so notifications still arrive. Right-click this icon to quit.';
   const tray = spawn(POWERSHELL, psArgs(TRAY_SCRIPT), {
     windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, RT_TITLE: TITLE, RT_DATA: DATA, RT_EXE: process.execPath, RT_PARENT: String(process.pid), RT_HINT: hint },
+    env: { ...process.env, RT_TITLE: TITLE, RT_DATA: DATA, RT_EXE: process.execPath, RT_PARENT: String(process.pid), RT_HINT: hint, RT_GAME: 'WarcraftRumble' },
   });
   let buf = '';
   let err = '';
@@ -204,14 +249,23 @@ function startTray(onQuit) {
       const cmd = buf.slice(0, i).trim();
       buf = buf.slice(i + 1);
       if (cmd === 'open') openWindow();
-      else if (cmd === 'quit') onQuit();
+      else if (cmd === 'quit') onQuit('Quit from the tray');
+      else if (cmd === 'shutdown') onQuit('Windows is signing out or shutting down');
+      // whether the game runs, for the server (server/game/watch.mjs)
+      else if (cmd === 'game 1' || cmd === 'game 0') process.emit('rumble:game', cmd === 'game 1');
       else if (cmd === 'ready' && hint) { try { fs.writeFileSync(hintFile, ''); } catch { /* shown again next time */ } }
     }
   });
   tray.stderr.setEncoding('utf8');
   tray.stderr.on('data', (c) => { if (err.length < 4000) err += c; });
-  tray.on('error', (e) => console.log(`Tray icon could not start: ${e.message}`));
-  tray.on('exit', (code) => { if (code) console.log(`Tray icon stopped (${code}): ${err.trim().slice(0, 1000)}`); });
+  // without the tray the server watches the game itself
+  tray.on('error', (e) => { console.log(`Tray icon could not start: ${e.message}`); process.emit('rumble:game-failed'); });
+  tray.on('exit', (code) => {
+    // PowerShell starts redirected error output with an empty "#< CLIXML" header
+    const msg = err.replace(/^#< CLIXML\s*/, '').trim();
+    if (code || msg) console.log(`Tray icon stopped (${code}): ${msg.slice(0, 1000)}`);
+    if (!quitting) process.emit('rumble:game-failed');
+  });
 }
 
 // ---- starting up ---------------------------------------------------------------------------------------------------
@@ -255,9 +309,9 @@ async function waitForServer() {
   return false;
 }
 
-/** Opens the running instance's window and exits. */
+/** Opens the running instance's window (unless started in the background) and exits. */
 async function handOver() {
-  console.log('Already running: opening its window');
+  console.log(`Already running${NO_WINDOW ? '' : ': opening its window'}`);
   await openWindow();
   setTimeout(() => process.exit(0), 3000);
 }
@@ -304,6 +358,7 @@ async function waitForExit(pid) {
 // can be renamed but not overwritten, so this one becomes RumbleTracker.exe.old (removed at the next start), the new
 // one is copied to its place and started; it waits for this instance to stop.
 const OLD_EXE = `${process.execPath}.old`;
+const FAILED_EXE = `${process.execPath}.failed`; // a new version that failed to start, rolled back (see fatal)
 function applyUpdate({ exe, version, done }) {
   const target = process.execPath;
   try {
@@ -324,17 +379,18 @@ function applyUpdate({ exe, version, done }) {
 }
 process.on('rumble:apply-update', applyUpdate);
 
-/** Tray Quit: the server stops once its scan and writes are done (same as Quit on the page). */
-function quitFromTray() {
-  if (!process.listenerCount('rumble:quit')) { console.log('Quit from the tray'); process.exit(0); }
-  process.emit('rumble:quit');
+/** Tray Quit or Windows shutting down: the server stops once its scan, backup and writes are done (as Quit on the page). */
+let quitting = false;
+function quitFromTray(reason) {
+  quitting = true;
+  if (!process.listenerCount('rumble:quit')) { console.log(reason); process.exit(0); }
+  process.emit('rumble:quit', reason);
   setTimeout(() => process.exit(0), 20000).unref(); // in case the server can't finish
 }
 
 async function main() {
   if (process.platform !== 'win32') return fatal(`${TITLE} runs on Windows only.`);
   if (afterUpdate) await waitForExit(afterUpdate.pid);
-  try { fs.rmSync(OLD_EXE, { force: true }); } catch { /* still in use: removed next time */ }
   const found = await findPort();
   if (found.running) { usePort(found.port); return handOver(); }
   if (!found.port) {
@@ -347,7 +403,7 @@ async function main() {
 
   rotateLog();
   let app;
-  try { app = unpack(); } catch (e) { return fatal(`Could not unpack the tracker's files: ${e.message}`); }
+  try { app = unpack(); } catch (e) { return fatal(`Could not unpack the tracker's files: ${e.message}`, { rollback: true }); }
 
   process.env.RUMBLE_DATA_DIR = DATA;
   process.env.RUMBLE_DEFAULT_DATA_PACK_URL ||= DATA_PACK_URL;
@@ -366,18 +422,20 @@ async function main() {
   });
 
   // resolve the browser while the server starts
-  if (!args.has('--no-browser') && !args.has('--tab')) chooseBrowser().catch(() => {});
+  if (!NO_WINDOW && !args.has('--tab')) chooseBrowser().catch(() => {});
 
   const load = createRequire(path.join(app.dir, 'launcher-helper.cjs'))(path.join(app.dir, 'import.cjs'));
   // not awaited: on first start the server downloads the game data before it finishes loading, serving a progress
   // page meanwhile, so the window opens as soon as the port answers
   let failed = false;
   load(pathToFileURL(path.join(app.dir, 'server', 'main.mjs')).href)
-    .catch((e) => { failed = true; fatal(`The tracker could not start: ${e && e.message || e}`); });
+    .catch((e) => { failed = true; fatal(`The tracker could not start: ${e && e.message || e}`, { rollback: true }); });
   if (!await waitForServer() || failed) {
-    if (!failed) fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`);
+    if (!failed) fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`, { rollback: true });
     return;
   }
+  // it works: the previous exe (kept since an update) and a rolled-back one are no longer needed
+  for (const f of [OLD_EXE, FAILED_EXE]) { try { fs.rmSync(f, { force: true }); } catch { /* in use: removed next time */ } }
   startTray(quitFromTray);
   // after an update on the same port, the open window reconnects and reloads by itself
   if (afterUpdate && afterUpdate.port === PORT) return;

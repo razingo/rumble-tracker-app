@@ -192,8 +192,20 @@ async function boot() {
   for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => setTab(b.dataset.tab));
   setTab(ui.tab);
   await poll();
-  setInterval(poll, 4000);
+  schedulePoll();
+  // back in view: refresh at once instead of waiting for the slow poll
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); schedulePoll(); } });
   setInterval(renderStatus, 1000);
+}
+
+// Polling: every 5 s; every 60 s while the tracker's window is minimized or hidden; every second while an update
+// downloads (for its progress).
+const POLL_MS = 5000, POLL_HIDDEN_MS = 60000, POLL_UPDATE_MS = 1000;
+let pollTimer = null;
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  const ms = state?.update?.state === 'downloading' ? POLL_UPDATE_MS : document.hidden ? POLL_HIDDEN_MS : POLL_MS;
+  pollTimer = setTimeout(async () => { await poll(); schedulePoll(); }, ms);
 }
 
 // state fields that change without a new revision (the server's liveState)
@@ -332,12 +344,17 @@ function renderUpdate() {
     return;
   }
   if (!u) return;
-  const key = `${u.version}:${u.state}:${u.error || ''}`;
+  const pct = u.total ? Math.min(100, Math.floor((u.done / u.total) * 100)) : null;
+  const key = `${u.version}:${u.state}:${u.error || ''}:${pct}:${u.state === 'downloading' && !u.total ? Math.floor(u.done / 1048576) : ''}`;
   if (key !== updateShown) {
     updateShown = key;
     const head = `<div class="nt-head"><h2>Version ${esc(u.version)} is available</h2></div>`;
     let body;
-    if (u.state === 'downloading') body = '<p>Downloading and checking the new version…</p>';
+    if (u.state === 'downloading') {
+      const mb = (n) => (n / 1048576).toFixed(1);
+      body = `<p>Downloading the new version… ${pct != null ? `${pct}% (${mb(u.done)} of ${mb(u.total)} MB)` : `${mb(u.done || 0)} MB`}</p>
+        <div class="bar"><span style="width:${pct ?? 0}%"></span></div>`;
+    }
     else if (u.state === 'restarting') body = '<p>Installing: the tracker restarts in a moment and this window reloads by itself.</p>';
     else {
       body = `${u.state === 'failed' ? `<p class="cost-no">The update didn't work: ${esc(u.error || 'unknown error')}</p>` : ''}
@@ -355,7 +372,8 @@ async function updateNow() {
   if (!u) return;
   if (!u.auto || u.state === 'failed') { openExternal(RELEASES_URL); return updateLater(); }
   try { await post('/api/update', {}); } catch (e) { alert(`The update could not start: ${e.message}`); }
-  poll();
+  await poll();
+  schedulePoll();
 }
 async function updateLater() {
   try { await post('/api/update/later', {}); } catch { /* the server is gone */ }

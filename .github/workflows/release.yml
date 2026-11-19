@@ -1,7 +1,7 @@
 # Builds the Windows release on GitHub's runners.
 #
 #   Push a tag v<version> (matching package.json): builds, attests and creates a draft release with the zip and
-#   SHA256SUMS.txt. Review the draft, edit the notes, publish.
+#   SHA256SUMS.txt; the release notes start with the version's section of CHANGELOG.md. Review the draft, edit the notes, publish.
 #   Run manually (Actions > Release > Run workflow): builds and attests only; the files are a workflow artifact.
 #
 # Verify a downloaded file:  gh attestation verify RumbleTracker.exe --repo razingo/rumble-tracker-app
@@ -47,6 +47,24 @@ jobs:
       - name: Build
         run: npm run build-release
 
+      # the version's section of CHANGELOG.md becomes the top of the release notes; a tag needs one
+      - name: Changes in this version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $lines = Get-Content CHANGELOG.md
+          $start = [array]::IndexOf($lines, "## $version")
+          if ($start -lt 0) {
+            if ($env:GITHUB_REF_TYPE -eq 'tag') { throw "CHANGELOG.md has no section '## $version'" }
+            $section = @()
+          } else {
+            $end = $start + 1
+            while ($end -lt $lines.Count -and -not $lines[$end].StartsWith('## ')) { $end++ }
+            $section = if ($end -gt $start + 1) { $lines[($start + 1)..($end - 1)] } else { @() }
+          }
+          New-Item -ItemType Directory -Force dist/release | Out-Null
+          Set-Content -Path dist/release/CHANGES.md -Value (($section -join [char]10).Trim()) -Encoding utf8NoBOM
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -61,6 +79,7 @@ jobs:
           path: |
             dist/release/RumbleTracker-*-win-x64.zip
             dist/release/SHA256SUMS.txt
+            dist/release/CHANGES.md
 
   release:
     if: github.ref_type == 'tag'
@@ -81,6 +100,16 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           {
+            if [ -s dist/CHANGES.md ]; then
+              echo "## What's new"
+              echo
+              cat dist/CHANGES.md
+              echo
+              echo "## Download"
+              echo
+            fi
+            echo "Already running 0.4.0 or later? The tracker offers the update itself. Otherwise:"
+            echo
             echo "Download **RumbleTracker-${version}-win-x64.zip**, extract it anywhere and run **RumbleTracker.exe** (Windows 10/11, 64-bit). Windows may show \"Windows protected your PC\" the first time: click **More info**, then **Run anyway**. The first start downloads the game data (about 4.5 MB)."
             echo
             echo "See the [player guide](https://github.com/razingo/rumble-tracker-app/blob/main/docs/INSTRUCTIONS.md)."

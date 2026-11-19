@@ -33,3 +33,23 @@ test('not a backup', () => {
   assert.deepEqual(restoreBackup(files, { format: BACKUP_FORMAT, data: { names: [1, 2] } }), []);
   assert.deepEqual(files.names, { accounts: {} });
 });
+
+test('daily backups: one per day, the newest 7 kept', async () => {
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { mkdtemp, readdir, readFile, writeFile, rm } = await import('node:fs/promises');
+  const { writeDailyBackup } = await import('../server/backup.mjs');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'rumble-daily-'));
+  await writeFile(path.join(dir, 'keep-me.txt'), 'other files are left alone');
+  const files = { names: { accounts: { a: 'Main' } } };
+  for (let d = 1; d <= 9; d++) await writeDailyBackup(dir, files, { now: new Date(2026, 0, d, 12) });
+  // the same day again: replaced, not added
+  files.names.accounts.a = 'Renamed';
+  const last = await writeDailyBackup(dir, files, { now: new Date(2026, 0, 9, 18) });
+  const names = (await readdir(dir)).sort();
+  assert.deepEqual(names, ['keep-me.txt', ...[3, 4, 5, 6, 7, 8, 9].map((d) => `rumble-tracker-backup-2026-01-0${d}.json`)]);
+  const b = JSON.parse(await readFile(last, 'utf8'));
+  assert.equal(b.format, BACKUP_FORMAT);
+  assert.equal(b.data.names.accounts.a, 'Renamed');
+  await rm(dir, { recursive: true });
+});

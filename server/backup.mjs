@@ -1,3 +1,6 @@
+import { mkdir, writeFile, rename, readdir, rm } from 'node:fs/promises';
+import path from 'node:path';
+
 // Backups: all user-entered data, and history that can't be rebuilt from the save, in one JSON file.
 export const BACKUP_FORMAT = 'rumble-tracker-backup';
 
@@ -26,4 +29,23 @@ export function restoreBackup(files, backup) {
     restored.push(key);
   }
   return restored;
+}
+
+// ---- daily backups: written when the tracker stops (Quit, the tray, an update, Windows shutting down) -------------
+const DAILY = /^rumble-tracker-backup-(\d{4}-\d{2}-\d{2})\.json$/;
+
+/**
+ * Writes today's backup into `dir` (one file per local day, replaced if it exists) and keeps the newest `keep`.
+ * Returns the file's path.
+ */
+export async function writeDailyBackup(dir, files, { now = new Date(), keep = 7 } = {}) {
+  await mkdir(dir, { recursive: true });
+  const day = now.toLocaleDateString('sv-SE'); // local YYYY-MM-DD
+  const file = path.join(dir, `rumble-tracker-backup-${day}.json`);
+  const tmp = `${file}.${process.pid}.tmp`;
+  await writeFile(tmp, JSON.stringify(buildBackup(files, now)));
+  await rename(tmp, file);
+  const old = (await readdir(dir)).filter((n) => DAILY.test(n)).sort().reverse().slice(keep);
+  for (const n of old) await rm(path.join(dir, n), { force: true });
+  return file;
 }

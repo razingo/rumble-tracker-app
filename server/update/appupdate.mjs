@@ -53,10 +53,29 @@ export function zipEntry(zip, name) {
  * Downloads and verifies the release named by `app` (from latestAppOf); writes the exe into `dir`. Earlier downloads
  * there are removed. Returns the exe's path. `fetchImpl` and `url` are for tests.
  */
-export async function downloadUpdate(app, dir, { fetchImpl = fetch, url = zipUrl(app) } = {}) {
+export async function downloadUpdate(app, dir, { fetchImpl = fetch, url = zipUrl(app), onProgress } = {}) {
   const r = await fetchImpl(url, { redirect: 'follow', signal: AbortSignal.timeout(10 * 60 * 1000) });
   if (!r.ok) throw new Error(`download failed (${r.status})`);
-  const zip = Buffer.from(await r.arrayBuffer());
+  const total = Number(r.headers?.get?.('content-length')) || 0;
+  if (total > MAX_ZIP) throw new Error('download too large');
+  // read in chunks to report progress: onProgress(bytes so far, total or 0)
+  const chunks = [];
+  let done = 0;
+  if (r.body?.getReader) {
+    const reader = r.body.getReader();
+    for (;;) {
+      const { done: end, value } = await reader.read();
+      if (end) break;
+      chunks.push(Buffer.from(value));
+      done += value.length;
+      if (done > MAX_ZIP) { reader.cancel().catch(() => {}); throw new Error('download too large'); }
+      onProgress?.(done, total);
+    }
+  } else {
+    chunks.push(Buffer.from(await r.arrayBuffer()));
+    onProgress?.(chunks[0].length, total);
+  }
+  const zip = Buffer.concat(chunks);
   if (zip.length > MAX_ZIP) throw new Error('download too large');
   if (sha256(zip) !== app.zipSha256) throw new Error('the downloaded file does not match its checksum');
   const exe = zipEntry(zip, EXE);
