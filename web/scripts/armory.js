@@ -1,11 +1,15 @@
-'use strict';
 // Armory tab: saved armies as cards with inline editing of name, description and tags.
-// Depends on globals from app.js and army.js.
+import { confirmDialog } from './dialogs.js';
+import { setTab } from './app.js';
+import { ownedUnit, levelInSlot, encodeArmyCode, saveDraftLocal, persistArmies } from './army.js';
+import { toggleIn } from './collection.js';
+import { $, esc, BY_SLUG, state, ui } from './core.js';
+import { rarityColor, effectivePicks } from './units.js';
 
 ui.armory = { q: '', tags: [] };
 
 /** Level and talent per slot of a saved army. */
-function armyStats(a) {
+export function armyStats(a) {
   const L = ownedUnit(a.leader);
   const slugs = [a.leader, ...a.minis];
   const slots = slugs.map((slug, i) => {
@@ -25,7 +29,7 @@ function armyStats(a) {
   };
 }
 
-function armoryCard(a) {
+export function armoryCard(a) {
   const s = armyStats(a);
   const portrait = (x, i) => x.m
     ? `<span class="am-mini${i === 0 ? ' am-leader' : ''}${x.u ? '' : ' missing'}" title="${esc(x.m.name)}${x.level != null ? ` · level ${x.level}` : ''}${x.talent ? ` · ${esc(x.talent.name)}` : ''}${x.u ? '' : ' · not owned'}" style="--rc:${x.u ? rarityColor(x.u.rarity) : 'var(--line)'}">
@@ -56,7 +60,7 @@ function armoryCard(a) {
   </article>`;
 }
 
-function armoryFiltered() {
+export function armoryFiltered() {
   const q = ui.armory.q.trim().toLowerCase();
   const want = ui.armory.tags.map((t) => t.toLowerCase());
   return (state.savedArmies || []).filter((a) => {
@@ -68,7 +72,7 @@ function armoryFiltered() {
   });
 }
 
-function renderArmory() {
+export function renderArmory() {
   if (!state) return;
   const page = $('#tab-armory');
   const all = state.savedArmies || [];
@@ -100,7 +104,7 @@ function renderArmory() {
 }
 
 // ---- editing --------------------------------------------------------------------------------------
-async function updateSavedArmy(id, change, card) {
+export async function updateSavedArmy(id, change, card) {
   const list = (state.savedArmies || []).map((a) => (a.id === id ? { ...a, ...change } : a));
   const msg = card?.querySelector('.am-msg');
   try {
@@ -116,9 +120,9 @@ async function updateSavedArmy(id, change, card) {
   if (ui.armyDraft?.id === id) { Object.assign(ui.armyDraft, change); saveDraftLocal(); }
 }
 
-function cleanTag(raw) { return String(raw).trim().replace(/\s+/g, ' ').slice(0, 30); }
+export function cleanTag(raw) { return String(raw).trim().replace(/\s+/g, ' ').slice(0, 30); }
 
-function bindArmory() {
+export function bindArmory() {
   const page = $('#tab-armory');
   const armyOfCard = (el) => {
     const card = el.closest('[data-armory-id]');
@@ -197,7 +201,7 @@ function bindArmory() {
         msg.className = `am-msg small ${copied ? 'cost-ok' : 'mono'}`;
       } catch (err) { msg.textContent = err.message; msg.className = 'am-msg small cost-no'; }
     } else if (act.dataset.amAct === 'delete') {
-      if (!confirm(`Delete "${army.name}"?`)) return;
+      if (!(await confirmDialog(`"${army.name}" is removed from your saved armies.`, { title: 'Delete this army?', ok: 'Delete', danger: true }))) return;
       await persistArmies((state.savedArmies || []).filter((a) => a.id !== army.id));
       if (ui.armyDraft?.id === army.id) { ui.armyDraft = { ...ui.armyDraft, id: null }; saveDraftLocal(); }
       renderArmory();

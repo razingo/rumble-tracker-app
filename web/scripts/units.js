@@ -1,0 +1,96 @@
+// Mini and army calculations on the game rules (rules.json, minis.json) and the selected account's state: rarity
+// upgrades, XP, talents and leader army slots. No DOM, so the tests can run them (test/page.test.mjs).
+import { RULES, BY_SLUG, state } from './core.js';
+
+export const rarityName = (r) => RULES.rarities[r]?.name ?? `Rarity ${r}`;
+export const rarityColor = (r) => `var(--r${r})`;
+export const miniOf = (u) => (u && u.slug ? BY_SLUG.get(u.slug) : null);
+// a mini not yet in the game data (typically added by a patch)
+export const unitName = (u) => miniOf(u)?.name ?? `New mini ${u.id.slice(0, 8)}`;
+// Known currencies are identified by ID (the same for every player); names are for display only.
+export const currencyOf = (role) => state.currencies.find((c) => c.id === RULES.currencyIds[role]);
+export const balance = (role) => currencyOf(role)?.balance ?? 0;
+export const curName = (role) => currencyOf(role)?.name || state.currencyNames?.[RULES.currencyIds[role]] || role;
+export const coreName = (role) => curName(role).replace(/s$/, '');
+
+export function nextUpgrade(u) {
+  if (u.synthetic || u.rarity >= RULES.rarityUpgrade.length) return null;
+  const step = RULES.rarityUpgrade[u.rarity];
+  const starsOk = u.stars >= step.stars;
+  const arcOk = balance('arcEnergy') >= step.arcEnergy;
+  const coreOk = !step.core || balance(step.core) >= 1;
+  return { ...step, starsOk, arcOk, coreOk, ready: starsOk && arcOk && coreOk };
+}
+export const talentSlots = (u) => (u.synthetic ? 0 : RULES.talentSlotsByRarity[u.rarity] ?? 0);
+export const talentTotal = (u) => miniOf(u)?.talents.length ?? 3;
+// A mini with every talent unlocked has all of them ticked.
+export const allTalentsOwned = (u) => talentTotal(u) > 0 && u.talents >= talentTotal(u);
+export const effectivePicks = (u) => (allTalentsOwned(u) ? [...Array(talentTotal(u)).keys()] : u.talentPicks);
+export function xpToMax(u) {
+  if (u.xpLevel >= RULES.maxXpLevel) return 0;
+  let total = Math.max(0, u.xpNeeded - u.xp);
+  for (let l = u.xpLevel + 1; l < RULES.maxXpLevel; l++) total += RULES.xpToNext[l] || 0;
+  return total;
+}
+// ---- army slots (leaders only, entered by the user) ----------------------------------------
+export const isLeader = (u) => !u.synthetic && miniOf(u)?.category === 'Leader';
+// Slots 1-3 form the top row. With known fixed slots, 1-2 are locked and 3 is the fixed type or Wildcard.
+// Slots 4-6 are free.
+export function fixedSlot(u, i) {
+  const f = miniOf(u)?.fixedArmySlots;
+  return f && i >= 1 && i <= 3 ? f[i - 1] || null : null;
+}
+export const slotLocked = (u, i) => i >= 1 && i <= 2 && !!fixedSlot(u, i);
+// legacy names for the Siege slot type
+export const SLOT_ALIASES = { 'Siege Damage': 'Siege', 'Siege Specialist': 'Siege' };
+/** Slot types allowed in a leader's bottom slots (4-6), from its army board; never Wildcard. */
+export const bottomSlotOptions = (u) => miniOf(u)?.armySlotUpgrades || [];
+export function armyOf(u) {
+  const A = RULES.armySlots;
+  const saved = u.army || [];
+  const used = new Set();
+  return Array.from({ length: A.count }, (_, i) => {
+    let type = i === A.leaderSlot ? 'Leader' : SLOT_ALIASES[saved[i]?.type] || saved[i]?.type || fixedSlot(u, i) || '';
+    if (slotLocked(u, i)) type = fixedSlot(u, i);
+    else if (i === 3 && fixedSlot(u, 3) && type !== 'Wildcard') type = fixedSlot(u, 3);
+    else if (i >= 4) {
+      // bottom row: a board type, no Wildcard, no repeats; invalid types read as empty
+      const opts = bottomSlotOptions(u);
+      if (type === 'Wildcard' || (opts.length && !opts.includes(type)) || used.has(type)) type = '';
+      if (type) used.add(type);
+    }
+    return { type, tier: saved[i]?.tier || 0, boost: i === A.boostSlot && saved[i]?.boost === true };
+  });
+}
+export const hasBoost = (u) => isLeader(u) && armyOf(u)[RULES.armySlots.boostSlot].boost;
+// A leader occupies its Leader slot, so that slot's bonus is part of its level.
+export const leaderSlotBonus = (u) => (isLeader(u) ? RULES.armySlots.tiers[armyOf(u)[RULES.armySlots.leaderSlot].tier]?.bonus || 0 : 0);
+export const totalLevel = (u) => u.level + leaderSlotBonus(u);
+
+export function armyTotals(units) {
+  const A = RULES.armySlots;
+  const diamond = A.tiers.length - 1;
+  const t = { leaders: 0, slots: 0, diamonds: 0, goldReady: 0, notDiamond: 0, cost: A.diamondValorCost };
+  for (const u of units) {
+    if (!isLeader(u)) continue;
+    t.leaders++;
+    for (const s of armyOf(u)) {
+      t.slots++;
+      if (s.tier === diamond) t.diamonds++;
+      else { t.notDiamond++; if (s.tier === diamond - 1) t.goldReady++; }
+    }
+  }
+  return t;
+}
+
+export function remainingToLegendary(u) {
+  const out = { arcEnergy: 0, stars: 0, cores: {} };
+  if (u.synthetic) return out;
+  for (let r = u.rarity; r < RULES.rarityUpgrade.length; r++) {
+    const s = RULES.rarityUpgrade[r];
+    out.arcEnergy += s.arcEnergy;
+    out.stars += r === u.rarity ? Math.max(0, s.stars - u.stars) : s.stars;
+    if (s.core) out.cores[s.core] = (out.cores[s.core] || 0) + 1;
+  }
+  return out;
+}

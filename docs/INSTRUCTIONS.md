@@ -3,9 +3,10 @@
 How to use the Rumble Collection Tracker: what each tab shows and what you can do there. To install it, see the
 [README](../README.md).
 
-The tracker reads your progress from the game's saved data on your PC every few seconds. Play a battle, upgrade a mini
-or buy something, and the tracker shows it within a few seconds. You don't need to keep it in front of you: it keeps
-running in the tray, and the window updates whenever you open it.
+The tracker reads your progress from the game's saved data on your PC every few seconds while the game runs. Play a
+battle, upgrade a mini or buy something, and the tracker shows it within a few seconds. You don't need to keep it in
+front of you: it keeps running in the tray, and the window updates whenever you open it. What it does in the
+background (reading the save, backups, updates) is explained in [How the tracker works](HOW-IT-WORKS.md).
 
 - [The top bar](#the-top-bar)
 - [Collection](#collection)
@@ -132,6 +133,8 @@ The PvP season, your rank and your matches.
 - **Season**: the season's end date and its maps.
 - **Modifiers**: the three modifiers in play now (they change every 3 days) and the next ones.
 - **Honor this season**: a chart of your honor and the latest matches.
+- **Win rate**: your record while each modifier was active. Click modifiers to see only the matches played while all
+  of the chosen ones were active: the record and the win-rate chart follow; *Show all* clears the choice.
 - **Season-end rewards**: what your current rank pays when the season ends, and what the next rank would pay.
 - **Victory Road** (bottom): every reward and how many Victory Points it needs.
 
@@ -160,14 +163,16 @@ arrive without starting it yourself. Untick it to stop that. (Only in `RumbleTra
 
 ![Notification settings](screenshots/alerts.png)
 
-Choose Windows notifications: free gift ready, daily shop reset, a new G.R.I.D., an event
-starting or ending soon, a mini ready to upgrade, enough tickets for a reward goal, and more.
+Choose Windows notifications: free gift ready, daily shop reset, a new G.R.I.D., an event starting or ending soon, a
+mini ready to upgrade, enough tickets for a reward goal, the PvP season ending soon (claim your Victory Road rewards),
+new PvP modifiers, a new tracker version, and more. Clicking a notification opens the tracker.
 
 - **For**: all accounts or one.
 - **Also while playing**: unticked notifications are skipped while Warcraft Rumble is running.
 - **Quiet hours**: notifications are held until they end.
 - **Send a test notification** to check that Windows shows them. If nothing appears, check that notifications for
-  Windows PowerShell are allowed in Windows' *Settings → System → Notifications*: the tracker sends them that way.
+  *Rumble Collection Tracker* (or *Windows PowerShell*, when running from source) are allowed in Windows' *Settings →
+  System → Notifications*.
 
 Notifications only arrive while the tracker is running (in the tray is enough).
 
@@ -179,6 +184,9 @@ Found a bug, or something's wrong or missing? Click **🐞 Report a problem**, d
 GitHub**. Your browser opens a new issue, already filled in; check it and press *Submit* there. A free GitHub account is
 needed. *Copy report* copies the same text, if you'd rather send it another way.
 
+To show what's wrong, add a screenshot: click **Take a screenshot** (or press **Win+Shift+S**), select an area, and
+paste it into the issue on GitHub with **Ctrl+V**.
+
 *Add the details below* adds the tracker's version, the game build, the game-data status and recent errors. User
 names, account IDs and other personal details are removed, and your collection and save data are never included. Open
 *Details that would be added* to see exactly what's sent.
@@ -186,14 +194,12 @@ names, account IDs and other personal details are removed, and your collection a
 ## Backup
 
 **Backup → Export backup** saves everything you entered into one file: account and mini names, talents, army slots,
-saved armies, the army you're editing, G.R.I.D. history, PvP match history, progress history and notification
-settings.
+saved armies, the army you're editing, reward goals and settings, plus the G.R.I.D., PvP and progress history.
 **Import backup…** restores it, also on another PC. What the tracker reads from the game (levels, currencies…) isn't
 in it: that comes back from your save by itself.
 
-The tracker also backs up by itself: each time it stops (Quit, the tray icon's *Quit tracker*, an update, or Windows
-shutting down) it writes the day's backup to the `backups` folder in its data folder (tray icon → *Open data folder*).
-The last 7 days are kept; restore one with **Import backup…**.
+The tracker also backs up by itself: when it starts, every 24 hours and when it stops, one backup per day, kept for 7
+days. **Backup → Automatic backups** lists them; click one to restore it.
 
 ## Tips
 
@@ -205,8 +211,7 @@ The last 7 days are kept; restore one with **Import backup…**.
   restarts the tracker with it; your data is kept. If the new version can't start, the previous one is put back.
   *Later* hides it until the tracker restarts.
 - **A data file was damaged** (shown under *Report a problem*): the tracker moved it aside (`<name>.corrupt-<date>` in
-  the data folder) and started without it. Import a backup to get the data back: yours, or a daily one from the
-  `backups` folder.
+  the data folder) and started without it. Restore the last good backup from **Backup → Automatic backups**.
 - **"No Rumble data found on this PC"**: start Warcraft Rumble on this PC at least once, and log in. The tracker reads what
   the game saved on this PC.
 - **The status says the save couldn't be read**: usually the game was saving at that moment; it clears itself within a

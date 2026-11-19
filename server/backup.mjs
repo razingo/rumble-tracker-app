@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rename, readdir, rm } from 'node:fs/promises';
+import { mkdir, writeFile, rename, readdir, rm, stat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Backups: all user-entered data, and history that can't be rebuilt from the save, in one JSON file.
@@ -31,21 +31,43 @@ export function restoreBackup(files, backup) {
   return restored;
 }
 
-// ---- daily backups: written when the tracker stops (Quit, the tray, an update, Windows shutting down) -------------
+// ---- automatic backups: at start, every 24 hours and when the tracker stops ----------------------------------
+// One file per local day (replaced by later backups that day); files older than KEEP_DAYS are deleted.
+export const KEEP_DAYS = 7;
 const DAILY = /^rumble-tracker-backup-(\d{4}-\d{2}-\d{2})\.json$/;
+const dayOf = (d) => d.toLocaleDateString('sv-SE'); // local YYYY-MM-DD
 
-/**
- * Writes today's backup into `dir` (one file per local day, replaced if it exists) and keeps the newest `keep`.
- * Returns the file's path.
- */
-export async function writeDailyBackup(dir, files, { now = new Date(), keep = 7 } = {}) {
+/** Writes today's backup into `dir` and deletes those older than KEEP_DAYS. Returns the file's path. */
+export async function writeDailyBackup(dir, files, { now = new Date(), keepDays = KEEP_DAYS } = {}) {
   await mkdir(dir, { recursive: true });
-  const day = now.toLocaleDateString('sv-SE'); // local YYYY-MM-DD
-  const file = path.join(dir, `rumble-tracker-backup-${day}.json`);
+  const file = path.join(dir, `rumble-tracker-backup-${dayOf(now)}.json`);
   const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(buildBackup(files, now)));
   await rename(tmp, file);
-  const old = (await readdir(dir)).filter((n) => DAILY.test(n)).sort().reverse().slice(keep);
-  for (const n of old) await rm(path.join(dir, n), { force: true });
+  const oldest = dayOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (keepDays - 1)));
+  for (const n of await readdir(dir)) {
+    const m = DAILY.exec(n);
+    if (m && m[1] < oldest) await rm(path.join(dir, n), { force: true });
+  }
   return file;
+}
+
+/** The automatic backups, newest first: [{ day, created, size }]. */
+export async function listDailyBackups(dir) {
+  let names;
+  try { names = await readdir(dir); } catch { return []; }
+  const out = [];
+  for (const n of names) {
+    const m = DAILY.exec(n);
+    if (!m) continue;
+    const st = await stat(path.join(dir, n)).catch(() => null);
+    if (st) out.push({ day: m[1], created: st.mtime.toISOString(), size: st.size });
+  }
+  return out.sort((a, b) => b.day.localeCompare(a.day));
+}
+
+/** Reads the automatic backup of a day (YYYY-MM-DD), or null. */
+export async function readDailyBackup(dir, day) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day))) return null;
+  try { return JSON.parse(await readFile(path.join(dir, `rumble-tracker-backup-${day}.json`), 'utf8')); } catch { return null; }
 }

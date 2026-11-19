@@ -24,11 +24,11 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
     const list = [...ctx.accounts.entries()]
       .filter(([id, acc]) => acc.snapshot && (!settings.account || id === settings.account))
       .map(([id, acc]) => ({
-        id, label: accountLabel(ctx, id), shop: acc.shop, currencies: acc.snapshot.currencies,
+        id, label: accountLabel(ctx, id), shop: acc.shop, currencies: acc.snapshot.currencies, pvp: acc.pvp || null,
         units: acc.snapshot.units.map((x) => ({ ...x, slug: unitSlug(ctx, x.id), name: nameOf.get(unitSlug(ctx, x.id)) })),
       }));
     const due = dueNotifications({
-      now, accounts: list, events: ctx.tables.events, store: ctx.tables.store, rules: ctx.tables.rules, plans: u().plans, settings,
+      now, accounts: list, events: ctx.tables.events, store: ctx.tables.store, rules: ctx.tables.rules, pvp: ctx.tables.pvp, plans: u().plans, settings,
       multi: list.length > 1, appUpdateNeeded: ctx.dataPack.needsAppUpdate, newVersion: ctx.dataPack.newVersion,
     }).filter((n) => !log.sent[n.key]);
     if (!due.length && !(log.pending.length && !inQuietHours(settings.quiet))) return;

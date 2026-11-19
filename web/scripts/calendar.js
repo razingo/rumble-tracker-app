@@ -1,67 +1,39 @@
-'use strict';
 // Calendar tab: event schedules from gamedata/events.json plus the events the save reports as running.
-// Depends on globals from app.js.
+import { DAY, occurrences, rotationAt, rotationName as rotName } from './lib/schedule.js';
+import { $, esc, fmt, ago, post, RULES, BY_SLUG, TAG_ICONS, state, ui, ANKH_ID, onTablesReload } from './core.js';
+import { ico, tag } from './drawer.js';
+import { STORE, loadStore } from './grid.js';
 
-let EVENTS = null; // { currencies: { A|B|C: saveId }, rotations: [...], events: [...] }
+export let EVENTS = null; // { currencies: { A|B|C: saveId }, rotations: [...], events: [...] }
+onTablesReload(() => { EVENTS = null; });
 // offset: timeline shift in days; tree: event whose reward tree is open; picks: selected rewards ("row-col" keys)
 ui.calendar = { offset: 0, tree: null, picks: [] };
-// event ticket currencies (save IDs, also in events.json)
-const EVENT_CURRENCY = { A: 'd43f55f20c6d9817715855e9601e9228', B: 'c4bb4c360d9e33ead30322d8d630ef79', C: '94c293ba0152633a5a74a8dae8dab0ba' };
-const EVENT_CURRENCY_IDS = new Set(Object.values(EVENT_CURRENCY));
+export { DAY, occurrences, rotationAt, rotName };
+// event ticket slots: { A|B|C: currency save ID } (events.json)
+const ticketSlots = () => EVENTS?.currencies || {};
+export const EVENT_ICON = new Set(['darkmoon', 'pilgrim', 'solo', 'winterveil', 'hallow', 'arthas', 'family', 'love', 'newyear']);
+export const eventIcon = (ev) => `/static/events/${EVENT_ICON.has(ev.family) ? ev.family : 'generic'}.webp`;
+export const TIMELINE_DAYS = 35; // centred on today
+export const TIMELINE_RANGE = 120; // slider range in days, each way
+export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'}`;
 
-const DAY = 86400000;
-const EVENT_ICON = new Set(['darkmoon', 'pilgrim', 'solo', 'winterveil', 'hallow', 'arthas', 'family', 'love', 'newyear']);
-const eventIcon = (ev) => `/static/events/${EVENT_ICON.has(ev.family) ? ev.family : 'generic'}.webp`;
-const TIMELINE_DAYS = 35; // centred on today
-const TIMELINE_RANGE = 120; // slider range in days, each way
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'}`;
-
-async function loadEvents() {
+export async function loadEvents() {
   if (EVENTS) return EVENTS;
   EVENTS = await fetch('/static/events.json').then((r) => r.json());
   return EVENTS;
 }
 
 // ---- schedules ------------------------------------------------------------------------------------
-/** UTC time of the n-th weekday of a month at the given hour. */
-function nthWeekdayUtc(y, m0, nth, weekday, hour) {
-  const first = new Date(Date.UTC(y, m0, 1)).getUTCDay();
-  return Date.UTC(y, m0, 1 + ((weekday - first + 7) % 7) + (nth - 1) * 7, hour);
-}
 
-/** Every run of an event overlapping [from, to): [{ start, end }] in ms. */
-function occurrences(ev, from, to) {
-  const s = ev.schedule;
-  const out = [];
-  if (s.kind === 'once') {
-    const a = Date.parse(s.start), b = Date.parse(s.end);
-    if (b > from && a < to) out.push({ start: a, end: b });
-    return out;
-  }
-  const until = s.until ? Date.parse(`${s.until}T23:59:59Z`) : Infinity;
-  const y0 = Math.max(s.fromYear, new Date(from).getUTCFullYear() - 1);
-  const y1 = new Date(to).getUTCFullYear();
-  for (let y = y0; y <= y1; y++) {
-    const months = s.every === 'month'
-      ? [...Array(12).keys()].filter((m) => y > s.fromYear || m >= s.month - 1)
-      : [s.month - 1];
-    for (const m of months) {
-      const a = s.kind === 'nthWeekday' ? nthWeekdayUtc(y, m, s.nth, s.weekday, s.hourUtc) : Date.UTC(y, m, s.day, s.hourUtc);
-      const b = a + s.days * DAY;
-      if (a <= until && b > from && a < to) out.push({ start: a, end: b });
-    }
-  }
-  return out;
-}
 
-function runsBetween(from, to) {
+export function runsBetween(from, to) {
   return EVENTS.events.flatMap((ev) => occurrences(ev, from, to).map((o) => ({ ev, ...o })));
 }
 
 /** "2nd Wednesday of every month · 7 days" */
-function ruleText(s) {
+export function ruleText(s) {
   if (s.kind === 'once') return null;
   const when = s.kind === 'nthWeekday'
     ? `${ordinal(s.nth)} ${WEEKDAY_NAMES[s.weekday]} of ${s.every === 'month' ? 'every month' : MONTH_NAMES[s.month - 1]}`
@@ -70,43 +42,35 @@ function ruleText(s) {
 }
 
 // ---- formatting -----------------------------------------------------------------------------------
-function span(ms) {
+export function span(ms) {
   const m = Math.max(0, Math.round(ms / 60000));
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), min = m % 60;
   if (d) return `${d}d ${h}h`;
   if (h) return `${h}h ${min}m`;
   return `${min}m`;
 }
-const when = (t) => new Date(t).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-const dayOnly = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-const isLive = (ev) => (state?.activeEvents || []).includes(ev.saveId);
+export const when = (t) => new Date(t).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+export const dayOnly = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+export const isLive = (ev) => (state?.activeEvents || []).includes(ev.saveId);
 // tickets reset between events: a balance belongs to the event using its slot now
-function ticketBalance(ev) {
-  const id = ev.currency && EVENT_CURRENCY[ev.currency];
+export function ticketBalance(ev) {
+  const id = ev.currency && ticketSlots()[ev.currency];
   const c = id && state?.currencies?.find((x) => x.id === id);
   return c && c.event === (ev.name || ev.id) ? c.balance : null;
 }
 
 // ---- dungeon / raid rotations ---------------------------------------------------------------------
-/** The rotation entry active at time t: { item, start, end }. */
-function rotationAt(rot, t) {
-  const t0 = Date.parse(rot.start), p = rot.periodDays * DAY;
-  const k = Math.floor((t - t0) / p);
-  const n = rot.list.length;
-  return { item: rot.list[((k % n) + n) % n], start: t0 + k * p, end: t0 + (k + 1) * p };
-}
-const rotName = (item) => (typeof item === 'string' ? item : `${item.name}${item.type === 'Siege' ? ' Siege' : ''}`);
-const rotColor = (rot, item) => (rot.id === 'dungeonFamily' ? `var(--fam-${String(item).toLowerCase()}, var(--ev-default))` : rot.id === 'raid' ? (item.type === 'Siege' ? 'var(--ev-siege)' : 'var(--ev-raid)') : 'var(--ev-dungeon)');
-const rotIcon = (rot, item) => (rot.id === 'dungeonFamily' && TAG_ICONS?.[item] ? `<img class="rot-ico" src="/static/${TAG_ICONS[item]}" alt="">` : '');
+export const rotColor = (rot, item) => (rot.id === 'dungeonFamily' ? `var(--fam-${String(item).toLowerCase()}, var(--ev-default))` : rot.id === 'raid' ? (item.type === 'Siege' ? 'var(--ev-siege)' : 'var(--ev-raid)') : 'var(--ev-dungeon)');
+export const rotIcon = (rot, item) => (rot.id === 'dungeonFamily' && TAG_ICONS?.[item] ? `<img class="rot-ico" src="/static/${TAG_ICONS[item]}" alt="">` : '');
 
 /** The account's Ankh (continues a failed dungeon), on the Dungeon card. */
-function ankhLine() {
+export function ankhLine() {
   const c = state?.currencies?.find((x) => x.id === ANKH_ID);
   const icon = RULES.currencyIcons?.[ANKH_ID];
   return `<div class="rot-ankh" title="Used to continue failed dungeons">${icon ? `<img class="cur-ico" src="/static/${icon}" alt="">` : ''}${esc(c?.name || 'Ankh')} <b>${fmt(c?.balance ?? 0)}</b> <small class="muted">continues a failed dungeon</small></div>`;
 }
 
-function renderRotations(now) {
+export function renderRotations(now) {
   const card = (rot) => {
     const cur = rotationAt(rot, now);
     const next = [1, 2, 3].map((k) => rotationAt(rot, cur.end + (k - 1) * rot.periodDays * DAY));
@@ -127,26 +91,26 @@ function renderRotations(now) {
 // ---- shop offers ----------------------------------------------------------------------------------
 // Timed store slots and limited offers from the save; titles and prices from static/store.json.
 // Permanent packs have no timer and are not listed.
-const titleCase = (s) => (s && s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s.'-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/'S\b/g, "'s") : s);
+export const titleCase = (s) => (s && s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s.'-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/'S\b/g, "'s") : s);
 // the tome an offer sells: from the save, or parsed from generic offer names
-function offerTome(o) {
+export function offerTome(o) {
   if (o.tome && STORE?.tomes?.[o.tome]) return STORE.tomes[o.tome];
   const m = /Tome(Modest|Major|Mega|Mythic)(?:_(\w+?))?_StoreOffer/.exec(STORE?.offers?.[o.offer]?.name || '');
   return m ? `${m[1]} ${m[2] && !/Generic/.test(m[2]) ? `${m[2]} ` : ''}Tome` : null;
 }
 // tome name -> icon (static/rewards)
-function tomeIcon(name) {
+export function tomeIcon(name) {
   const m = /^(Modest|Major|Mega|Mythic)(?: (\w+))? Tome$/.exec(name || '');
   return m ? `/static/rewards/Shared_Tex_Tome${m[1]}_${m[2] || 'Generic'}.webp` : null;
 }
-function offerTitle(o) {
+export function offerTitle(o) {
   const info = STORE?.offers?.[o.offer];
   const minis = (o.slugs || []).map((s) => BY_SLUG.get(s)?.name).filter(Boolean);
   let t = info?.title || 'Offer';
   t = t.replace('{mini}', minis.join(' + ') || 'Mini').replace('{tome}', offerTome(o) || 'Tome');
   return titleCase(t);
 }
-function renderShopOffers(now) {
+export function renderShopOffers(now) {
   const shop = state?.shop;
   if (!shop || !STORE) return '';
   const timed = [...shop.offers.filter((o) => o.expires && Date.parse(o.expires) > now - 60000), ...shop.limited.filter((o) => o.expires && Date.parse(o.expires) > now - 60000)]
@@ -186,9 +150,9 @@ function renderShopOffers(now) {
 }
 
 // ---- event currencies -----------------------------------------------------------------------------
-function renderTickets(now) {
+export function renderTickets(now) {
   const soon = runsBetween(now - DAY, now + 60 * DAY).sort((a, b) => a.start - b.start);
-  const chips = Object.entries(EVENT_CURRENCY).map(([k, id]) => {
+  const chips = Object.entries(ticketSlots()).map(([k, id]) => {
     const c = state?.currencies?.find((x) => x.id === id);
     const runs = soon.filter((r) => r.ev.currency === k && r.end > now);
     const users = [...new Set(runs.map((r) => r.ev.name || r.ev.id))].slice(0, 3);
@@ -206,7 +170,7 @@ function renderTickets(now) {
 }
 
 // ---- reward tree ----------------------------------------------------------------------------------
-function rewardImg(r, ev) {
+export function rewardImg(r, ev) {
   const art = r.mini && BY_SLUG.get(r.mini)?.art;
   const src = art ? `/static/${art}` : r.icon ? `/static/rewards/${encodeURIComponent(r.icon)}.webp` : eventIcon(ev);
   return `<img class="${art ? 'mini-art' : ''}" src="${esc(src)}" alt="" data-fallback="${esc(eventIcon(ev))}">`;
@@ -217,11 +181,11 @@ document.addEventListener('error', (e) => {
   if (img instanceof HTMLImageElement && img.dataset.fallback) { const f = img.dataset.fallback; delete img.dataset.fallback; img.src = f; }
 }, true);
 /** Extra coin percentage from owned income bonuses. */
-function coinBonusPercent() {
+export function coinBonusPercent() {
   return (state?.incomeBonuses || []).reduce((s, id) => s + (EVENTS.incomeBonuses?.[id]?.coinsPercent || 0), 0);
 }
 /** The event's challenges (ticket sources), collapsed by default. */
-function renderChallenges(ev) {
+export function renderChallenges(ev) {
   const groups = ev.challenges || [];
   if (!groups.length) return '';
   const count = groups.reduce((s, g) => s + g.challenges.length, 0);
@@ -238,7 +202,7 @@ function renderChallenges(ev) {
 }
 
 /** Days left and remaining daily-challenge tickets for a running event. */
-function dailiesLeft(ev, now) {
+export function dailiesLeft(ev, now) {
   const run = occurrences(ev, now, now + 1)[0];
   const daily = (ev.challenges || []).find((g) => g.kind === 'daily');
   if (!run || !daily) return null;
@@ -246,7 +210,7 @@ function dailiesLeft(ev, now) {
   return { days, tickets: days * daily.perDay, perDay: daily.perDay };
 }
 
-function renderRewardTree(ev) {
+export function renderRewardTree(ev) {
   const R = ev.rewards || [];
   if (!R.length) return '';
   const bonus = coinBonusPercent();
@@ -354,7 +318,7 @@ function renderRewardTree(ev) {
 }
 
 // ---- rendering ------------------------------------------------------------------------------------
-function eventCard(r, now) {
+export function eventCard(r, now) {
   const { ev } = r;
   const running = r.start <= now && now < r.end;
   const live = (running || r.unknown) && isLive(ev); // the save lists only current events
@@ -376,7 +340,7 @@ function eventCard(r, now) {
 }
 
 /** The timeline's date range, e.g. "Nov 2 – Dec 6, 2026". */
-function timelineRange(now) {
+export function timelineRange(now) {
   const t = new Date(now);
   const a = new Date(t.getFullYear(), t.getMonth(), t.getDate() - Math.floor(TIMELINE_DAYS / 2) + (ui.calendar.offset || 0));
   const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + TIMELINE_DAYS - 1);
@@ -384,7 +348,7 @@ function timelineRange(now) {
 }
 
 /** Timeline section: header, slider and bars. */
-function renderCalendarTimeline(now) {
+export function renderCalendarTimeline(now) {
   const off = ui.calendar.offset || 0;
   return `<section class="panel cal-timeline">
     <div class="cal-head">
@@ -402,9 +366,9 @@ function renderCalendarTimeline(now) {
 }
 
 /** Full and short bar labels; CSS container queries show the one that fits. */
-const barLabel = (full, short) => `<span class="lb lb-full">${full}</span><span class="lb lb-short">${short}</span>`;
+export const barLabel = (full, short) => `<span class="lb lb-full">${full}</span><span class="lb lb-short">${short}</span>`;
 
-function renderTimelineBody(now) {
+export function renderTimelineBody(now) {
   // TIMELINE_DAYS centred on today, shifted by the slider
   const n = TIMELINE_DAYS;
   const today = new Date(now);
@@ -465,7 +429,7 @@ function renderTimelineBody(now) {
     </div>` : '<p class="muted">No events in the game files for these days.</p>'}`;
 }
 
-function renderCalendarRules() {
+export function renderCalendarRules() {
   // one line per event name (some events have one definition per month)
   const groups = new Map();
   for (const ev of EVENTS.events) {
@@ -493,7 +457,7 @@ function renderCalendarRules() {
   </section>`;
 }
 
-async function renderCalendar() {
+export async function renderCalendar() {
   const page = $('#tab-calendar');
   if (!page) return;
   try { await loadEvents(); await loadStore(); } catch {
@@ -533,7 +497,7 @@ async function renderCalendar() {
   window.scrollTo(0, scrollY);
 }
 
-function bindCalendar() {
+export function bindCalendar() {
   const page = $('#tab-calendar');
   // click selects one reward (again to clear); Ctrl/Cmd+click toggles it in the plan
   const pick = (el, multi) => {

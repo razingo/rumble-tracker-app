@@ -41,6 +41,9 @@ try { await stat(nodeLicense); } catch { fail('desktop/node-LICENSE.txt is missi
 const APP_FILES = [
   ['server', ['.mjs']],
   ['web', ['.html', '.js', '.css', '.ico', '.woff2', '.txt']],
+  // PowerShell scripts the launcher runs: the tray icon and Windows integration
+  ['desktop/tray.ps1', []],
+  ['desktop/integration.ps1', []],
 ];
 async function walk(rel, exts) {
   const abs = path.join(ROOT, rel);

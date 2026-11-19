@@ -1,9 +1,17 @@
-'use strict';
-// PvP tab: season, rank, Victory Road, season-end rewards, the modifier rotation (gamedata/pvp.json) and the wins and
-// losses the server inferred from honor and Victory Point changes. Depends on globals from app.js and calendar.js.
+// PvP tab: season, rank, Victory Road, season-end rewards, the modifier rotation (gamedata/pvp.json), and the wins and
+// losses the server inferred from honor and Victory Point changes, with win rates by modifier. Calculations: lib/pvp.js.
+import { seasonAt, rankOf, nextRank, setAt, record, streak, matchesWithMods, modifierStats, withModifiers, winRateSeries } from './lib/pvp.js';
+import { alertDialog } from './dialogs.js';
+import { poll } from './app.js';
+import { DAY, loadEvents, span, when, dayOnly } from './calendar.js';
+import { $, esc, fmt, ago, post, store, state, ui, onTablesReload } from './core.js';
 
-let PVP = null;
-async function loadPvp() {
+// modifiers chosen to filter the win rate (kept between visits)
+ui.pvpMods = store.get('pvpMods', []);
+
+export let PVP = null;
+onTablesReload(() => { PVP = null; });
+export async function loadPvp() {
   if (PVP) return PVP;
   const r = await fetch('/static/pvp.json');
   if (!r.ok) throw new Error('no pvp.json');
@@ -11,55 +19,20 @@ async function loadPvp() {
   return PVP;
 }
 
-const pvpSeasonAt = (t) => PVP.seasons.find((s) => Date.parse(s.start) <= t && t < Date.parse(s.end)) || null;
-const pvpRankOf = (honor) => PVP.ranks.reduce((r, x) => (honor >= x.from ? x : r), PVP.ranks[0]);
-const pvpNextRank = (rank) => PVP.ranks[PVP.ranks.indexOf(rank) + 1] || null;
-const pvpFrame = (rank) => (rank?.frame ? `/static/pvp/${encodeURIComponent(rank.frame)}.webp` : '');
+export const pvpSeasonAt = (t) => seasonAt(PVP, t);
+export const pvpRankOf = (honor) => rankOf(PVP, honor);
+export const pvpNextRank = (rank) => nextRank(PVP, rank);
+export const pvpSetAt = (t) => setAt(PVP, t);
+export const pvpFrame = (rank) => (rank?.frame ? `/static/pvp/${encodeURIComponent(rank.frame)}.webp` : '');
 
-/** The modifier set in play at time t: { mods: [id], start, end } (each season runs its own rotation). */
-function pvpSetAt(t) {
-  const rot = pvpSeasonAt(t)?.rotation;
-  if (!rot?.sets.length) return null;
-  const p = rot.periodDays * DAY, t0 = Date.parse(rot.start);
-  const k = Math.floor((t - t0) / p);
-  const n = rot.sets.length;
-  return { mods: rot.sets[((k % n) + n) % n], start: t0 + k * p, end: t0 + (k + 1) * p };
-}
-
-function pvpReward(r) {
+export function pvpReward(r) {
   const amount = r.amount != null && r.amount !== 1 ? `${fmt(r.amount)}× ` : r.amount === 1 && r.kind === 'currency' ? '1× ' : '';
   const icon = r.icon ? `<img src="/static/rewards/${encodeURIComponent(r.icon)}.webp" alt="">` : '';
   const options = r.options ? ` <small class="muted">(pick from ${r.options})</small>` : '';
   return `<span class="pvp-reward">${icon}<span>${esc(amount)}${esc(r.label)}${options}</span></span>`;
 }
 
-/** Wins and losses in log entries from time `from`; estimated if any entry was. */
-function pvpRecord(log, from = 0) {
-  let wins = 0, losses = 0, estimated = false, honorOnly = false;
-  for (const e of log) {
-    if (Date.parse(e.t) < from || !(e.wins || e.losses)) continue;
-    wins += e.wins || 0;
-    losses += e.losses || 0;
-    if (e.estimated) estimated = true;
-    if (e.honorOnly) honorOnly = true;
-  }
-  return { wins, losses, estimated, honorOnly };
-}
-
-/** Current streak from the newest readings: { kind: 'win'|'loss', n } or null. Mixed readings end it. */
-function pvpStreak(log) {
-  let kind = null, n = 0;
-  for (const e of [...log].reverse()) {
-    if (!(e.wins || e.losses)) continue;
-    const k = e.wins && !e.losses ? 'win' : e.losses && !e.wins ? 'loss' : null;
-    if (!k || (kind && k !== kind)) { if (!kind && !k) return null; break; }
-    kind = k;
-    n += e.wins || e.losses;
-  }
-  return kind ? { kind, n } : null;
-}
-
-function pvpHonorChart(log, season) {
+export function pvpHonorChart(log, season) {
   const pts = log.map((e) => ({ t: Date.parse(e.t), honor: e.honor, e }));
   if (pts.length < 2) return '<p class="muted small">The chart fills in as the tracker sees your honor change.</p>';
   const W = 1100, H = 170, pad = 44;
@@ -86,14 +59,14 @@ function pvpHonorChart(log, season) {
   </svg>`;
 }
 
-function pvpResult(e) {
+export function pvpResult(e) {
   const parts = [];
   if (e.wins) parts.push(e.wins === 1 ? 'win' : `${e.wins} wins`);
   if (e.losses) parts.push(e.losses === 1 ? 'loss' : `${e.losses} losses`);
   return parts.join(' + ') || 'no match';
 }
 
-async function renderPvp() {
+export async function renderPvp() {
   const page = $('#tab-pvp');
   if (!page) return;
   try { await loadPvp(); await loadEvents(); } catch {
@@ -137,14 +110,14 @@ async function renderPvp() {
 
   // ---- record
   const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-  const seasonRec = pvpRecord(log), todayRec = pvpRecord(log, midnight.getTime());
-  const streak = pvpStreak(log);
+  const seasonRec = record(log), todayRec = record(log, midnight.getTime());
+  const run = streak(log);
   const unexplained = log.filter((e) => e.unexplained && !e.manual).length;
   const rate = seasonRec.wins + seasonRec.losses ? Math.round((seasonRec.wins / (seasonRec.wins + seasonRec.losses)) * 100) : null;
   const recordCard = `<div class="pvp-card">
       <div class="rot-label">Wins / losses${seasonRec.estimated ? ' <span class="flag warn" title="Some changes fit more than one combination of wins and losses: the tracker picked the likeliest">estimated</span>' : ''}</div>
       <div class="pvp-big"><span class="pvp-win">${fmt(seasonRec.wins)}</span> – <span class="pvp-loss">${fmt(seasonRec.losses)}</span>${rate != null ? ` <small class="muted">${rate}%</small>` : ''}</div>
-      <div class="small">Today ${fmt(todayRec.wins)} – ${fmt(todayRec.losses)}${streak ? ` · ${streak.n} ${streak.kind === 'win' ? (streak.n === 1 ? 'win' : 'wins') : (streak.n === 1 ? 'loss' : 'losses')} in a row` : ''}</div>
+      <div class="small">Today ${fmt(todayRec.wins)} – ${fmt(todayRec.losses)}${run ? ` · ${run.n} ${run.kind === 'win' ? (run.n === 1 ? 'win' : 'wins') : (run.n === 1 ? 'loss' : 'losses')} in a row` : ''}</div>
       <div class="small">Counted from honor and Victory Point changes the tracker sees, so matches before it first saw this account aren't included.${seasonRec.honorOnly ? ' Victory Points stopped moving, so some results come from honor alone and losses at a rank floor may be missing.' : ''}</div>
       ${unexplained ? `<div class="small"><span class="flag warn">${unexplained} unexplained</span> change${unexplained > 1 ? 's' : ''} below: mark ${unexplained > 1 ? 'them' : 'it'} as a win or a loss.</div>` : ''}
     </div>`;
@@ -224,6 +197,32 @@ async function renderPvp() {
       </tbody></table></div>` : '<p class="muted small">No matches seen yet this season.</p>'}
     </section>` : '';
 
+  // ---- win rates by modifier: the chips filter the chart to matches played while every chosen modifier was active
+  let statsPanel = '';
+  if (mine && season && !stale) {
+    const matches = matchesWithMods(PVP, log);
+    const byMod = modifierStats(matches);
+    const ids = Object.keys(byMod).sort((a, b) => (byMod[b].wins + byMod[b].losses) - (byMod[a].wins + byMod[a].losses));
+    const chosen = (ui.pvpMods || []).filter((id) => byMod[id]);
+    const shown = withModifiers(matches, chosen);
+    const total = record(shown.map((m) => ({ t: new Date(m.t).toISOString(), wins: m.wins, losses: m.losses })));
+    const pct = (w, l) => (w + l ? `${Math.round((w / (w + l)) * 100)}%` : '–');
+    const chip = (id) => {
+      const m = PVP.modifiers[id] || { name: id }, st = byMod[id];
+      return `<button class="pvp-stat${chosen.includes(id) ? ' on' : ''}" data-pvp-mod="${esc(id)}" aria-pressed="${chosen.includes(id)}" title="${esc(m.description || '')}">
+        ${m.icon ? `<img src="/static/pvp/${encodeURIComponent(m.icon)}.webp" alt="">` : ''}<span><b>${esc(m.name)}</b><br><span class="small">${st.wins}–${st.losses} · ${pct(st.wins, st.losses)}</span></span></button>`;
+    };
+    statsPanel = `<section class="panel">
+      <div class="cal-head"><h2>Win rate</h2><span class="muted small">Pick modifiers to see only the matches played while all of them were active</span></div>
+      ${ids.length ? `<div class="pvp-stats">${ids.map(chip).join('')}</div>
+        <div class="pvp-stat-sum">${chosen.length ? `With ${chosen.map((id) => esc(PVP.modifiers[id]?.name || id)).join(' + ')}: ` : 'All matches: '}
+          <b>${total.wins}–${total.losses}</b> · ${pct(total.wins, total.losses)}
+          ${chosen.length ? ' <button class="chip" data-pvp-mod-clear>Show all</button>' : ''}</div>
+        ${pvpWinRateChart(winRateSeries(shown), season)}`
+      : '<p class="muted small">Fills in as the tracker sees your matches.</p>'}
+    </section>`;
+  }
+
   // ---- full Victory Road
   const roadList = season ? `<section class="panel">
       <div class="cal-head"><h2>Victory Road</h2><span class="muted small">${esc(season.name)} · Victory Points from every finished match: ${fmt(PVP.victoryPoints.base * PVP.victoryPoints.loss)} for a loss, ${fmt(PVP.victoryPoints.base * PVP.victoryPoints.win)} for a win, more on a win streak</span></div>
@@ -236,17 +235,50 @@ async function renderPvp() {
   page.innerHTML = `
     ${stale ? `<div class="panel small">This account's save still shows ${esc(mySeason.name)}: the game updates it at the next PvP match.</div>` : ''}
     <section class="pvp-cards">${rankCard}${recordCard}${roadCard}${seasonCard}</section>
-    ${rotation}${history}${endRewards}${roadList}`;
+    ${rotation}${history}${statsPanel}${endRewards}${roadList}`;
 }
 
-function bindPvp() {
+/** The win rate over the season, after each match: a line, with 50% marked. */
+export function pvpWinRateChart(series, season) {
+  if (series.length < 2) return '<p class="muted small">The chart needs at least two matches.</p>';
+  const W = 1100, H = 150, pad = 44;
+  const t0 = Math.min(Date.parse(season.start), series[0].t), t1 = Math.max(Date.now(), series[series.length - 1].t);
+  const x = (t) => pad + ((t - t0) / Math.max(1, t1 - t0)) * (W - pad - 8);
+  const y = (r) => 8 + (1 - r) * (H - 16);
+  const path = series.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.rate).toFixed(1)}`).join(' ');
+  const last = series[series.length - 1];
+  return `<svg class="pg-chart pvp-chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="Win rate this season">
+    <line x1="${pad}" y1="${H}" x2="${W}" y2="${H}" class="axis"/>
+    <line x1="${pad}" x2="${W}" y1="${y(0.5).toFixed(1)}" y2="${y(0.5).toFixed(1)}" class="floor"/>
+    <text x="${pad - 4}" y="${(y(1) + 4).toFixed(1)}" class="tick" text-anchor="end">100%</text>
+    <text x="${pad - 4}" y="${(y(0.5) + 4).toFixed(1)}" class="tick" text-anchor="end">50%</text>
+    <text x="${pad - 4}" y="${(y(0) + 4).toFixed(1)}" class="tick" text-anchor="end">0%</text>
+    <path d="${path}" fill="none" stroke="var(--gold-1)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${x(last.t).toFixed(1)}" cy="${y(last.rate).toFixed(1)}" r="3.5" class="win"><title>${Math.round(last.rate * 100)}% after ${last.wins + last.losses} matches</title></circle>
+    <text x="${pad}" y="${H + 14}" class="tick">${esc(dayOnly(t0))}</text>
+    <text x="${W}" y="${H + 14}" class="tick" text-anchor="end">${esc(dayOnly(t1))}</text>
+  </svg>`;
+}
+
+export function bindPvp() {
   // Win / Loss for an unexplained change; Undo ("") clears it
   $('#tab-pvp').addEventListener('click', async (e) => {
+    // modifier filter of the win rate
+    const mod = e.target.closest('[data-pvp-mod]');
+    if (mod || e.target.closest('[data-pvp-mod-clear]')) {
+      const id = mod?.dataset.pvpMod;
+      const cur = new Set(ui.pvpMods || []);
+      if (!id) cur.clear(); else if (cur.has(id)) cur.delete(id); else cur.add(id);
+      ui.pvpMods = [...cur];
+      store.set('pvpMods', ui.pvpMods);
+      renderPvp();
+      return;
+    }
     const b = e.target.closest('[data-pvp-result]');
     if (!b || !state?.account) return;
     b.disabled = true;
     try { await post('/api/pvp/result', { account: state.account, t: b.dataset.t, result: b.dataset.pvpResult || null }); }
-    catch (err) { alert(`Could not save: ${err.message}`); }
+    catch (err) { alertDialog(err.message, { title: 'Not saved' }); }
     poll();
   });
 }

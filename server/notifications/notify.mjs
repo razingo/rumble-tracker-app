@@ -1,6 +1,7 @@
 // Determines which notifications are due, from the scanned save and the event schedules. Each has a unique key so
 // it is sent once; the server tracks sent keys, applies quiet hours and delivers them (toast.mjs).
 import { occurrences, rotationAt, rotationName, DAY } from '../game/schedule.mjs';
+import { seasonAt, setAt, rankOf } from '../../web/scripts/lib/pvp.js';
 
 const HOUR = 3600000;
 const GRACE = 3 * HOUR; // older occurrences (tracker not running) are not announced
@@ -15,6 +16,8 @@ export const NOTIFY_TYPES = [
   { id: 'rotation', label: 'Dungeon faction, dungeon or raid/siege changes', on: false, whenPlaying: false },
   { id: 'upgradeReady', label: 'A mini is ready to upgrade', on: true, whenPlaying: false },
   { id: 'planAffordable', label: 'Enough tickets for a reward goal', on: true, whenPlaying: true },
+  { id: 'pvpSeasonEnd', label: 'The PvP season ends soon', on: true, whenPlaying: true, hoursBefore: 48 },
+  { id: 'pvpModifiers', label: 'PvP modifiers change', on: false, whenPlaying: false },
   { id: 'appUpdate', label: 'A new tracker version is available', on: true, whenPlaying: true },
 ];
 
@@ -58,7 +61,7 @@ const span = (ms) => { const h = Math.round(ms / HOUR); return h >= 48 ? `${Math
 
 /**
  * Notifications due now: [{ type, key, title, body }].
- * ctx = { now, accounts: [{ id, label, shop, currencies, units }], events, store, rules, plans, settings, multi }.
+ * ctx = { now, accounts: [{ id, label, shop, currencies, units, pvp }], events, store, rules, pvp, plans, settings, multi }.
  */
 export function dueNotifications(ctx) {
   const { now, settings, events, store, rules } = ctx;
@@ -74,7 +77,7 @@ export function dueNotifications(ctx) {
       'New game data needs a newer version of Rumble Collection Tracker. Download it from GitHub Releases.');
   } else if (ctx.newVersion && on('appUpdate')) {
     add('appUpdate', `app-version-${ctx.newVersion}`, 'Tracker update available',
-      `Rumble Collection Tracker ${ctx.newVersion} is available on GitHub Releases.`);
+      `Rumble Collection Tracker ${ctx.newVersion} is available. Open the tracker to install it.`);
   }
 
   // shop: free gift, daily reset, new G.R.I.D.
@@ -123,6 +126,23 @@ export function dueNotifications(ctx) {
     for (const rot of events?.rotations || []) {
       const cur = rotationAt(rot, now);
       if (now - cur.start < GRACE) add('rotation', `rot:${rot.id}:${cur.start}`, `${rot.label}: ${rotationName(cur.item)}`, `Until ${fmtTime(cur.end)}.`);
+    }
+  }
+
+  // PvP: the season ends soon (Victory Road resets; season-end rewards by rank), the modifier set changes
+  if (ctx.pvp?.seasons) {
+    const season = seasonAt(ctx.pvp, now);
+    const end = season && Date.parse(season.end);
+    const lead = (settings.types.pvpSeasonEnd?.hoursBefore || 48) * HOUR;
+    if (season && on('pvpSeasonEnd') && end - now <= lead) {
+      const ranks = ctx.accounts.filter((a) => a.pvp?.season === season.saveId).map((a) => `${rankOf(ctx.pvp, a.pvp.honor).name}${who(a)}`);
+      add('pvpSeasonEnd', `pvpEnd:${season.id}`, `${season.name} ends in ${span(end - now)}`,
+        `Claim your Victory Road rewards before it resets.${ranks.length ? ` Season-end rewards at your rank: ${ranks.join(', ')}.` : ''}`);
+    }
+    const set = on('pvpModifiers') ? setAt(ctx.pvp, now) : null;
+    if (set && now - set.start < GRACE) {
+      add('pvpModifiers', `pvpMods:${set.start}`, 'New PvP modifiers',
+        `${set.mods.map((id) => ctx.pvp.modifiers?.[id]?.name || id).join(', ')}, until ${fmtTime(set.end)}.`);
     }
   }
 

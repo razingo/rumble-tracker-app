@@ -1,7 +1,7 @@
-'use strict';
 // "Report a problem": forwards page script errors to the local server's error log, and builds a report (description
 // and cleaned diagnostics) the user can open as a GitHub issue or copy. Nothing is sent without the user submitting it.
 // Loaded first so it also catches start-up errors.
+import { $, esc, post, openExternal, state, ui } from './core.js';
 
 // ---- catching the page's errors --------------------------------------------------------------------------
 (() => {
@@ -19,10 +19,10 @@
 })();
 
 // ---- the dialog ----------------------------------------------------------------------------------------------
-const REPORT = { data: null, title: '', what: '', steps: '', include: true };
-const MAX_URL = 7500; // GitHub rejects longer URLs
+export const REPORT = { data: null, title: '', what: '', steps: '', include: true };
+export const MAX_URL = 7500; // GitHub rejects longer URLs
 
-function renderReportBadge() {
+export function renderReportBadge() {
   const b = document.getElementById('reportBtn');
   if (!b) return;
   const n = state?.problems || 0;
@@ -30,18 +30,19 @@ function renderReportBadge() {
   b.title = n ? `${n} error${n > 1 ? 's' : ''} noted since the tracker started` : '';
 }
 
-function reportText() {
+export function reportText() {
   const d = REPORT.data;
   const body = [
     '### What happened', REPORT.what.trim() || '_(not described)_', '',
     ...(REPORT.steps.trim() ? ['### How to make it happen', REPORT.steps.trim(), ''] : []),
+    ...(REPORT.screenshot ? ['### Screenshot', '_(paste it here with Ctrl+V)_', ''] : []),
     ...(REPORT.include && d ? ['### Details (added by the tracker)', '```', d.diagnostics, '```'] : []),
   ].join('\n');
   return { title: REPORT.title.trim() || 'Problem report', body };
 }
 
 /** GitHub new-issue URL, trimming the oldest errors to fit MAX_URL. */
-function issueUrl() {
+export function issueUrl() {
   const repo = REPORT.data?.repo;
   const make = (title, body) => `https://github.com/${repo}/issues/new?labels=bug&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
   let { title, body } = reportText();
@@ -56,7 +57,7 @@ function issueUrl() {
   return url;
 }
 
-function renderReportDialog(msg = '') {
+export function renderReportDialog(msg = '') {
   const dlg = $('#reportDialog');
   const d = REPORT.data;
   dlg.innerHTML = `<form method="dialog" class="rp-form">
@@ -73,6 +74,9 @@ function renderReportDialog(msg = '') {
       <p class="muted small">Versions, game-data status and recent errors, with names, account IDs and other personal details
         removed. Your collection is never included.</p>
     </details>
+    <p class="small rp-shot">${state?.standalone
+    ? '<button type="button" class="chip" data-rp-shot>Take a screenshot</button> Select an area; it is copied, so paste it into the issue on GitHub with <b>Ctrl+V</b>.'
+    : 'Screenshot: press <b>Win+Shift+S</b>, select an area, then paste it into the issue on GitHub with <b>Ctrl+V</b>.'}</p>
     <div class="rp-actions">
       <button type="button" class="btn" data-rp-open ${d ? '' : 'disabled'}>Open on GitHub</button>
       <button type="button" class="chip" data-rp-copy ${d ? '' : 'disabled'}>Copy report</button>
@@ -82,7 +86,7 @@ function renderReportDialog(msg = '') {
   </form>`;
 }
 
-async function openReportDialog() {
+export async function openReportDialog() {
   const dlg = $('#reportDialog');
   REPORT.data = null;
   renderReportDialog();
@@ -93,7 +97,7 @@ async function openReportDialog() {
   } catch { renderReportDialog('The tracker server is not reachable.'); }
 }
 
-function bindReport() {
+export function bindReport() {
   const dlg = $('#reportDialog');
   $('#reportBtn').addEventListener('click', openReportDialog);
   dlg.addEventListener('input', (e) => {
@@ -107,6 +111,13 @@ function bindReport() {
       if (!REPORT.what.trim()) { msg('Please describe what happened first.', false); dlg.querySelector('[data-rp="what"]').focus(); return; }
       openExternal(issueUrl());
       msg('Opened in your browser: check it and press Submit there.', true);
+    } else if (e.target.closest('[data-rp-shot]')) {
+      // Windows' snipping overlay; the dialog steps aside and comes back when the window has focus again
+      dlg.close();
+      try { await post('/api/screenshot', {}); } catch (err) { dlg.showModal(); msg(err.message, false); return; }
+      REPORT.screenshot = true;
+      const back = () => { if (!dlg.open) { dlg.showModal(); msg('Screenshot copied: paste it into the issue with Ctrl+V.', true); } };
+      setTimeout(() => window.addEventListener('focus', back, { once: true }), 500);
     } else if (e.target.closest('[data-rp-copy]')) {
       const { title, body } = reportText();
       try { await navigator.clipboard.writeText(`${title}\n\n${body}`); msg('Copied.', true); } catch { msg('Copying was blocked by the browser.', false); }

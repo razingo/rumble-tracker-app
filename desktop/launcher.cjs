@@ -39,6 +39,7 @@ const LOCAL = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Lo
 const ROAMING = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
 const DATA = path.resolve(process.env.RUMBLE_DATA_DIR || path.join(ROAMING, 'RumbleTracker'));
 const HOME = path.join(LOCAL, 'RumbleTracker'); // unpacked app and browser profile
+let APP_DIR = null; // this version's unpacked files (set by main)
 
 process.title = TITLE;
 
@@ -164,78 +165,11 @@ async function openWindow() {
 }
 
 // ---- tray icon -----------------------------------------------------------------------------------------------------
-const TRAY_SCRIPT = `
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-function Say($m) { [Console]::Out.WriteLine($m); [Console]::Out.Flush() }
-# fallback icon, drawn in code
-$bmp = New-Object System.Drawing.Bitmap 32, 32
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'AntiAliasGridFit'
-$g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 240, 180, 50))), 1, 1, 30, 30)
-$g.DrawEllipse((New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 110, 60, 10)), 2), 2, 2, 28, 28)
-$font = New-Object System.Drawing.Font('Segoe UI', 17, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-$sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'; $sf.LineAlignment = 'Center'
-$g.DrawString('R', $font, (New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 70, 35, 5))), (New-Object System.Drawing.RectangleF 0, 1, 32, 32), $sf)
-$g.Dispose()
-$tray = New-Object System.Windows.Forms.NotifyIcon
-# the exe's icon; the fallback if it can't be read
-try { $tray.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($env:RT_EXE) } catch { $tray.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon()) }
-$tray.Text = $env:RT_TITLE
-$menu = New-Object System.Windows.Forms.ContextMenuStrip
-$open = $menu.Items.Add('Open tracker')
-$open.Font = New-Object System.Drawing.Font($open.Font, [System.Drawing.FontStyle]::Bold)
-$folder = $menu.Items.Add('Open data folder')
-[void]$menu.Items.Add('-')
-$quit = $menu.Items.Add('Quit tracker')
-$open.add_Click({ Say 'open' })
-$folder.add_Click({ Start-Process explorer.exe -ArgumentList ('"' + $env:RT_DATA + '"') })
-$quit.add_Click({ $tray.Visible = $false; Say 'quit'; [System.Windows.Forms.Application]::Exit() })
-$tray.add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Say 'open' } })
-$tray.ContextMenuStrip = $menu
-$tray.Visible = $true
-$parent = [int]$env:RT_PARENT
-# Windows signing out or shutting down: tell the tracker (it writes its backup and stops), then give it a few
-# seconds. A hidden top-level window receives WM_ENDSESSION; it needs a little C#.
-try {
-  Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
-using System; using System.Diagnostics; using System.Windows.Forms;
-public class RtEndSession : NativeWindow {
-  int parent;
-  public RtEndSession(int parent) { this.parent = parent; CreateHandle(new CreateParams()); }
-  protected override void WndProc(ref Message m) {
-    if (m.Msg == 0x16 && m.WParam != IntPtr.Zero) {
-      Console.Out.WriteLine("shutdown"); Console.Out.Flush();
-      var sw = Stopwatch.StartNew();
-      while (sw.ElapsedMilliseconds < 4000) { try { Process.GetProcessById(parent); } catch { break; } System.Threading.Thread.Sleep(100); }
-    }
-    base.WndProc(ref m);
-  }
-}
-'@
-  $endSession = New-Object RtEndSession $parent
-} catch { [Console]::Error.WriteLine("shutdown watch: $_") }
-# every 2 s: exit when the tracker process ends; report whether Warcraft Rumble runs ("game 1" / "game 0") when it changes
-$global:lastGame = ''
-$timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 2000
-$timer.add_Tick({
-  try { [void][System.Diagnostics.Process]::GetProcessById($parent) } catch { $tray.Visible = $false; [System.Windows.Forms.Application]::Exit(); return }
-  $game = if ([System.Diagnostics.Process]::GetProcessesByName($env:RT_GAME).Length) { 'game 1' } else { 'game 0' }
-  if ($game -ne $global:lastGame) { $global:lastGame = $game; Say $game }
-})
-$timer.Start()
-if ($env:RT_HINT) { $tray.ShowBalloonTip(8000, $env:RT_TITLE, $env:RT_HINT, 'Info') }
-Say 'ready'
-[System.Windows.Forms.Application]::Run()
-$tray.Dispose()
-`;
 
 function startTray(onQuit) {
   const hintFile = path.join(DATA, '.tray-hint-shown');
   const hint = fs.existsSync(hintFile) ? '' : 'The tracker keeps running here when you close its window, so notifications still arrive. Right-click this icon to quit.';
-  const tray = spawn(POWERSHELL, psArgs(TRAY_SCRIPT), {
+  const tray = spawn(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'tray.ps1'), 'utf8')), {
     windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, RT_TITLE: TITLE, RT_DATA: DATA, RT_EXE: process.execPath, RT_PARENT: String(process.pid), RT_HINT: hint, RT_GAME: 'WarcraftRumble' },
   });
@@ -404,6 +338,7 @@ async function main() {
   rotateLog();
   let app;
   try { app = unpack(); } catch (e) { return fatal(`Could not unpack the tracker's files: ${e.message}`, { rollback: true }); }
+  APP_DIR = app.dir;
 
   process.env.RUMBLE_DATA_DIR = DATA;
   process.env.RUMBLE_DEFAULT_DATA_PACK_URL ||= DATA_PACK_URL;
@@ -437,12 +372,31 @@ async function main() {
   // it works: the previous exe (kept since an update) and a rolled-back one are no longer needed
   for (const f of [OLD_EXE, FAILED_EXE]) { try { fs.rmSync(f, { force: true }); } catch { /* in use: removed next time */ } }
   startTray(quitFromTray);
+  integrate();
   // after an update on the same port, the open window reconnects and reloads by itself
   if (afterUpdate && afterUpdate.port === PORT) return;
   await openWindow();
 }
 
+// ---- Windows integration (desktop/integration.ps1) -------------------------------------------------------------
+// The Start menu shortcut gives notifications the tracker's name and icon (app ID AUMID); clicking one opens a
+// rumble-tracker: link, which starts this exe (--open): a running tracker then shows its window.
+const AUMID = 'razingo.RumbleCollectionTracker';
+function integrate() {
+  const env = { ...process.env, RT_EXE: process.execPath, RT_AUMID: AUMID, RT_TITLE: TITLE, RT_REFRESH: afterUpdate ? '1' : '' };
+  execFile(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'integration.ps1'), 'utf8')), { windowsHide: true, timeout: 60000, env }, (err, out, stderr) => {
+    const done = new Set(String(out || '').split(/\r?\n/).map((l) => l.trim()));
+    // read by server/notifications/toast.mjs
+    if (done.has('shortcut')) process.env.RUMBLE_TOAST_APP = AUMID;
+    if (done.has('protocol')) process.env.RUMBLE_TOAST_LAUNCH = 'rumble-tracker:open';
+    const problems = String(stderr || '').replace(/^#< CLIXML\s*/, '').trim();
+    if (err || problems) console.log(`Windows integration: ${problems || err.message}`.slice(0, 1000));
+  });
+}
+
 // emitted by the server for allowed external links (see server/main.mjs)
 process.on('rumble:open-external', openInDefaultBrowser);
+// "Take a screenshot" in Report a problem: Windows' snipping overlay
+process.on('rumble:screenshot', () => openInDefaultBrowser('ms-screenclip:'));
 
 main().catch((e) => fatal(`The tracker could not start: ${e && e.stack || e}`));

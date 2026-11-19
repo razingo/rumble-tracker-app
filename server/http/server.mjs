@@ -4,7 +4,7 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createGuard, requestPath } from '../guard.mjs';
-import { buildBackup, replaceContents } from '../backup.mjs';
+import { buildBackup, replaceContents, listDailyBackups, readDailyBackup } from '../backup.mjs';
 import { NOTIFY_TYPES, cleanSettings } from '../notifications/notify.mjs';
 import { ISSUES_REPO, diagnostics } from '../report.mjs';
 import { buildState, liveState, resolveAccount, dataStale } from '../state.mjs';
@@ -86,6 +86,13 @@ export function createHttpServer(ctx, deps) {
     'POST /api/armies': json(h.armies),
     'POST /api/pvp/result': json(h.pvpResult),
     'POST /api/restore': json(h.restore, 20 * 1024 * 1024),
+    // automatic backups (backup.mjs): the list, and restoring one of them
+    'GET /api/backups': async () => [200, { backups: await listDailyBackups(ctx.paths.BACKUPS) }],
+    'POST /api/backups/restore': async (req) => {
+      const backup = await readDailyBackup(ctx.paths.BACKUPS, (await readBody(req)).day);
+      if (!backup) return [404, { error: 'That backup is not there any more.' }];
+      return h.restore({ backup });
+    },
     'POST /api/scan': async () => { await deps.scan(); return [200, { ok: true }]; },
     'GET /api/notifications': async () => {
       const { notifySettings, sentLog } = ctx.user;
@@ -141,6 +148,8 @@ export function createHttpServer(ctx, deps) {
       process.emit('rumble:open-external', target);
       return [200, { ok: true }];
     });
+    // "Take a screenshot" in Report a problem: Windows' snipping overlay (the capture goes to the clipboard)
+    routes.set('POST /api/screenshot', async () => { process.emit('rumble:screenshot'); return [200, { ok: true }]; });
     routes.set('POST /api/quit', async () => { setTimeout(() => deps.shutdown('Quit from the page'), 200); return [200, { ok: true }]; });
     routes.set('POST /api/update', async () => deps.startUpdate());
   }

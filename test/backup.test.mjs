@@ -34,7 +34,7 @@ test('not a backup', () => {
   assert.deepEqual(files.names, { accounts: {} });
 });
 
-test('daily backups: one per day, the newest 7 kept', async () => {
+test('daily backups: one per day, none older than 7 days', async () => {
   const os = await import('node:os');
   const path = await import('node:path');
   const { mkdtemp, readdir, readFile, writeFile, rm } = await import('node:fs/promises');

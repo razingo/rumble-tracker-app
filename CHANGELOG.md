@@ -3,6 +3,21 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.6.0
+
+- **PvP win rate by modifier**: your record while each modifier was active; pick modifiers to filter the win-rate
+  chart to the matches played with them.
+- New notifications: the PvP season ends soon (claim your Victory Road rewards), and new PvP modifiers (off by
+  default). Clicking a notification opens the tracker; notifications show the tracker's own name and icon.
+- **Automatic backups** at start, every 24 hours and when the tracker stops, kept for 7 days; restore one from
+  *Backup → Automatic backups*.
+- Messages and confirmations (Quit, Delete, Restore) appear in the tracker's own style instead of the browser's.
+- *Report a problem*: take a screenshot and paste it into the issue.
+- After an update the exe's icon is refreshed in Explorer.
+- Event ticket slots come from the game data, so a data update can change them.
+- For developers: the page is split into ES modules with tests for its calculations; the Calendar and the
+  notifications share one schedule module; tests run on GitHub for every push.
+
 ## 0.5.0
 
 - **Settings** replaces *Alerts*: notifications as before, plus **Start with Windows** (starts in the tray, no window).

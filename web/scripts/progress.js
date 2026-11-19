@@ -1,21 +1,23 @@
-'use strict';
 // Progress tab: daily income from lifetime totals, level growth, and a projection of when every owned mini reaches
-// legendary. History comes from the server (data/progress.json). Depends on globals from app.js.
+// legendary. History comes from the server (data/progress.json).
+import { span } from './calendar.js';
+import { $, esc, fmt, RULES, state } from './core.js';
+import { balance, curName, remainingToLegendary } from './units.js';
 
-const PDAY = 86400000;
-const MIN_SPAN = 12 * 3600000; // minimum history for rates
+export const PDAY = 86400000;
+export const MIN_SPAN = 12 * 3600000; // minimum history for rates
 
 /** History points for the account, oldest first. */
-function progressPoints() {
+export function progressPoints() {
   const p = state?.progress;
   if (!p) return [];
   const pts = [p.first, ...p.days].filter(Boolean).sort((a, b) => a.t - b.t);
   return pts.filter((x, i) => i === 0 || x.t !== pts[i - 1].t);
 }
-const lifetimeOf = (pt, role) => pt.cur?.[RULES.currencyIds[role]]?.[1] ?? null;
+export const lifetimeOf = (pt, role) => pt.cur?.[RULES.currencyIds[role]]?.[1] ?? null;
 
 /** Per-day rate over the last `days` days (null with too little history). */
-function rateOf(get, days = 7) {
+export function rateOf(get, days = 7) {
   const pts = progressPoints();
   if (pts.length < 2) return null;
   const last = pts[pts.length - 1];
@@ -27,7 +29,7 @@ function rateOf(get, days = 7) {
 }
 
 /** Day-to-day changes: [{ day, value }]. */
-function dailyDeltas(get) {
+export function dailyDeltas(get) {
   const days = state?.progress?.days || [];
   const out = [];
   for (let i = 1; i < days.length; i++) {
@@ -38,7 +40,7 @@ function dailyDeltas(get) {
 }
 
 // ---- charts (SVG, one series each) ----
-function barChart(data, color, unit) {
+export function barChart(data, color, unit) {
   if (data.length < 2) return '<p class="muted small">Needs at least two days of history.</p>';
   const W = 560, H = 160, pad = 28, bw = Math.max(4, (W - pad) / data.length - 3);
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -57,7 +59,7 @@ function barChart(data, color, unit) {
     <text x="${W}" y="${H + 14}" class="tick" text-anchor="end">${esc(data[data.length - 1].day.slice(5))}</text>
   </svg>`;
 }
-function lineChart(data, color, unit) {
+export function lineChart(data, color, unit) {
   if (data.length < 2) return '<p class="muted small">Needs at least two days of history.</p>';
   const W = 560, H = 160, pad = 36;
   const vals = data.map((d) => d.value);
@@ -77,7 +79,7 @@ function lineChart(data, color, unit) {
 }
 
 // ---- projections ----------------------------------------------------------------------------------
-function legendaryProjection() {
+export function legendaryProjection() {
   const need = { arcEnergy: 0, stars: 0, cores: {} };
   for (const u of state.units) {
     if (u.synthetic) continue;
@@ -96,10 +98,10 @@ function legendaryProjection() {
   for (const [role, n] of Object.entries(need.cores)) add(curName(role), n - balance(role), rateOf((p) => lifetimeOf(p, role)), '');
   return rows;
 }
-const whenText = (days) => (days === 0 ? 'done' : !isFinite(days) ? 'no income yet' : days > 3650 ? '10+ years'
+export const whenText = (days) => (days === 0 ? 'done' : !isFinite(days) ? 'no income yet' : days > 3650 ? '10+ years'
   : new Date(Date.now() + days * PDAY).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }));
 
-function renderProgress() {
+export function renderProgress() {
   const page = $('#tab-progress');
   if (!page || !state) return;
   const pts = progressPoints();

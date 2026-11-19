@@ -29,6 +29,7 @@ const SCAN_MS = 5000;           // while the game runs
 const SCANS_AFTER_EXIT = 6;     // the game may still write its save while closing
 const NOTIFY_MS = 30000;
 const PACK_CHECK_MS = 6 * 60 * 60 * 1000;
+const BACKUP_MS = 24 * 60 * 60 * 1000;
 const STANDALONE = !!process.env.RUMBLE_STANDALONE; // set by desktop/launcher.cjs
 
 const ctx = createContext({
@@ -95,6 +96,23 @@ const onGameWatchFailed = (message) => { console.log(`Game check: ${message}; re
 ctx.game = STANDALONE ? watchGameFromTray(onGame, onGameWatchFailed) : watchGame(onGame, onGameWatchFailed);
 const gameRunning = async () => ctx.game.running() ?? gameRunningOnce();
 
+// ---- automatic backups: at start, every 24 hours and when the tracker stops (backup.mjs) --------------------------
+// Not while a data file was found damaged at start: its backup would replace the last good one of the day.
+const backupsPaused = ctx.errorLog.list().some((e) => e.source === 'data file');
+if (backupsPaused) console.log('Automatic backups paused: a data file was damaged at start');
+async function autoBackup() {
+  if (backupsPaused) return null;
+  try {
+    const file = await writeDailyBackup(ctx.paths.BACKUPS, ctx.user.backupFiles());
+    console.log(`Backup: ${path.basename(file)}`);
+    return file;
+  } catch (e) {
+    console.log(`Backup failed: ${e.message}`);
+    ctx.errorLog.add('backup', e.message);
+    return null;
+  }
+}
+
 // ---- stopping: page Quit, tray Quit, Windows shutting down, an app update -----------------------------------------
 /** Stops once a running scan and every queued write are done, after writing today's backup (at most 15 s). */
 async function shutdown(reason, code = 0) {
@@ -104,10 +122,7 @@ async function shutdown(reason, code = 0) {
   const deadline = Date.now() + 15000;
   const left = () => new Promise((r) => setTimeout(r, Math.max(0, deadline - Date.now())));
   while (ctx.scan.scanning && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
-  try {
-    const file = await Promise.race([writeDailyBackup(ctx.paths.BACKUPS, ctx.user.backupFiles()), left()]);
-    if (file) console.log(`Backup: ${path.basename(file)}`);
-  } catch (e) { console.log(`Backup failed: ${e.message}`); }
+  await Promise.race([autoBackup(), left()]);
   await Promise.race([flushWrites(), left()]);
   process.exit(code);
 }
@@ -130,6 +145,8 @@ if (STANDALONE) refreshAutostart(process.execPath).catch(() => {});
 
 // ---- start ----------------------------------------------------------------------------------------------------------
 await scan();
+autoBackup();
+setInterval(autoBackup, BACKUP_MS);
 setInterval(() => {
   if (stopping) return;
   if (ctx.game.running() === false) {

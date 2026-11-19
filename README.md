@@ -46,7 +46,7 @@ Releases are built by GitHub Actions from this repository's source; with the Git
 | What | Where |
 |---|---|
 | Your own data: names you gave, armies, talents, G.R.I.D. and PvP history, progress, notification settings, downloaded game data and app updates | `%APPDATA%\RumbleTracker` |
-| Daily backups (the last 7, written when the tracker stops) | `%APPDATA%\RumbleTracker\backups` |
+| Automatic backups (one a day, kept for 7 days) | `%APPDATA%\RumbleTracker\backups` |
 | The tracker's log (`tracker.log`, attach it to a bug report if asked) | `%APPDATA%\RumbleTracker` |
 | The program's files, unpacked from the exe on first start, and the window's browser profile | `%LOCALAPPDATA%\RumbleTracker` |
 
@@ -58,7 +58,11 @@ from GitHub, checks it against the checksums in the signed data pack, replaces `
 can also download the new release yourself and replace `RumbleTracker.exe`. Your data stays where it is. If a new
 version fails to start, the previous one is put back. What changed: [CHANGELOG.md](CHANGELOG.md).
 
-**Uninstalling:** untick *Start with Windows* in **⚙ Settings** if you ticked it, quit the tracker, then delete `RumbleTracker.exe` and the two `RumbleTracker` folders above.
+What the tracker does in the background and every place it stores something: [How the tracker works](docs/HOW-IT-WORKS.md).
+
+**Uninstalling:** untick *Start with Windows* in **⚙ Settings** if you ticked it, quit the tracker, then delete
+`RumbleTracker.exe`, the two `RumbleTracker` folders above and the Start menu shortcut *Rumble Collection Tracker*
+(details in [How the tracker works](docs/HOW-IT-WORKS.md#uninstalling)).
 
 ## Game data updates
 
@@ -123,16 +127,16 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 | `server/scan/` | reading the save on a timer (`scanner.mjs`) and the history kept from it (`history.mjs`) |
 | `server/http/` | the HTTP server and routes (`server.mjs`) and the API handlers (`handlers.mjs`) |
 | `server/update/` | in-app updates: download and checks (`appupdate.mjs`), the *Download now* flow (`updater.mjs`) |
-| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`), currency names (`currencies.mjs`), PvP and match results (`pvp.mjs`), whether the game runs (`watch.mjs`) |
+| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`, from the page's `lib/schedule.js`), currency names (`currencies.mjs`), PvP and match results (`pvp.mjs`), whether the game runs (`watch.mjs`) |
 | `server/notifications/` | what's due (`notify.mjs`), sending it (`runner.mjs`) and Windows notifications (`toast.mjs`) |
 | `server/datapack/` | signed game-data updates (`datapack.mjs`), the checks (`checker.mjs`), the first start's download (`firstrun.mjs`) and the public key packs must be signed with |
-| `web/` | the page: `index.html`, `scripts/` (one file per tab), `styles/` |
+| `web/` | the page: `index.html`, `styles/` and `scripts/`, ES modules: `app.js` (start, polling, tabs), `core.js` (shared state and helpers), one module per tab, `units.js` (mini and army rules), `dialogs.js`, and `lib/` (`schedule.js`, `pvp.js`: calculations shared with the server) |
 | `gamedata/` | the game data and art (© Blizzard, see NOTICE), filled by `npm run fetch-gamedata`, served as `/static/…`; not in the repository |
-| `desktop/` | the Windows exe's launcher (app window, tray icon) and its icon |
+| `desktop/` | the Windows exe's launcher (`launcher.cjs`: app window, updates), the tray icon (`tray.ps1`), Windows integration (`integration.ps1`: Start menu shortcut, notification clicks) and the icon |
 | `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip; no game data inside, the exe downloads it on first start) |
-| `test/` | tests for save decoding, scans, the HTTP API and request filtering, backups, data packs, app updates, notifications, currency names and PvP (`npm test`, Node's built-in test runner; `helpers.mjs` builds save values and a tracker in a temporary folder) |
-| `.github/workflows/` | `release.yml`: tests, builds and attests releases on GitHub Actions when a `v<version>` tag is pushed |
-| `docs/` | the player guide and its screenshots |
+| `test/` | tests for save decoding, scans, the HTTP API and request filtering, backups, data packs, app updates, notifications, currency names, PvP, the page's calculations and (on Windows) the tray and integration scripts (`npm test`, Node's built-in test runner; `helpers.mjs` builds save values and a tracker in a temporary folder) |
+| `.github/workflows/` | `test.yml`: the tests on every push and pull request; `release.yml`: tests, builds and attests releases when a `v<version>` tag is pushed |
+| `docs/` | the player guide and its screenshots, and how the tracker works in the background |
 
 **Security.** The server listens on 127.0.0.1 only and answers only the tracker's own page: requests for another host
 name, from another website, or API writes that aren't JSON are refused. The page runs under a strict content security

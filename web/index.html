@@ -42,7 +42,9 @@
         <div class="backup-menu" id="backupMenu" role="menu" hidden>
           <a role="menuitem" href="/api/backup" download>Export backup</a>
           <button role="menuitem" id="backupImport">Import backup…</button>
-          <p class="small muted">Everything you entered: names, talents and armies.</p>
+          <p class="small muted">What you entered, plus G.R.I.D., PvP and progress history.</p>
+          <div class="backup-head">Automatic backups</div>
+          <div id="backupList"></div>
         </div>
         <input type="file" id="backupFile" accept="application/json,.json" hidden>
       </div>
@@ -99,6 +101,7 @@
   </div>
 
   <dialog id="settingsDialog" class="alerts-dialog" aria-label="Settings"></dialog>
+  <dialog id="messageDialog" class="alerts-dialog message-dialog" aria-label="Message"></dialog>
   <dialog id="updateDialog" class="alerts-dialog update-dialog" aria-label="Tracker update"></dialog>
   <dialog id="reportDialog" class="alerts-dialog report-dialog" aria-label="Report a problem"></dialog>
 
@@ -106,14 +109,8 @@
     Unofficial fan tool, not affiliated with or endorsed by Blizzard Entertainment. Warcraft Rumble and its game art
     and data © Blizzard Entertainment, Inc.  </footer>
 
-  <script src="/scripts/report.js"></script>
-  <script src="/scripts/app.js"></script>
-  <script src="/scripts/army.js"></script>
-  <script src="/scripts/armory.js"></script>
-  <script src="/scripts/calendar.js"></script>
-  <script src="/scripts/grid.js"></script>
-  <script src="/scripts/notifications.js"></script>
-  <script src="/scripts/progress.js"></script>
-  <script src="/scripts/pvp.js"></script>
+  <!-- report.js first: it reports script errors from the start -->
+  <script type="module" src="/scripts/report.js"></script>
+  <script type="module" src="/scripts/app.js"></script>
 </body>
 </html>

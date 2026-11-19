@@ -1,32 +1,33 @@
-'use strict';
 // G.R.I.D. tab: the current grid, its refresh timer and offer cooldowns.
 // A mini is not re-offered until a number of other minis have been offered (12; 16 for leaders; 20 for special
 // leaders). Cooldowns are derived from the grids the tracker has observed (data/grid_history.json).
-// Depends on globals from app.js.
+import { currencyChip } from './collection.js';
+import { $, esc, fmt, MINIS, BY_SLUG, state, ui, GRID_CURRENCY_IDS, onTablesReload } from './core.js';
 
-let STORE = null; // static/store.json
-async function loadStore() {
+export let STORE = null; // static/store.json
+onTablesReload(() => { STORE = null; });
+export async function loadStore() {
   if (!STORE) STORE = await fetch('/static/store.json').then((r) => r.json());
   return STORE;
 }
 
-function countdown(iso) {
+export function countdown(iso) {
   if (!iso) return '';
   const ms = Date.parse(iso) - Date.now();
   if (ms <= 0) return 'now';
   const m = Math.round(ms / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
   return d ? `${d}d ${h}h` : h ? `${h}h ${m % 60}m` : `${m % 60}m`;
 }
-const rarityLabel = (id) => {
+export const rarityLabel = (id) => {
   const n = STORE.gridRarity[id]?.name || '';
   const m = /^(\w+?)Rarity_(Troop|Leader)$/.exec(n);
   return m ? `${m[1]}${m[2] === 'Leader' ? ' leader' : ''}` : '';
 };
-const isLeaderSlug = (slug) => BY_SLUG.get(slug)?.category === 'Leader';
-const ownedSlug = (slug) => state.units.find((u) => u.slug === slug && !u.synthetic) || null;
+export const isLeaderSlug = (slug) => BY_SLUG.get(slug)?.category === 'Leader';
+export const ownedSlug = (slug) => state.units.find((u) => u.slug === slug && !u.synthetic) || null;
 
 /** Minis on cooldown: slug -> { place, limit, lastSeen }. */
-function gridCooldowns() {
+export function gridCooldowns() {
   const rules = STORE.rules?.recentlySeen || {};
   const special = new Set((STORE.rules?.specialMinis || []).map((id) => state.gridHistory.flatMap((g) => g.items).find((x) => x.mini === id)?.slug).filter(Boolean));
   // Newest grid first. Minis in the same grid count as offered together; place = distinct minis of the same kind
@@ -49,7 +50,7 @@ function gridCooldowns() {
   return out;
 }
 
-function gridSlot(s) {
+export function gridSlot(s) {
   if (s.bought) return '<div class="grid-slot bought"><span>Bought</span></div>';
   if (s.xpBoost) {
     const x = STORE.xpBoosts[s.xpBoost] || {};
@@ -67,15 +68,15 @@ function gridSlot(s) {
   </div>`;
 }
 
-// (renderGrid is the Collection grid in app.js)
-async function renderGridTab() {
+// (renderGrid is the Collection grid, collection.js)
+export async function renderGridTab() {
   const page = $('#tab-grid');
   if (!page || !state) return;
   try { await loadStore(); } catch { page.innerHTML = '<div class="panel muted">Could not load static/store.json.</div>'; return; }
   if (ui.tab !== 'grid') return;
   const shop = state.shop;
   if (!shop) { page.innerHTML = '<div class="panel muted">No G.R.I.D. in the saved data for this account yet. Open the shop in the game.</div>'; return; }
-  // G.R.I.D. currencies (GRID_CURRENCY_IDS, app.js) the account has
+  // G.R.I.D. currencies (GRID_CURRENCY_IDS, core.js) the account has
   const gridCur = GRID_CURRENCY_IDS.map((id) => state.currencies.find((c) => c.id === id && c.name)).filter(Boolean);
   const cd = gridCooldowns();
   const hist = state.gridHistory || [];
@@ -120,6 +121,6 @@ async function renderGridTab() {
     </section>`;
 }
 
-function bindGridTab() {
+export function bindGridTab() {
   setInterval(() => { if (ui.tab === 'grid' && !document.hidden) renderGridTab(); }, 30000);
 }

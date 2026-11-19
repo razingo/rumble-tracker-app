@@ -139,3 +139,16 @@ test('army and tag cleaning', () => {
   assert.equal(cleanTags(Array.from({ length: 30 }, (_, i) => `t${i}`)).length, 20);
   assert.equal(cleanTags(['x'.repeat(50)])[0].length, 30);
 });
+
+test('automatic backups: listed and restored by day', async () => {
+  const { writeDailyBackup } = await import('../server/backup.mjs');
+  ctx.user.names.accounts[ACC] = 'Backed up';
+  await writeDailyBackup(ctx.paths.BACKUPS, ctx.user.backupFiles(), { now: new Date(2026, 10, 18, 12) });
+  ctx.user.names.accounts[ACC] = 'Later';
+  const list = (await api('GET', '/api/backups')).body.backups;
+  assert.deepEqual(list.map((b) => b.day), ['2026-11-18']);
+  assert.equal((await api('POST', '/api/backups/restore', { day: '2026-11-18' })).status, 200);
+  assert.equal(ctx.user.names.accounts[ACC], 'Backed up');
+  assert.equal((await api('POST', '/api/backups/restore', { day: '../names' })).status, 404);
+  assert.equal((await api('POST', '/api/backups/restore', { day: '2020-01-01' })).status, 404);
+});

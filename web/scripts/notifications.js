@@ -1,18 +1,18 @@
-'use strict';
 // Settings dialog: general settings (Start with Windows) and notifications. Settings are stored and notifications sent
-// by the server, also while the page is closed. Depends on globals from app.js.
+// by the server, also while the page is closed.
+import { $, esc, post, state } from './core.js';
 
-let NOTIFY = null; // { settings, types, log, pending, playing }
-let GENERAL = null; // { startWithWindows: true | false | null (not available: running from source) }
+export let NOTIFY = null; // { settings, types, log, pending, playing }
+export let GENERAL = null; // { startWithWindows: true | false | null (not available: running from source) }
 
-async function loadNotify() {
+export async function loadNotify() {
   [NOTIFY, GENERAL] = await Promise.all([
     fetch('/api/notifications').then((r) => r.json()),
     fetch('/api/settings').then((r) => r.json()),
   ]);
 }
 
-function renderNotifyDialog() {
+export function renderNotifyDialog() {
   const dlg = $('#settingsDialog');
   if (!NOTIFY) { dlg.innerHTML = '<p>Loading…</p>'; return; }
   const s = NOTIFY.settings;
@@ -57,7 +57,7 @@ function renderNotifyDialog() {
   </form>`;
 }
 
-async function saveNotify(msg) {
+export async function saveNotify(msg) {
   try {
     const r = await post('/api/notifications', { settings: NOTIFY.settings });
     NOTIFY.settings = r.settings;
@@ -65,7 +65,7 @@ async function saveNotify(msg) {
   } catch (e) { if (msg) { msg.textContent = `Not saved: ${e.message}`; msg.className = 'nt-msg small cost-no'; } }
 }
 
-function bindNotify() {
+export function bindNotify() {
   const dlg = $('#settingsDialog');
   $('#settingsBtn').addEventListener('click', async () => {
     dlg.showModal();
