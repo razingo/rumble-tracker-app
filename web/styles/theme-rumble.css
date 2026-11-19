@@ -1,5 +1,5 @@
 /* Game-inspired theme over style.css (optional: remove its <link> for the plain look).
-   Fonts: Lilita One (headings, numbers) and Nunito (text), from Google Fonts. */
+   Fonts: Lilita One (headings, numbers) and Nunito (text), bundled in web/fonts/. */
 
 :root, :root:not([data-theme]) {
   --bg: #161a2e;

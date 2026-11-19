@@ -15,7 +15,7 @@ export const NOTIFY_TYPES = [
   { id: 'rotation', label: 'Dungeon faction, dungeon or raid/siege changes', on: false, whenPlaying: false },
   { id: 'upgradeReady', label: 'A mini is ready to upgrade', on: true, whenPlaying: false },
   { id: 'planAffordable', label: 'Enough tickets for a reward goal', on: true, whenPlaying: true },
-  { id: 'appUpdate', label: 'A newer tracker version is needed', on: true, whenPlaying: true },
+  { id: 'appUpdate', label: 'A new tracker version is available', on: true, whenPlaying: true },
 ];
 
 export function defaultSettings() {
@@ -72,6 +72,9 @@ export function dueNotifications(ctx) {
   if (ctx.appUpdateNeeded && on('appUpdate')) {
     add('appUpdate', 'app-update-needed', 'Tracker update needed',
       'New game data needs a newer version of Rumble Collection Tracker. Download it from GitHub Releases.');
+  } else if (ctx.newVersion && on('appUpdate')) {
+    add('appUpdate', `app-version-${ctx.newVersion}`, 'Tracker update available',
+      `Rumble Collection Tracker ${ctx.newVersion} is available on GitHub Releases.`);
   }
 
   // shop: free gift, daily reset, new G.R.I.D.

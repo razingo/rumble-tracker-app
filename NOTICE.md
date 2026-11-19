@@ -33,10 +33,15 @@ Extracted from the game's files and published only in the data repository
 contributors, MIT-licensed, with third-party components under their own licenses. The full text ships in the zip as
 `THIRD-PARTY-NOTICES/Node.js-LICENSE.txt`.
 
+## Fonts
+
+The page uses two bundled fonts under the SIL Open Font License 1.1: Lilita One (© 2011 Juan Montoreano) and Nunito
+(© 2014 The Nunito Project Authors). Their licenses are in `web/fonts/` and in the zip under `THIRD-PARTY-NOTICES`.
+
 ## The player's own data
 
 The tracker reads Warcraft Rumble's saved settings from the Windows registry on the player's own PC, read-only, and
 keeps everything it stores in its own data folder on that PC (`%APPDATA%\RumbleTracker`). It sends nothing
-anywhere. Its only network requests are the data-pack check, which downloads signed files and sends no player data,
-and the page's fonts from Google Fonts. "Report a problem" only opens a pre-filled GitHub issue in the player's
+anywhere. Its only network requests are the data-pack check, which downloads signed files and sends no player data.
+"Report a problem" only opens a pre-filled GitHub issue in the player's
 browser; it is sent only if the player submits it there.

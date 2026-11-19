@@ -62,6 +62,8 @@ async function loadTables() {
 // Data packs: from config.json "dataPackUrl" or RUMBLE_DATA_PACK_URL (the exe sets RUMBLE_DEFAULT_DATA_PACK_URL).
 const config = await readJson(path.join(DATA, 'config.json'), {});
 const dataPackUrl = process.env.RUMBLE_DATA_PACK_URL || config.dataPackUrl || process.env.RUMBLE_DEFAULT_DATA_PACK_URL || '';
+// pack check state (also read by notifications, which can run before the first check)
+const dataPack = { url: dataPackUrl, lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false, newVersion: null };
 
 // Game data is not bundled: from source, npm run fetch-gamedata fills gamedata/; otherwise (the exe) the first start
 // installs the signed data pack into DATA/gamedata.
@@ -219,14 +221,15 @@ const FAILS_BEFORE_ERROR = 3;
 const failures = new Map(); // 'read' or account id -> consecutive failures
 
 // logMessage omits user-given names, for problem reports.
+let lastErrorLog = null; // lastError without user-given names, for tracker.log
 function noteFailure(key, message, logMessage = message) {
   const n = (failures.get(key) || 0) + 1;
   failures.set(key, n);
-  if (n >= FAILS_BEFORE_ERROR) { lastError = message; errorLog.add(key === 'read' ? 'reading the save' : 'decoding the save', logMessage); }
+  if (n >= FAILS_BEFORE_ERROR) { lastError = message; lastErrorLog = logMessage; errorLog.add(key === 'read' ? 'reading the save' : 'decoding the save', logMessage); }
 }
 function noteSuccess(key) {
   failures.delete(key);
-  if (![...failures.values()].some((n) => n >= FAILS_BEFORE_ERROR)) lastError = null;
+  if (![...failures.values()].some((n) => n >= FAILS_BEFORE_ERROR)) { lastError = null; lastErrorLog = null; }
 }
 
 async function scan() {
@@ -356,7 +359,7 @@ function buildState(requested) {
       dataVersion: gameData?.dataVersion || null,
       gameBuild: gameBuildSeen,
       stale: !!(gameBuildSeen && gameData?.gameBuild && compareBuilds(gameBuildSeen, gameData.gameBuild) > 0),
-      pack: typeof dataPack === 'undefined' ? null : { configured: !!dataPack.url, lastCheck: dataPack.lastCheck, result: dataPack.result, error: dataPack.error, needsAppUpdate: dataPack.needsAppUpdate },
+      pack: typeof dataPack === 'undefined' ? null : { configured: !!dataPack.url, lastCheck: dataPack.lastCheck, result: dataPack.result, error: dataPack.error, needsAppUpdate: dataPack.needsAppUpdate, newVersion: dataPack.newVersion },
     },
     // shop with unit IDs resolved to slugs (null if unknown), plus G.R.I.D. history
     shop: acc && acc.shop ? withSlugs(acc.shop) : null,
@@ -376,14 +379,15 @@ function buildState(requested) {
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
 };
 
 // Content security policy: own scripts only (no inline script, handlers or eval), connections and images only to
-// this server, fonts from Google Fonts. Inline style attributes are allowed; the page sets colours through them.
+// this server, fonts bundled. Inline style attributes are allowed; the page sets colours through them.
 const SECURITY_HEADERS = {
   'content-security-policy': [
     "default-src 'self'", "script-src 'self'", "connect-src 'self'", "img-src 'self' data:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'", "font-src 'self'",
     "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'",
   ].join('; '),
   'x-content-type-options': 'nosniff',
@@ -704,7 +708,7 @@ async function notifyTick() {
       id, label: accountLabel(id), shop: acc.shop, currencies: acc.snapshot.currencies,
       units: acc.snapshot.units.map((u) => ({ ...u, slug: unitSlug(u.id), name: nameOf.get(unitSlug(u.id)) })),
     }));
-  const due = dueNotifications({ now, accounts: list, events: eventsTable, store: storeTable, rules, plans, settings: notifySettings, multi: list.length > 1, appUpdateNeeded: dataPack.needsAppUpdate })
+  const due = dueNotifications({ now, accounts: list, events: eventsTable, store: storeTable, rules, plans, settings: notifySettings, multi: list.length > 1, appUpdateNeeded: dataPack.needsAppUpdate, newVersion: dataPack.newVersion })
     .filter((n) => !sentLog.sent[n.key]);
   if (!due.length && !(sentLog.pending.length && !inQuietHours(notifySettings.quiet))) return;
   const stamp = new Date(now).toISOString();
@@ -744,7 +748,8 @@ setInterval(() => notifyTick().catch(notifyFailed), 30000);
 notifyTick().catch(notifyFailed);
 
 // ---- data packs (address: see dataPackUrl above) ------------------------------------------------------------
-const dataPack = { url: dataPackUrl, lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false };
+/** Whether dotted version a is newer than b. */
+const newerVersion = (a, b) => { const x = a.split('.').map(Number), y = String(b || '0').split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
 // Two signature failures in a row (rechecked after 15 minutes) mean packs are signed with a key this version doesn't
 // know: ask the user to download the current version. A verified pack clears it.
 const RECHECK_MS = Number(process.env.RUMBLE_PACK_RECHECK_MS) || 15 * 60 * 1000; // env override for testing
@@ -757,6 +762,8 @@ async function checkDataPack() {
     dataPack.error = null;
     dataPack.badSignatures = 0;
     if (dataPack.needsAppUpdate) { dataPack.needsAppUpdate = false; rev++; }
+    const newVersion = r.latestAppVersion && APP_VERSION && newerVersion(r.latestAppVersion, APP_VERSION) ? r.latestAppVersion : null;
+    if (newVersion !== dataPack.newVersion) { dataPack.newVersion = newVersion; rev++; if (newVersion) notifyTick().catch(notifyFailed); }
     if (r.updated) {
       await loadTables();
       rev++;
@@ -779,5 +786,6 @@ setInterval(checkDataPack, 6 * 60 * 60 * 1000);
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Rumble tracker running at http://localhost:${PORT}`);
   console.log(`Data folder: ${DATA}`);
-  console.log(`Accounts found: ${[...accounts.keys()].map(accountLabel).join(', ') || 'none'}${lastError ? `  (error: ${lastError})` : ''}`);
+  // count only: account names are user-given and the log may be attached to bug reports
+  console.log(`Accounts found: ${accounts.size}${lastErrorLog ? `  (error: ${lastErrorLog})` : ''}`);
 });

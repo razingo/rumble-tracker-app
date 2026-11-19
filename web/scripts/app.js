@@ -270,6 +270,13 @@ function renderDataBanner() {
       <button class="chip" data-open-releases>Download the latest version</button>`;
     return;
   }
+  const v = d?.pack?.newVersion;
+  if (v && store.get('dismissedVersion', null) !== v) {
+    el.hidden = false;
+    el.innerHTML = `<b>Version ${esc(v)} is available.</b> Download it from GitHub Releases; your data is kept.
+      <button class="chip" data-open-releases>Download</button> <button class="chip" data-dismiss-version="${esc(v)}">Not now</button>`;
+    return;
+  }
   el.hidden = !d?.stale;
   if (!d?.stale) return;
   el.innerHTML = `<b>The game was updated to ${esc(d.gameBuild)}.</b> The tracker's game data is from ${esc(d.dataBuild)}, so new minis,
@@ -827,7 +834,11 @@ function bindStatic() {
   });
   $('#show').addEventListener('change', (e) => { ui.show = e.target.value; store.set('show', ui.show); renderFilters(); renderGrid(); });
   $('#quitBtn').addEventListener('click', quitTracker);
-  $('#dataBanner').addEventListener('click', (e) => { if (e.target.closest('[data-open-releases]')) openExternal(RELEASES_URL); });
+  $('#dataBanner').addEventListener('click', (e) => {
+    if (e.target.closest('[data-open-releases]')) openExternal(RELEASES_URL);
+    const later = e.target.closest('[data-dismiss-version]');
+    if (later) { store.set('dismissedVersion', later.dataset.dismissVersion); renderDataBanner(); }
+  });
   // restore the minimum width after a resize
   let sizeTimer;
   window.addEventListener('resize', () => {

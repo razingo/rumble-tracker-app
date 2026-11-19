@@ -62,14 +62,15 @@ when it starts and every 6 hours, at <https://razingo.github.io/rumble-tracker-d
 tracker only installs a pack with a valid signature from the key built into the exe, so nobody else can push data to
 your tracker. If the page says its game data is older than your game, a pack for the new build isn't out yet. If it
 says a newer version of the tracker is needed, new packs can only be verified by a newer exe: download the latest
-release (your data is kept).
+release (your data is kept). When a new version of the tracker is released, a banner (and one notification) says so;
+*Not now* hides it until the next version.
 
 ## Privacy
 
 - The tracker only **reads** the game's saved data (from the Windows registry). It never changes it, and it ignores
   the login tokens stored next to it.
-- It sends nothing about you anywhere. Its only network requests are the data pack check (downloads only) and the
-  page's fonts from Google Fonts.
+- It sends nothing about you anywhere. Its only network requests are the data pack downloads (on first start and
+  the update checks).
 - The local page is only reachable from this PC, and only by the tracker's own page.
 
 ## Found a problem?
@@ -92,8 +93,8 @@ Start `RumbleTracker.exe` from a Command Prompt or a shortcut to use these:
 ## License
 
 The tracker's code is MIT-licensed ([LICENSE](LICENSE)). That license doesn't cover the game art and data, which belong
-to Blizzard Entertainment ([NOTICE.md](NOTICE.md)). The exe contains the Node.js runtime, whose license is in
-`THIRD-PARTY-NOTICES` in the zip.
+to Blizzard Entertainment ([NOTICE.md](NOTICE.md)). The exe contains the Node.js runtime and two open-licensed fonts,
+whose licenses are in `THIRD-PARTY-NOTICES` in the zip.
 
 ## For developers
 

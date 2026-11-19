@@ -40,7 +40,7 @@ try { await stat(nodeLicense); } catch { fail('desktop/node-LICENSE.txt is missi
 // [folder, allowed extensions]. Game data is not bundled: the exe downloads it on first start.
 const APP_FILES = [
   ['server', ['.mjs']],
-  ['web', ['.html', '.js', '.css', '.ico']],
+  ['web', ['.html', '.js', '.css', '.ico', '.woff2', '.txt']],
 ];
 async function walk(rel, exts) {
   const abs = path.join(ROOT, rel);
@@ -191,6 +191,8 @@ const zipBuf = zip([
   [`${folder}/LICENSE.txt`, await readFile(path.join(ROOT, 'LICENSE'))],
   [`${folder}/NOTICE.md`, await readFile(path.join(ROOT, 'NOTICE.md'))],
   [`${folder}/THIRD-PARTY-NOTICES/Node.js-LICENSE.txt`, await readFile(nodeLicense)],
+  [`${folder}/THIRD-PARTY-NOTICES/Font-LilitaOne-OFL.txt`, await readFile(path.join(ROOT, 'web', 'fonts', 'OFL-LilitaOne.txt'))],
+  [`${folder}/THIRD-PARTY-NOTICES/Font-Nunito-OFL.txt`, await readFile(path.join(ROOT, 'web', 'fonts', 'OFL-Nunito.txt'))],
 ]);
 await writeFile(path.join(OUT, zipName), zipBuf);
 await writeFile(path.join(OUT, 'SHA256SUMS.txt'), `${sha256(zipBuf)}  ${zipName}\n${sha256(exe)}  ${EXE}\n`);
