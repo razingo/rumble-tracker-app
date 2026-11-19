@@ -35,9 +35,6 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME does not match package.json version $version" }
 
-      - name: Fetch the game data (signed pack)
-        run: npm run fetch-gamedata
-
       - name: Build
         run: npm run build-release
 

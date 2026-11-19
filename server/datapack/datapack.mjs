@@ -9,6 +9,7 @@ import { PACK_PUBLIC_KEYS } from './pack_keys.mjs';
 
 const MAX_FILE = 8 * 1024 * 1024;   // per file
 const MAX_TOTAL = 64 * 1024 * 1024; // per pack
+const PARALLEL = 8; // concurrent downloads
 const SAFE_PATH = /^[A-Za-z0-9_][\w./ '-]*\.(json|webp|png)$/;
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
@@ -31,9 +32,10 @@ async function fetchBuf(url, limit) {
 
 /**
  * Installs the pack at `base` into `dir` if it is newer than `current`. Only changed files are downloaded, and every
- * file is verified before the switch. Returns { updated, manifest, downloaded, reason }.
+ * file is verified before the switch. onProgress(done, total) is called after each file.
+ * Returns { updated, manifest, downloaded, reason }.
  */
-export async function updateDataPack({ base, current, dir, staticDir, publicKeys = PACK_PUBLIC_KEYS }) {
+export async function updateDataPack({ base, current, dir, staticDir, publicKeys = PACK_PUBLIC_KEYS, onProgress }) {
   const keys = publicKeys.map((pem) => { try { return createPublicKey(pem); } catch { return null; } }).filter(Boolean);
   if (!base) return { updated: false, reason: 'no data pack address configured' };
   if (!allowedUrl(base)) return { updated: false, reason: 'data pack address must be https' };
@@ -61,7 +63,10 @@ export async function updateDataPack({ base, current, dir, staticDir, publicKeys
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
   let downloaded = 0;
-  for (const [rel, f] of entries) {
+  let done = 0;
+  let next = 0;
+  let failed = null;
+  const installOne = async ([rel, f]) => {
     const target = path.join(staging, ...rel.split('/'));
     await mkdir(path.dirname(target), { recursive: true });
     // reuse an identical local file instead of downloading it
@@ -75,7 +80,16 @@ export async function updateDataPack({ base, current, dir, staticDir, publicKeys
       downloaded++;
     }
     await writeFile(target, buf);
-  }
+    onProgress?.(++done, entries.length);
+  };
+  // PARALLEL workers take files in turn; the first error stops them all
+  const worker = async () => {
+    while (!failed && next < entries.length) {
+      try { await installOne(entries[next++]); } catch (e) { failed ??= e; }
+    }
+  };
+  await Promise.all(Array.from({ length: PARALLEL }, worker));
+  if (failed) throw failed;
   await writeFile(path.join(staging, 'gamedata.json'), JSON.stringify(remote, null, 1));
   // swap directories; remove the old pack only once the new one is in place
   const old = `${dir}.old`;

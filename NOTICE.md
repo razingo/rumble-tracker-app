@@ -17,8 +17,8 @@ your collection in a recognisable way.
 ## Game art and data © Blizzard Entertainment
 
 Extracted from the game's files and published only in the data repository
-(<https://github.com/razingo/rumble-tracker-data>): built into the exe, delivered in data packs, and downloaded into
-`gamedata/` by `npm run fetch-gamedata`. None of it is in this repository:
+(<https://github.com/razingo/rumble-tracker-data>), which the tracker downloads on first start and for updates, and
+`npm run fetch-gamedata` into `gamedata/`. None of it is in this repository or in the release downloads:
 
 - images: mini portraits (one of them, the Kobold Miner, is also the app's icon), talent icons, card frames, boards and textures, faction, trait and tag icons, event
   tickets, event reward icons, shop art and currency icons;

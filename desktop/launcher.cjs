@@ -309,12 +309,15 @@ async function main() {
   if (!args.has('--no-browser') && !args.has('--tab')) chooseBrowser().catch(() => {});
 
   const load = createRequire(path.join(app.dir, 'launcher-helper.cjs'))(path.join(app.dir, 'import.cjs'));
-  try {
-    await load(pathToFileURL(path.join(app.dir, 'server', 'main.mjs')).href);
-  } catch (e) {
-    return fatal(`The tracker could not start: ${e && e.message || e}`);
+  // not awaited: on first start the server downloads the game data before it finishes loading, serving a progress
+  // page meanwhile, so the window opens as soon as the port answers
+  let failed = false;
+  load(pathToFileURL(path.join(app.dir, 'server', 'main.mjs')).href)
+    .catch((e) => { failed = true; fatal(`The tracker could not start: ${e && e.message || e}`); });
+  if (!await waitForServer() || failed) {
+    if (!failed) fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`);
+    return;
   }
-  if (!await waitForServer()) return fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`);
   startTray(() => { console.log('Quit from the tray'); process.exit(0); });
   await openWindow();
 }

@@ -11,11 +11,13 @@ your progress over time, and optional Windows notifications.
 ## Download and run
 
 You need Windows 10 or 11 (64-bit) and Warcraft Rumble for PC, played at least once on this PC. Nothing else: no
-Node.js, no installer.
+Node.js, no installer. The first start needs an internet connection: the tracker downloads its game data (about
+4.5 MB) before it opens.
 
 1. Open [Releases](https://github.com/razingo/rumble-tracker-app/releases/latest) and download `RumbleTracker-<version>-win-x64.zip`.
 2. Extract the zip anywhere (for example to `Documents\RumbleTracker`) and double-click **RumbleTracker.exe**.
-3. The tracker opens in its own window.
+3. The tracker opens in its own window. The first time, it shows the game data download (a minute or less), then the
+   tracker.
 
 The tracker reads the game's save every few seconds, so the window updates on its own while you play. What every tab
 does is explained in the **[player guide](https://github.com/razingo/rumble-tracker-app/blob/main/docs/INSTRUCTIONS.md)**.
@@ -118,7 +120,7 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 | `web/` | the page: `index.html`, `scripts/` (one file per tab), `styles/` |
 | `gamedata/` | the game data and art (© Blizzard, see NOTICE), filled by `npm run fetch-gamedata`, served as `/static/…`; not in the repository |
 | `desktop/` | the Windows exe's launcher (app window, tray icon) and its icon |
-| `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip, with the game data from `gamedata/` built in) |
+| `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip; no game data inside, the exe downloads it on first start) |
 | `.github/workflows/` | `release.yml`: builds and attests releases on GitHub Actions when a `v<version>` tag is pushed |
 | `docs/` | the player guide and its screenshots |
 

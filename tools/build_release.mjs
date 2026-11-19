@@ -37,11 +37,10 @@ const nodeLicense = path.join(DESKTOP, 'node-LICENSE.txt');
 try { await stat(nodeLicense); } catch { fail('desktop/node-LICENSE.txt is missing (Node.js license, must ship with the exe).'); }
 
 // ---- the app's files ---------------------------------------------------------------------------------------------
-// [folder, allowed extensions]
+// [folder, allowed extensions]. Game data is not bundled: the exe downloads it on first start.
 const APP_FILES = [
   ['server', ['.mjs']],
   ['web', ['.html', '.js', '.css', '.ico']],
-  ['gamedata', ['.json', '.webp', '.png', '.svg']],
 ];
 async function walk(rel, exts) {
   const abs = path.join(ROOT, rel);
@@ -55,16 +54,6 @@ async function walk(rel, exts) {
   }
   return out;
 }
-// verify gamedata/ against its gamedata.json before bundling it
-const gameDataDir = path.join(ROOT, 'gamedata');
-const gameData = await readFile(path.join(gameDataDir, 'gamedata.json'), 'utf8').then(JSON.parse, () => null);
-if (!gameData?.files) fail('gamedata/ is missing: run  npm run fetch-gamedata  first.');
-for (const [rel, f] of Object.entries(gameData.files)) {
-  const buf = await readFile(path.join(gameDataDir, ...rel.split('/'))).catch(() => null);
-  if (!buf || sha256(buf) !== f.sha256) fail(`gamedata/${rel} is missing or changed: run  npm run fetch-gamedata -- --force.`);
-}
-console.log(`Game data: build ${gameData.gameBuild}, data version ${gameData.dataVersion}, ${Object.keys(gameData.files).length} files checked`);
-
 const files = [];
 for (const [rel, exts] of APP_FILES) for (const r of await walk(rel, exts)) files.push([r, await readFile(path.join(ROOT, r))]);
 files.sort((a, b) => a[0].localeCompare(b[0]));

@@ -59,12 +59,71 @@ async function loadTables() {
   builtinUnits = (await readJson(await staticPath('unit_ids.json'), { units: {} })).units;
   gameData = await readJson(await staticPath('gamedata.json'), null); // game build of the tables
 }
-// gamedata/ is filled by npm run fetch-gamedata (bundled in the exe).
-try { await stat(path.join(STATIC, 'rules.json')); } catch {
-  console.error(`No game data in ${STATIC}. Run  npm run fetch-gamedata  once (it downloads the signed data pack), then start again.`);
-  process.exit(1);
+// Data packs: from config.json "dataPackUrl" or RUMBLE_DATA_PACK_URL (the exe sets RUMBLE_DEFAULT_DATA_PACK_URL).
+const config = await readJson(path.join(DATA, 'config.json'), {});
+const dataPackUrl = process.env.RUMBLE_DATA_PACK_URL || config.dataPackUrl || process.env.RUMBLE_DEFAULT_DATA_PACK_URL || '';
+
+// Game data is not bundled: from source, npm run fetch-gamedata fills gamedata/; otherwise (the exe) the first start
+// installs the signed data pack into DATA/gamedata.
+async function hasGameData() {
+  for (const dir of [GAMEDATA, STATIC]) { try { await stat(path.join(dir, 'rules.json')); return true; } catch { /* next */ } }
+  return false;
+}
+if (!(await hasGameData())) {
+  if (!dataPackUrl || !allowedUrl(dataPackUrl)) {
+    console.error(`No game data in ${STATIC}. Run  npm run fetch-gamedata  once (it downloads the signed data pack), then start again.`);
+    process.exit(1);
+  }
+  await firstRunDownload();
 }
 await loadTables();
+
+/** Installs the data pack, serving a self-refreshing progress page on PORT meanwhile; retries every 30 s. */
+async function firstRunDownload() {
+  const status = { done: 0, total: 0, error: null };
+  const html = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const page = () => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="2">
+<title>Rumble Collection Tracker</title></head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#14162a;color:#f3e3c4;font:16px/1.5 system-ui,'Segoe UI',sans-serif">
+<main style="max-width:560px;padding:24px;text-align:center"><h1 style="color:#ffd166;font-size:24px">Rumble Collection Tracker</h1>
+<p>${status.error ? html(status.error)
+    : `Downloading the game data (first start only)… ${status.total ? `${status.done} of ${status.total} files` : 'connecting'}`}</p></main></body></html>`;
+  const hosts = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
+  const boot = http.createServer((req, res) => {
+    if (!hosts.has(req.headers.host)) { res.writeHead(403); res.end(); return; }
+    const p = new URL(req.url, 'http://localhost').pathname;
+    if (p === '/api/report') { // answers the launcher's "is it running" check
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ repo: ISSUES_REPO, starting: true }));
+      return;
+    }
+    res.writeHead(p === '/' ? 200 : 503, {
+      'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
+    });
+    res.end(page());
+  });
+  await new Promise((resolve, reject) => { boot.once('error', reject); boot.listen(PORT, '127.0.0.1', resolve); });
+  console.log(`First start: downloading game data from ${dataPackUrl}`);
+  for (;;) {
+    try {
+      const r = await updateDataPack({ base: dataPackUrl, current: null, dir: GAMEDATA, staticDir: STATIC,
+        onProgress: (done, total) => { status.done = done; status.total = total; } });
+      if (!r.updated) throw new Error(r.reason);
+      console.log(`Game data installed: ${r.reason} (${r.downloaded} files downloaded)`);
+      break;
+    } catch (e) {
+      console.log(`Game data download failed: ${e.message}`);
+      errorLog.add('data pack', e.message);
+      status.error = e.code === 'BAD_SIGNATURE'
+        ? 'This version of the tracker cannot verify the current game data. Download the latest version from https://github.com/razingo/rumble-tracker-app/releases/latest'
+        : `Could not download the game data (${e.message}). Check your internet connection; retrying in 30 seconds.`;
+      await new Promise((r) => setTimeout(r, 30000));
+      Object.assign(status, { done: 0, total: 0, error: null });
+    }
+  }
+  await new Promise((resolve) => { boot.close(resolve); boot.closeAllConnections(); });
+}
 const names = await readJson(path.join(DATA, 'names.json'), { accounts: {}, units: {}, currencies: {} });
 const unitSlug = (id) => names.units[id] || builtinUnits[id] || null;
 const talents = await readJson(path.join(DATA, 'talents.json'), {});
@@ -684,10 +743,7 @@ const notifyFailed = (e) => { console.log(`Notifications: ${e.message}`); errorL
 setInterval(() => notifyTick().catch(notifyFailed), 30000);
 notifyTick().catch(notifyFailed);
 
-// ---- data packs: from config.json "dataPackUrl" or RUMBLE_DATA_PACK_URL ------------------------------------
-const config = await readJson(path.join(DATA, 'config.json'), {});
-// (the exe sets RUMBLE_DEFAULT_DATA_PACK_URL; config.json overrides it)
-const dataPackUrl = process.env.RUMBLE_DATA_PACK_URL || config.dataPackUrl || process.env.RUMBLE_DEFAULT_DATA_PACK_URL || '';
+// ---- data packs (address: see dataPackUrl above) ------------------------------------------------------------
 const dataPack = { url: dataPackUrl, lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false };
 // Two signature failures in a row (rechecked after 15 minutes) mean packs are signed with a key this version doesn't
 // know: ask the user to download the current version. A verified pack clears it.
