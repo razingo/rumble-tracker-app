@@ -1,0 +1,69 @@
+// PvP from the save (PvpPlayerRankState) and the matches the tracker infers from changes between scans.
+// The save has no match history or win/loss counts. Each finished match adds Victory Points (VP: loss = base x loss,
+// win = base x win, more on a win streak) and wins add honor, losses usually take some. So a VP change tells
+// how many wins and losses happened since the last scan; honor breaks ties (two losses = one win in VP).
+import { parseMessage, sub, first, num, readId } from './protobuf.mjs';
+
+/** { season: save id, honor, honor2, vp } from PvpPlayerRankState, or null. honor2 is a second honor value
+ *  (equal to honor so far; maybe the season's best). */
+export function parsePvp(buf) {
+  if (!buf || !buf.length) return null;
+  const f = parseMessage(buf);
+  const seasonField = first(f, 2);
+  const rank = first(f, 3);
+  const vp = first(f, 4);
+  const r = rank && rank.wt === 2 ? sub(buf, rank) : [];
+  return {
+    season: seasonField ? readId(buf, seasonField) || null : null,
+    honor: num(first(r, 1)),
+    honor2: num(first(r, 2)),
+    vp: vp && vp.wt === 2 ? num(first(sub(buf, vp), 1)) : 0,
+  };
+}
+
+/** VP for a loss and for wins (one value per win-streak band), from pvp.json victoryPoints. */
+export function vpValues(rules) {
+  const base = rules?.base ?? 80;
+  const loss = Math.round(base * (rules?.loss ?? 1));
+  const wins = [...new Set((rules?.streak?.length ? rules.streak : [{ x: 1 }]).map((b) => Math.round(base * (rules?.win ?? 2) * (b.x ?? 1))))];
+  return { loss, wins };
+}
+
+/**
+ * Matches between two readings of the same season: { wins, losses, estimated, honorOnly } or null (nothing happened
+ * or it can't be told). estimated: more than one combination fits (honor picked one); honorOnly: VP didn't move
+ * (Victory Road may stop counting once finished), so the result comes from honor alone: one match.
+ */
+export function inferMatches(prev, cur, rules, maxMatches = 12) {
+  if (!prev || !cur || prev.season !== cur.season) return null;
+  const dv = cur.vp - prev.vp;
+  const dh = cur.honor - prev.honor;
+  if (dv < 0) return null; // VP never drop within a season
+  if (dv === 0) {
+    if (dh > 0) return { wins: 1, losses: 0, estimated: true, honorOnly: true };
+    if (dh < 0) return { wins: 0, losses: 1, estimated: true, honorOnly: true };
+    return null;
+  }
+  const { loss, wins } = vpValues(rules);
+  // every (losses, wins per band) with total VP = dv, fewest matches first
+  const found = [];
+  const search = (left, i, counts) => {
+    if (counts.reduce((a, b) => a + b, 0) > maxMatches) return;
+    if (i === wins.length) {
+      if (left % loss === 0) found.push({ losses: left / loss, wins: counts.reduce((a, b) => a + b, 0) });
+      return;
+    }
+    for (let n = 0; n * wins[i] <= left; n++) search(left - n * wins[i], i + 1, [...counts, n]);
+  };
+  search(dv, 0, []);
+  if (!found.length) return null;
+  const options = [...new Map(found.map((o) => [`${o.wins}/${o.losses}`, o])).values()];
+  // honor: up = more wins than not, down = more losses; flat (floors, caps) says nothing
+  const fits = options.filter((o) => (dh > 0 ? o.wins > 0 : dh < 0 ? o.losses > 0 : true));
+  const pool = fits.length ? fits : options;
+  const fewest = Math.min(...pool.map((o) => o.wins + o.losses));
+  const best = pool.filter((o) => o.wins + o.losses === fewest);
+  const pick = best.sort((a, b) => (dh >= 0 ? b.wins - a.wins : b.losses - a.losses))[0];
+  // certain only when honor leaves one combination
+  return { wins: pick.wins, losses: pick.losses, estimated: pool.length > 1 || !fits.length, honorOnly: false };
+}

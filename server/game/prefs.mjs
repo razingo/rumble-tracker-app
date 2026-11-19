@@ -11,6 +11,7 @@ const WANTED = {
   store: /^StoreState_v\d+_h\d+$/, // shop, running events, income bonuses
   profile: /^ProfileManagerState_v\d+_h\d+$/, // owned avatars
   commerce: /^CommerceState_v\d+_h\d+$/, // game build
+  pvp: /^PvpPlayerRankState_v\d+_h\d+$/, // PvP season, honor, Victory Points
 };
 // "<account>_prod-actual_<entry>"=hex:0a,1b,... (REG_BINARY in a .reg file)
 const REG_LINE = /^"([0-9a-f]{32})_prod-actual_([^"\\]+)"=hex:([0-9a-fA-F,]*)$/;

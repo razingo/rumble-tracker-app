@@ -45,7 +45,10 @@ button { cursor: pointer; }
 /* visually hidden label (the picker is self-explanatory; kept for screen readers) */
 .topbar .account label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .topbar-actions { gap: 10px; }
-.topbar-actions .status { margin-left: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* only the text is cut short, so the light and its glow stay whole */
+.topbar-actions .status { margin-left: 8px; min-width: 0; display: flex; align-items: center; }
+.status .dot { flex: none; }
+.status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-spacer { flex: 1; }
 .brand { font-weight: 700; font-size: 16px; }
 .tag { font-weight: 500; font-size: 11px; color: var(--muted); background: var(--chip); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
@@ -649,3 +652,43 @@ button { cursor: pointer; }
 /* exe only: Quit button and the post-quit page */
 .quit-page { max-width: 520px; margin: 18vh auto; padding: 0 16px; text-align: center; }
 .quit-page h1 { margin-bottom: 8px; }
+
+/* PvP tab */
+.pvp-page { max-width: 1280px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+.pvp-page > .panel { margin: 0; }
+.pvp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.pvp-card { display: grid; gap: 6px; align-content: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); }
+.pvp-big { font-family: "Nunito", system-ui, sans-serif; font-size: 22px; font-weight: 800; color: #fff3d8; }
+.pvp-big small { font-size: 13px; font-weight: 600; }
+.pvp-rank { grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+.pvp-rank-text { display: grid; gap: 4px; }
+.pvp-frame { position: relative; width: 96px; height: 96px; display: grid; place-items: center; }
+.pvp-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.pvp-frame b { position: relative; font-size: 17px; font-weight: 800; color: #fff3d8; text-shadow: 0 1px 2px rgb(0 0 0 / 80%); font-variant-numeric: tabular-nums; }
+.pvp-win { color: var(--good); }
+.pvp-loss { color: var(--warn); }
+.pvp-reward { display: inline-flex; align-items: center; gap: 6px; }
+.pvp-reward img { width: 26px; height: 26px; object-fit: contain; }
+.pvp-rewards { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.pvp-end { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid rgb(255 220 160 / 10%); }
+.pvp-end:first-of-type { border-top: 0; }
+.pvp-mods { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.pvp-mod { display: flex; align-items: center; gap: 8px; }
+.pvp-mod img { width: 30px; height: 30px; object-fit: contain; border-radius: 6px; }
+.pvp-mod.big { padding: 8px 10px; border-radius: 10px; background: rgb(10 12 26 / 35%); border: 1px solid var(--line); }
+.pvp-mod.big img { width: 52px; height: 52px; }
+.pvp-next { display: grid; gap: 6px; margin-top: 12px; }
+.pvp-next-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.pvp-next-row > .small { min-width: 52px; }
+.pvp-chart .floor { stroke: rgb(255 220 160 / 14%); stroke-dasharray: 3 4; }
+.pvp-chart circle.win { fill: var(--good); }
+.pvp-chart circle.loss { fill: var(--warn); }
+.pvp-chart circle.mixed { fill: var(--muted); }
+/* match list: header plus 8 rows in view, the rest scrolls */
+.pvp-matches { margin-top: 10px; max-height: calc(28px + 8 * 33px); overflow-y: auto; }
+.pvp-matches th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.pvp-matches td { height: 33px; box-sizing: border-box; white-space: nowrap; }
+.pvp-road { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; }
+.pvp-step { display: flex; align-items: center; gap: 10px; padding: 4px 8px; border-radius: 8px; opacity: .65; }
+.pvp-step.got { opacity: 1; background: color-mix(in srgb, var(--good) 14%, transparent); }
+.pvp-step-vp { min-width: 44px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold-1); }

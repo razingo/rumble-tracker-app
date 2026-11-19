@@ -414,12 +414,14 @@ function renderTimelineBody(now) {
   const to = dayAt(n).getTime();
   const pct = (t) => ((Math.min(Math.max(t, from), to) - from) / (to - from)) * 100;
   const runs = runsBetween(from, to);
-  const rows = new Map(); // per event name
+  // one row per event name, in alphabetical order so rows keep their place while the slider moves
+  const byName = new Map();
   for (const r of runs.sort((a, b) => a.start - b.start)) {
     const key = r.ev.name || r.ev.id;
-    if (!rows.has(key)) rows.set(key, { ev: r.ev, runs: [] });
-    rows.get(key).runs.push(r);
+    if (!byName.has(key)) byName.set(key, { ev: r.ev, runs: [] });
+    byName.get(key).runs.push(r);
   }
+  const rows = new Map([...byName].sort(([a], [b]) => a.localeCompare(b)));
   const todayIn = now >= from && now < to;
   const dates = Array.from({ length: n }, (_, i) => dayAt(i));
   const isToday = (d) => d.toDateString() === today.toDateString();

@@ -115,14 +115,14 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 | Folder | What |
 |---|---|
 | `server/` | the local server (`main.mjs`): scans the save, keeps history, serves the page and its API |
-| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`), currency names (`currencies.mjs`) |
+| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`), currency names (`currencies.mjs`), PvP and match results (`pvp.mjs`) |
 | `server/notifications/` | what's due (`notify.mjs`) and Windows notifications (`toast.mjs`) |
 | `server/datapack/` | signed game-data updates (`datapack.mjs`) and the public key they must be signed with |
 | `web/` | the page: `index.html`, `scripts/` (one file per tab), `styles/` |
 | `gamedata/` | the game data and art (© Blizzard, see NOTICE), filled by `npm run fetch-gamedata`, served as `/static/…`; not in the repository |
 | `desktop/` | the Windows exe's launcher (app window, tray icon) and its icon |
 | `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip; no game data inside, the exe downloads it on first start) |
-| `test/` | tests for save decoding, data packs and notifications (`npm test`, Node's built-in test runner) |
+| `test/` | tests for save decoding, data packs, notifications, currency names and PvP (`npm test`, Node's built-in test runner) |
 | `.github/workflows/` | `release.yml`: tests, builds and attests releases on GitHub Actions when a `v<version>` tag is pushed |
 | `docs/` | the player guide and its screenshots |
 

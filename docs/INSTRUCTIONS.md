@@ -115,6 +115,23 @@ Events and the shop.
 - Further down: **Coming up** (the next events), a **timeline** of 35 days with today in the middle (drag the slider
   above it to look up to 4 months back or ahead; *Today* brings it back), **Dungeons, raids & sieges** and **How events repeat**.
 
+## PvP
+
+The PvP season, your rank and your matches.
+
+- **Rank**: your rank, honor and how much honor is left to the next rank.
+- **Wins / losses**: this season's record, today's record and your current streak. The game doesn't save match
+  results, so the tracker works them out from changes in honor and Victory Points while it runs. Matches played
+  while it isn't running still count once it sees the change. Marked *estimated* when a change fits more than one
+  combination of wins and losses.
+- **Victory Road**: your Victory Points (every finished match adds some, more for a win) and the next reward.
+  Victory Road resets at the end of the season, so claim the rewards in the game before then.
+- **Season**: the season's end date and its maps.
+- **Modifiers**: the three modifiers in play now (they change every 3 days) and the next ones.
+- **Honor this season**: a chart of your honor and the latest matches.
+- **Season-end rewards**: what your current rank pays when the season ends, and what the next rank would pay.
+- **Victory Road** (bottom): every reward and how many Victory Points it needs.
+
 ## Progress
 
 ![The Progress tab](screenshots/progress.png)

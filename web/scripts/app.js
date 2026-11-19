@@ -50,7 +50,7 @@ const ui = {
   sort: store.get('sort', 'level'),
   planCategory: store.get('planCategory', 'all'),
   planExpanded: store.get('planExpanded', false),
-  tab: ['collection', 'army', 'armory', 'grid', 'calendar', 'progress'].includes(location.hash.slice(1)) ? location.hash.slice(1) : store.get('tab', 'collection'),
+  tab: ['collection', 'army', 'armory', 'grid', 'calendar', 'pvp', 'progress'].includes(location.hash.slice(1)) ? location.hash.slice(1) : store.get('tab', 'collection'),
   filters: { types: [], families: [], traits: [], traitMode: 'all', ...store.get('filters', {}) },
   traitPickerOpen: false,
   traitSearch: '',
@@ -228,12 +228,14 @@ function setTab(tab) {
   $('#tab-army').hidden = tab !== 'army';
   $('#tab-armory').hidden = tab !== 'armory';
   $('#tab-calendar').hidden = tab !== 'calendar';
+  $('#tab-pvp').hidden = tab !== 'pvp';
   $('#tab-grid').hidden = tab !== 'grid';
   $('#tab-progress').hidden = tab !== 'progress';
   if (tab === 'progress') renderProgress();
   if (tab === 'army') renderArmy();
   if (tab === 'armory') renderArmory();
   if (tab === 'calendar') renderCalendar();
+  if (tab === 'pvp') renderPvp();
   if (tab === 'grid') renderGridTab();
 }
 
@@ -244,6 +246,7 @@ function render() {
   if (ui.tab === 'army') renderArmy();
   if (ui.tab === 'armory') renderArmory();
   if (ui.tab === 'calendar') renderCalendar();
+  if (ui.tab === 'pvp') renderPvp();
   if (ui.tab === 'grid') renderGridTab();
   if (ui.tab === 'progress') renderProgress();
   renderCurrencies();
@@ -289,7 +292,7 @@ function renderStatus() {
   if (!state) return;
   const err = state.connError || state.lastError;
   el.className = `status${err ? ' error' : ''}`;
-  el.innerHTML = `<span class="dot"></span>${err ? esc(err) : `Live · last scan ${ago(state.lastScan)}`}`;
+  el.innerHTML = `<span class="dot"></span><span class="status-text">${err ? esc(err) : `Live · last scan ${ago(state.lastScan)}`}</span>`;
 }
 
 function renderAccounts() {

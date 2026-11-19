@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRumblePrefs } from './game/prefs.mjs';
 import { currencyInfo as gameCurrencyInfo } from './game/currencies.mjs';
+import { parsePvp, inferMatches } from './game/pvp.mjs';
 import { parseUnits, parseCurrencies, parseActiveEvents, parseIncomeBonuses, parseOwnedAvatars, parseStore, parseGameBuild, compareBuilds, storeFieldsForLog, diffSnapshots, updateLearned } from './game/model.mjs';
 import { updateDataPack, allowedUrl, newerVersion } from './datapack/datapack.mjs';
 import { NOTIFY_TYPES, cleanSettings, dueNotifications, inQuietHours } from './notifications/notify.mjs';
@@ -21,6 +22,7 @@ const STATIC = path.join(ROOT, 'gamedata'); // served as /static/
 const PORT = Number(process.env.PORT || 8765);
 const SCAN_MS = 5000;
 const MAX_EVENTS = 500;
+const MAX_PVP_LOG = 2000; // PvP readings kept per account (about a season of play)
 
 async function readJson(p, fallback) {
   try {
@@ -49,10 +51,11 @@ async function staticPath(rel) {
   const p = path.join(GAMEDATA, rel);
   try { await stat(p); return p; } catch { return path.join(STATIC, rel); }
 }
-let rules, minis, slugs, builtinUnits, gameData, eventsTable, storeTable;
+let rules, minis, slugs, builtinUnits, gameData, eventsTable, storeTable, pvpTable;
 async function loadTables() {
   eventsTable = await readJson(await staticPath('events.json'), null);
   storeTable = await readJson(await staticPath('store.json'), null);
+  pvpTable = await readJson(await staticPath('pvp.json'), null);
   rules = await readJson(await staticPath('rules.json'));
   minis = (await readJson(await staticPath('minis.json'))).minis;
   slugs = new Set(minis.map((m) => m.slug));
@@ -304,6 +307,7 @@ async function scan() {
           changed = true;
         }
       } catch { /* caught mid-save: try again next scan */ }
+      try { if (recordPvp(acc, parsePvp(entries.pvp), now)) changed = true; } catch { /* caught mid-save */ }
       if (changed) {
         rev++;
         await writeJson(path.join(STATE, `${id}.json`), acc);
@@ -319,6 +323,25 @@ async function scan() {
   } finally {
     scanning = false;
   }
+}
+
+/**
+ * Logs a PvP reading when honor or Victory Points change, with the wins and losses that explain the change
+ * (inferMatches). The first reading of a season (or of an account) is a starting point without matches.
+ */
+function recordPvp(acc, cur, now) {
+  if (!cur || !cur.season) return false;
+  const prev = acc.pvp;
+  if (prev && prev.season === cur.season && prev.honor === cur.honor && prev.vp === cur.vp && prev.honor2 === cur.honor2) return false;
+  const same = prev && prev.season === cur.season;
+  const m = same ? inferMatches(prev, cur, pvpTable?.victoryPoints) : null;
+  acc.pvpLog = [...(acc.pvpLog || []), {
+    t: now, season: cur.season, honor: cur.honor, vp: cur.vp,
+    ...(same ? { dh: cur.honor - prev.honor, dv: cur.vp - prev.vp } : { start: true }),
+    ...(m || {}),
+  }].slice(-MAX_PVP_LOG);
+  acc.pvp = cur;
+  return true;
 }
 
 function accountLabel(id) {
@@ -352,6 +375,8 @@ function buildState(requested) {
     currencyNames: Object.fromEntries(Object.values(rules.currencyIds || {}).map((id) => [id, currencyInfo(id, acc).name])),
     events: acc ? acc.events.slice(-200) : [],
     activeEvents: (acc && acc.activeEvents) || [],
+    pvp: acc?.pvp || null,
+    pvpLog: acc?.pvp ? (acc.pvpLog || []).filter((e) => e.season === acc.pvp.season) : [],
     activeEventsAt: (acc && acc.activeEventsAt) || null,
     incomeBonuses: (acc && acc.incomeBonuses) || [],
     ownedAvatars: (acc && acc.ownedAvatars) || [],
