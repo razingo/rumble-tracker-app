@@ -3,6 +3,10 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.6.1
+
+- The Backup menu's text wraps inside the menu instead of running past its edge.
+
 ## 0.6.0
 
 - **PvP win rate by modifier**: your record while each modifier was active; pick modifiers to filter the win-rate
