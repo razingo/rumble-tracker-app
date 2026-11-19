@@ -115,7 +115,7 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 | Folder | What |
 |---|---|
 | `server/` | the local server (`main.mjs`): scans the save, keeps history, serves the page and its API |
-| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`) |
+| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`), currency names (`currencies.mjs`) |
 | `server/notifications/` | what's due (`notify.mjs`) and Windows notifications (`toast.mjs`) |
 | `server/datapack/` | signed game-data updates (`datapack.mjs`) and the public key they must be signed with |
 | `web/` | the page: `index.html`, `scripts/` (one file per tab), `styles/` |

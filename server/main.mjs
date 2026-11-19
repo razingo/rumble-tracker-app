@@ -5,6 +5,7 @@ import { readFile, writeFile, mkdir, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRumblePrefs } from './game/prefs.mjs';
+import { currencyInfo as gameCurrencyInfo } from './game/currencies.mjs';
 import { parseUnits, parseCurrencies, parseActiveEvents, parseIncomeBonuses, parseOwnedAvatars, parseStore, parseGameBuild, compareBuilds, storeFieldsForLog, diffSnapshots, updateLearned } from './game/model.mjs';
 import { updateDataPack, allowedUrl, newerVersion } from './datapack/datapack.mjs';
 import { NOTIFY_TYPES, cleanSettings, dueNotifications, inQuietHours } from './notifications/notify.mjs';
@@ -126,7 +127,7 @@ async function firstRunDownload() {
   }
   await new Promise((resolve) => { boot.close(resolve); boot.closeAllConnections(); });
 }
-const names = await readJson(path.join(DATA, 'names.json'), { accounts: {}, units: {}, currencies: {} });
+const names = await readJson(path.join(DATA, 'names.json'), { accounts: {}, units: {} });
 const unitSlug = (id) => names.units[id] || builtinUnits[id] || null;
 const talents = await readJson(path.join(DATA, 'talents.json'), {});
 // Army slots, entered by the user: { [account]: { [unitId]: [{ type, tier } x7] } }
@@ -332,6 +333,8 @@ function withSlugs(shop) {
   };
 }
 
+const currencyInfo = (id, acc) => gameCurrencyInfo(id, { events: eventsTable, rules, activeEvents: acc?.activeEvents || [] });
+
 function buildState(requested) {
   const ids = [...accounts.keys()];
   const account = ids.includes(requested) ? requested : ids[0] || null;
@@ -345,7 +348,8 @@ function buildState(requested) {
     account,
     accounts: ids.map((id) => ({ id, label: accountLabel(id), units: accounts.get(id).snapshot?.units.length || 0 })),
     units: acc ? acc.snapshot.units.map((u) => ({ ...u, slug: unitSlug(u.id), talentPicks: picks[u.id] || [], army: slots[u.id] || null })) : [],
-    currencies: acc ? acc.snapshot.currencies.map((c) => ({ ...c, name: names.currencies[c.id] || null })) : [],
+    currencies: acc ? acc.snapshot.currencies.map((c) => ({ ...c, ...currencyInfo(c.id, acc) })) : [],
+    currencyNames: Object.fromEntries(Object.values(rules.currencyIds || {}).map((id) => [id, currencyInfo(id, acc).name])),
     events: acc ? acc.events.slice(-200) : [],
     activeEvents: (acc && acc.activeEvents) || [],
     activeEventsAt: (acc && acc.activeEventsAt) || null,
@@ -438,11 +442,10 @@ async function handleName(body) {
     if (v && takenBy) return [409, { error: 'That mini is already assigned to another unit.', takenBy: takenBy[0] }];
     if (v) names.units[id] = v;
     else delete names.units[id];
-  } else if (kind === 'currency' || kind === 'account') {
+  } else if (kind === 'account') {
     if (v.length > 40) return [400, { error: 'name too long' }];
-    const map = kind === 'currency' ? names.currencies : names.accounts;
-    if (v) map[id] = v;
-    else delete map[id];
+    if (v) names.accounts[id] = v;
+    else delete names.accounts[id];
   } else {
     return [400, { error: 'bad kind' }];
   }
@@ -576,7 +579,7 @@ async function handleRestore(body) {
     restored.push(key);
   }
   // older or partial backups may lack required keys
-  names.accounts ??= {}; names.units ??= {}; names.currencies ??= {};
+  names.accounts ??= {}; names.units ??= {};
   learned.xpToNext ??= {}; learned.xpConflicts ??= []; learned.spending ??= [];
   rev++;
   return [200, { ok: true, restored, created: b.created }];

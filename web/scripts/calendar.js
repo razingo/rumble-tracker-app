@@ -80,10 +80,11 @@ function span(ms) {
 const when = (t) => new Date(t).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const dayOnly = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 const isLive = (ev) => (state?.activeEvents || []).includes(ev.saveId);
+// tickets reset between events: a balance belongs to the event using its slot now
 function ticketBalance(ev) {
   const id = ev.currency && EVENT_CURRENCY[ev.currency];
   const c = id && state?.currencies?.find((x) => x.id === id);
-  return c ? c.balance : null;
+  return c && c.event === (ev.name || ev.id) ? c.balance : null;
 }
 
 // ---- dungeon / raid rotations ---------------------------------------------------------------------
@@ -98,6 +99,13 @@ const rotName = (item) => (typeof item === 'string' ? item : `${item.name}${item
 const rotColor = (rot, item) => (rot.id === 'dungeonFamily' ? `var(--fam-${String(item).toLowerCase()}, var(--ev-default))` : rot.id === 'raid' ? (item.type === 'Siege' ? 'var(--ev-siege)' : 'var(--ev-raid)') : 'var(--ev-dungeon)');
 const rotIcon = (rot, item) => (rot.id === 'dungeonFamily' && TAG_ICONS?.[item] ? `<img class="rot-ico" src="/static/${TAG_ICONS[item]}" alt="">` : '');
 
+/** The account's Ankh (continues a failed dungeon), on the Dungeon card. */
+function ankhLine() {
+  const c = state?.currencies?.find((x) => x.id === ANKH_ID);
+  const icon = RULES.currencyIcons?.[ANKH_ID];
+  return `<div class="rot-ankh" title="Used to continue failed dungeons">${icon ? `<img class="cur-ico" src="/static/${icon}" alt="">` : ''}${esc(c?.name || 'Ankh')} <b>${fmt(c?.balance ?? 0)}</b> <small class="muted">continues a failed dungeon</small></div>`;
+}
+
 function renderRotations(now) {
   const card = (rot) => {
     const cur = rotationAt(rot, now);
@@ -106,6 +114,7 @@ function renderRotations(now) {
       <div class="rot-label">${esc(rot.label)} <span class="muted">· every ${rot.periodDays === 7 ? 'week' : `${rot.periodDays / 7} weeks`}</span></div>
       <div class="rot-now">${rotIcon(rot, cur.item)}<b>${esc(rotName(cur.item))}</b></div>
       <div class="cal-when">Changes in ${span(cur.end - now)}</div>
+      ${rot.id === 'dungeon' ? ankhLine() : ''}
       <div class="rot-next">${next.map((x) => `<span title="${esc(when(x.start))}">${rotIcon(rot, x.item)}${esc(rotName(x.item))} <small>${esc(dayOnly(x.start))}</small></span>`).join('')}</div>
     </article>`;
   };
@@ -185,9 +194,13 @@ function renderTickets(now) {
     const users = [...new Set(runs.map((r) => r.ev.name || r.ev.id))].slice(0, 3);
     // icon of the current or next event using these tickets
     const icon = RULES.currencyIcons?.[id] ? `/static/${RULES.currencyIcons[id]}` : runs[0] ? eventIcon(runs[0].ev) : null;
-    return `<div class="cur" title="${esc(c?.name || `Event tickets ${k}`)}${c ? ` · earned all time: ${fmt(c.lifetime)}` : ''}">
-      ${icon ? `<img class="cur-ico" src="${icon}" alt="">` : ''}<span>${esc(c?.name || `Event tickets ${k}`)}</span><b>${fmt(c?.balance ?? 0)}</b>
-      ${users.length ? `<small class="muted">${esc(users.join(', '))}</small>` : ''}</div>`;
+    // between events the slot is idle: its old balance resets when the next event starts
+    const name = c?.name || 'Event tickets';
+    const idle = !c?.event;
+    const next = users.filter((u) => u !== c?.event);
+    return `<div class="cur${idle ? ' idle' : ''}" title="${esc(name)}${idle ? ' · no event is using these tickets now' : ''}">
+      ${icon ? `<img class="cur-ico" src="${icon}" alt="">` : ''}<span>${esc(name)}</span><b>${idle ? '–' : fmt(c?.balance ?? 0)}</b>
+      ${next.length ? `<small class="muted">next: ${esc(next.join(', '))}</small>` : ''}</div>`;
   }).join('');
   return `<div class="currencies cal-tickets">${chips}</div>`;
 }

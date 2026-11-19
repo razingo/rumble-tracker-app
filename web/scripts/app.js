@@ -68,7 +68,7 @@ const unitName = (u) => miniOf(u)?.name ?? `New mini ${u.id.slice(0, 8)}`;
 // Known currencies are identified by ID (the same for every player); names are for display only.
 const currencyOf = (role) => state.currencies.find((c) => c.id === RULES.currencyIds[role]);
 const balance = (role) => currencyOf(role)?.balance ?? 0;
-const curName = (role) => currencyOf(role)?.name || RULES.currencyDefaultNames[role] || role;
+const curName = (role) => currencyOf(role)?.name || state.currencyNames?.[RULES.currencyIds[role]] || role;
 const coreName = (role) => curName(role).replace(/s$/, '');
 
 function nextUpgrade(u) {
@@ -310,6 +310,9 @@ const GRID_CURRENCY_IDS = [
   '97b4103c5c0740da8488d67801c30c2b', // Mega Tinker's Gems
 ];
 
+// Ankh ("used to continue failed dungeons"), shown on the Calendar's Dungeon card instead of the Collection.
+const ANKH_ID = '32141a9ef28487c729b80616d70185ba';
+
 /** Currency chip: icon, name and balance; lifetime total as tooltip. */
 function currencyChip(c) {
   const icon = RULES.currencyIcons?.[c.id];
@@ -317,8 +320,8 @@ function currencyChip(c) {
 }
 
 function renderCurrencies() {
-  // event tickets and G.R.I.D. currencies have their own tabs
-  const named = state.currencies.filter((c) => c.name && !EVENT_CURRENCY_IDS.has(c.id) && !GRID_CURRENCY_IDS.includes(c.id));
+  // event tickets, Ankh and G.R.I.D. currencies are on other tabs
+  const named = state.currencies.filter((c) => c.name && !EVENT_CURRENCY_IDS.has(c.id) && !GRID_CURRENCY_IDS.includes(c.id) && c.id !== ANKH_ID);
   const order = ['coins', 'arcEnergy', 'rareCore', 'epicCore', 'legendaryCore', 'valor'].map((r) => RULES.currencyIds[r]);
   named.sort((a, b) => (order.indexOf(a.id) + 1 || 99) - (order.indexOf(b.id) + 1 || 99));
   $('#currencies').innerHTML = named.map(currencyChip).join('');
@@ -364,7 +367,6 @@ function miniOptions(currentSlug) {
 function renderNeeds() {
   const unknownUnits = state.units.filter((u) => !u.slug)
     .sort((a, b) => (lastEventFor(b.id)?.t || '').localeCompare(lastEventFor(a.id)?.t || ''));
-  const unknownCur = state.currencies.filter((c) => !c.name && (c.balance || c.lifetime || lastEventFor(c.id)));
   const rows = [];
   for (const u of unknownUnits.slice(0, 12)) {
     const ev = lastEventFor(u.id);
@@ -375,17 +377,9 @@ function renderNeeds() {
       <button class="btn" data-save-unit="${u.id}">Save</button></div>`);
   }
   if (unknownUnits.length > 12) rows.push(`<div class="row small">…and ${unknownUnits.length - 12} more. Tip: level up or upgrade a mini in the game and it moves to the top, ready to name.</div>`);
-  for (const c of unknownCur) {
-    const ev = lastEventFor(c.id);
-    rows.push(`<div class="row">
-      <div class="what"><b>Unnamed currency</b> <span class="mono muted">${c.id.slice(0, 8)}</span><br>
-        <span class="small">balance ${fmt(c.balance)} · earned all time ${fmt(c.lifetime)}${ev ? ` · last change ${ev.delta > 0 ? '+' : ''}${fmt(ev.delta)} ${ago(ev.t)}` : ''}</span></div>
-      <input class="keep" data-name-cur="${c.id}" placeholder="What is it?" maxlength="40">
-      <button class="btn" data-save-cur="${c.id}">Save</button></div>`);
-  }
   // shown only when something needs naming
   $('#needs').hidden = rows.length === 0;
-  $('#needs').innerHTML = rows.length ? `<h2>Needs your input (${unknownUnits.length + unknownCur.length})</h2>${rows.join('')}` : '';
+  $('#needs').innerHTML = rows.length ? `<h2>Needs your input (${unknownUnits.length})</h2>${rows.join('')}` : '';
 }
 
 // ---- planner: which minis are closest to their next level / rarity ------------------------
@@ -883,7 +877,7 @@ function bindStatic() {
   document.addEventListener('click', async (e) => {
     // close the trait picker on outside clicks
     if (ui.traitPickerOpen && !e.target.closest('#filters .trait-pop,[data-trait-picker]')) { ui.traitPickerOpen = false; renderFilters(); }
-    const t = e.target.closest('[data-f-type],[data-f-family],[data-f-trait],[data-trait-picker],[data-trait-mode],[data-clear-traits],[data-clear-filters],[data-plan-cat],[data-plan-toggle],[data-open-unit],[data-open-mini],[data-save-unit],[data-save-cur],[data-close]');
+    const t = e.target.closest('[data-f-type],[data-f-family],[data-f-trait],[data-trait-picker],[data-trait-mode],[data-clear-traits],[data-clear-filters],[data-plan-cat],[data-plan-toggle],[data-open-unit],[data-open-mini],[data-save-unit],[data-close]');
     if (!t) return;
     if (t.hasAttribute('data-plan-toggle')) { ui.planExpanded = !ui.planExpanded; store.set('planExpanded', ui.planExpanded); renderPlanner(); return; }
     const refilter = () => { saveFilters(); renderFilters(); renderPlanner(); renderGrid(); };
@@ -898,11 +892,7 @@ function bindStatic() {
     else if (t.dataset.openUnit) openDrawer({ kind: 'unit', id: t.dataset.openUnit });
     else if (t.dataset.openMini) openDrawer({ kind: 'mini', slug: t.dataset.openMini });
     else if (t.dataset.saveUnit) saveUnitName(t.dataset.saveUnit, $(`[data-name-unit="${t.dataset.saveUnit}"]`, t.parentElement));
-    else if (t.dataset.saveCur) {
-      const input = $(`[data-name-cur="${t.dataset.saveCur}"]`);
-      if (!input.value.trim()) return;
-      try { await post('/api/name', { kind: 'currency', id: t.dataset.saveCur, value: input.value }); await poll(); } catch (err) { alert(err.message); }
-    } else if (t.hasAttribute('data-close')) closeDrawer();
+    else if (t.hasAttribute('data-close')) closeDrawer();
   });
 
   document.addEventListener('keydown', (e) => {

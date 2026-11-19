@@ -58,8 +58,8 @@ Your whole collection at a glance.
   traits and talents.
 - **Talents**: the save only says *how many* talents a mini has, not which ones. Tick the ones you picked in the mini's
   details; "Talents to tick" counts minis where you haven't yet.
-- **Needs your input**: appears when the game has something the tracker can't name yet (e.g. a brand-new mini or
-  currency right after a patch). Pick or type what it is, or wait for the next game-data update.
+- **Needs your input**: appears when the game has a mini the tracker can't name yet (a brand-new mini right after a
+  patch). Pick which mini it is, or wait for the next game-data update.
 
 ## Army
 
@@ -105,7 +105,9 @@ The G.R.I.D. shop from your save.
 
 Events and the shop.
 
-- **Event tickets** at the top: how many of each you have, and which events use them.
+- **Event tickets** at the top: the game has three ticket balances that events take turns using, so each is named
+  after the event using it now, with the events that use it next. Tickets reset when an event ends, so a balance no
+  event is using shows as –.
 - **Running now**: events the game says are on, with how long they last and your tickets.
 - **Rewards**: open an event's reward tree to see what each step costs. Set a **reward goal** there, and the tracker
   can notify you when you have enough tickets for it.
