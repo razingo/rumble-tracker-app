@@ -110,7 +110,7 @@ npm start
 in this repository: they're published, signed, in
 [rumble-tracker-data](https://github.com/razingo/rumble-tracker-data), and the download gets the same signature and
 checksum checks as players' trackers. Then open http://localhost:8765. Your data goes to `data/` in the project folder (or the folder in
-`RUMBLE_DATA_DIR`).
+`RUMBLE_DATA_DIR`). `npm test` runs the tests (no game data or save needed).
 
 | Folder | What |
 |---|---|
@@ -122,7 +122,8 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 | `gamedata/` | the game data and art (© Blizzard, see NOTICE), filled by `npm run fetch-gamedata`, served as `/static/…`; not in the repository |
 | `desktop/` | the Windows exe's launcher (app window, tray icon) and its icon |
 | `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip; no game data inside, the exe downloads it on first start) |
-| `.github/workflows/` | `release.yml`: builds and attests releases on GitHub Actions when a `v<version>` tag is pushed |
+| `test/` | tests for save decoding, data packs and notifications (`npm test`, Node's built-in test runner) |
+| `.github/workflows/` | `release.yml`: tests, builds and attests releases on GitHub Actions when a `v<version>` tag is pushed |
 | `docs/` | the player guide and its screenshots |
 
 **Security.** The server listens on 127.0.0.1 only and answers only the tracker's own page: requests for another host

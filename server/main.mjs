@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRumblePrefs } from './game/prefs.mjs';
 import { parseUnits, parseCurrencies, parseActiveEvents, parseIncomeBonuses, parseOwnedAvatars, parseStore, parseGameBuild, compareBuilds, storeFieldsForLog, diffSnapshots, updateLearned } from './game/model.mjs';
-import { updateDataPack, allowedUrl } from './datapack/datapack.mjs';
+import { updateDataPack, allowedUrl, newerVersion } from './datapack/datapack.mjs';
 import { NOTIFY_TYPES, cleanSettings, dueNotifications, inQuietHours } from './notifications/notify.mjs';
 import { showToast, gameRunning } from './notifications/toast.mjs';
 import { ISSUES_REPO, createErrorLog, diagnostics } from './report.mjs';
@@ -749,7 +749,6 @@ notifyTick().catch(notifyFailed);
 
 // ---- data packs (address: see dataPackUrl above) ------------------------------------------------------------
 /** Whether dotted version a is newer than b. */
-const newerVersion = (a, b) => { const x = a.split('.').map(Number), y = String(b || '0').split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
 // Two signature failures in a row (rechecked after 15 minutes) mean packs are signed with a key this version doesn't
 // know: ask the user to download the current version. A verified pack clears it.
 const RECHECK_MS = Number(process.env.RUMBLE_PACK_RECHECK_MS) || 15 * 60 * 1000; // env override for testing

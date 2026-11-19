@@ -78,13 +78,39 @@ await writeFile(path.join(BUILD, 'app.bin'), Buffer.concat([head, indexBuf, data
 console.log(`App files: ${files.length} (${(data.length / 1048576).toFixed(1)} MB), version ${version}`);
 
 // ---- the exe -----------------------------------------------------------------------------------------------------
-/** Replaces Node's icon with desktop/icon.ico via the Windows resource API. */
-function setExeIcon(exePath, icoPath) {
+/**
+ * The exe's version information (Properties > Details): a VS_VERSIONINFO resource. Each block is
+ * [wLength, wValueLength, wType, key (UTF-16, NUL), padding, value, padding, children], 32-bit aligned.
+ */
+function versionInfo(version, strings) {
+  const [major, minor, patch] = version.split('.').map(Number);
+  const utf16 = (s) => Buffer.from(`${s}\0`, 'utf16le');
+  const pad4 = (b) => (b.length % 4 ? Buffer.concat([b, Buffer.alloc(4 - (b.length % 4))]) : b);
+  const block = (key, type, value = Buffer.alloc(0), valueLength = 0, children = []) => {
+    const head = pad4(Buffer.concat([Buffer.alloc(6), utf16(key)]));
+    const parts = children.length ? [pad4(Buffer.concat([head, value])), ...children.map((c, i) => (i < children.length - 1 ? pad4(c) : c))] : [head, value];
+    const b = Buffer.concat(parts);
+    b.writeUInt16LE(b.length, 0); b.writeUInt16LE(valueLength, 2); b.writeUInt16LE(type, 4);
+    return b;
+  };
+  const fixed = Buffer.alloc(52);
+  [0xFEEF04BD, 0x00010000, (major << 16) | minor, patch << 16, (major << 16) | minor, patch << 16, 0x3F, 0, 0x40004, 1, 0, 0, 0]
+    .forEach((v, i) => fixed.writeUInt32LE(v >>> 0, i * 4)); // signature, struct version, file/product version, flags, VOS_NT_WINDOWS32, VFT_APP
+  const string = (k, v) => block(k, 1, utf16(v), v.length + 1);
+  const translation = Buffer.alloc(4); translation.writeUInt16LE(0x0409, 0); translation.writeUInt16LE(0x04B0, 2); // en-US, Unicode
+  return block('VS_VERSION_INFO', 0, fixed, fixed.length, [
+    block('StringFileInfo', 1, undefined, 0, [block('040904B0', 1, undefined, 0, Object.entries(strings).map(([k, v]) => string(k, v)))]),
+    block('VarFileInfo', 1, undefined, 0, [block('Translation', 0, translation, translation.length)]),
+  ]);
+}
+
+/** Replaces Node's icon and version information with desktop/icon.ico and versionInfo() via the Windows resource API. */
+function setExeResources(exePath, icoPath, versionPath) {
   const script = `
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System; using System.Collections.Generic; using System.IO; using System.Runtime.InteropServices;
-public static class ExeIcon {
+public static class ExeResources {
   [DllImport("kernel32", SetLastError=true, CharSet=CharSet.Unicode)] static extern IntPtr LoadLibraryEx(string f, IntPtr h, uint flags);
   [DllImport("kernel32")] static extern bool FreeLibrary(IntPtr h);
   delegate bool EnumName(IntPtr m, IntPtr type, IntPtr name, IntPtr p);
@@ -95,12 +121,12 @@ public static class ExeIcon {
   [DllImport("kernel32", SetLastError=true)] static extern bool UpdateResource(IntPtr h, IntPtr type, IntPtr name, ushort lang, byte[] data, uint size);
   [DllImport("kernel32", SetLastError=true)] static extern bool EndUpdateResource(IntPtr h, bool discard);
   static bool IsId(IntPtr p) { return ((long)p >> 16) == 0; }
-  public static void Set(string exe, string ico) {
-    // enumerate existing icon resources for deletion
+  public static void Set(string exe, string ico, string ver) {
+    // enumerate existing icon and version resources for deletion
     var old = new List<Tuple<int,int,ushort>>();
     IntPtr m = LoadLibraryEx(exe, IntPtr.Zero, 0x2 | 0x20);
     if (m == IntPtr.Zero) throw new Exception("cannot read " + exe);
-    foreach (int type in new[] { 14, 3 }) {
+    foreach (int type in new[] { 14, 3, 16 }) {
       EnumResourceNames(m, (IntPtr)type, (mm, t, n, p) => {
         if (IsId(n)) EnumResourceLanguages(mm, t, n, (m2, t2, n2, lang, p2) => { old.Add(Tuple.Create(type, (int)n2, lang)); return true; }, IntPtr.Zero);
         return true; }, IntPtr.Zero);
@@ -121,16 +147,18 @@ public static class ExeIcon {
     }
     byte[] g = group.ToArray();
     if (!UpdateResource(h, (IntPtr)14, (IntPtr)1, 1033, g, (uint)g.Length)) throw new Exception("icon group: " + Marshal.GetLastWin32Error());
+    byte[] v = File.ReadAllBytes(ver);
+    if (!UpdateResource(h, (IntPtr)16, (IntPtr)1, 1033, v, (uint)v.Length)) throw new Exception("version info: " + Marshal.GetLastWin32Error());
     if (!EndUpdateResource(h, false)) throw new Exception("EndUpdateResource failed: " + Marshal.GetLastWin32Error());
   }
 }
 '@
-[ExeIcon]::Set($env:RT_EXE, $env:RT_ICO)
+[ExeResources]::Set($env:RT_EXE, $env:RT_ICO, $env:RT_VER)
 `;
   const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   execFileSync(ps, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
     // no inherited stdin: a nested PowerShell can block on it
-    { env: { ...process.env, RT_EXE: exePath, RT_ICO: icoPath }, stdio: ['ignore', 'pipe', 'pipe'] });
+    { env: { ...process.env, RT_EXE: exePath, RT_ICO: icoPath, RT_VER: versionPath }, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 await copyFile(path.join(DESKTOP, 'launcher.cjs'), path.join(BUILD, 'launcher.cjs'));
@@ -143,7 +171,18 @@ await writeFile(path.join(BUILD, 'sea-config.json'), JSON.stringify({
   assets: { 'app.bin': 'app.bin' },
 }, null, 2));
 execFileSync(process.execPath, ['--build-sea', 'sea-config.json'], { cwd: BUILD, stdio: 'inherit' });
-setExeIcon(path.join(OUT, EXE), path.join(DESKTOP, 'icon.ico'));
+// file details shown by Windows (and required for code signing): product name and version instead of Node's
+await writeFile(path.join(BUILD, 'version.bin'), versionInfo(version, {
+  CompanyName: 'razingo',
+  FileDescription: 'Rumble Collection Tracker',
+  FileVersion: version,
+  InternalName: 'RumbleTracker',
+  LegalCopyright: '© razingo. MIT License. Not affiliated with Blizzard Entertainment.',
+  OriginalFilename: EXE,
+  ProductName: 'Rumble Collection Tracker',
+  ProductVersion: version,
+}));
+setExeResources(path.join(OUT, EXE), path.join(DESKTOP, 'icon.ico'), path.join(BUILD, 'version.bin'));
 const exe = await readFile(path.join(OUT, EXE));
 // Mark the exe as a GUI program (no console window). Subsystem is at e_lfanew + 4 + 20 + 68.
 const pe = exe.readUInt32LE(0x3c);

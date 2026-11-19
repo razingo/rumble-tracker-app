@@ -22,6 +22,13 @@ export function allowedUrl(base) {
   } catch { return false; }
 }
 
+/** True if version a (x.y.z) is newer than b. */
+export function newerVersion(a, b) {
+  const x = String(a).split('.').map(Number), y = String(b || '0').split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+}
+
 async function fetchBuf(url, limit) {
   const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000) });
   if (!r.ok) throw new Error(`${r.status} for ${url}`);

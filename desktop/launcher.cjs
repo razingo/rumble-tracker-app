@@ -39,11 +39,23 @@ process.title = TITLE;
 fs.mkdirSync(DATA, { recursive: true });
 const LOG = path.join(DATA, 'tracker.log');
 // called only by the instance that runs (not when handing over to a running one)
-const rotateLog = () => { try { fs.renameSync(LOG, path.join(DATA, 'tracker.previous.log')); } catch { /* first start */ } };
+const rotateLog = () => { try { fs.renameSync(LOG, path.join(DATA, 'tracker.previous.log')); } catch { /* first start */ } logBytes = 0; };
+// size cap while running (the tracker can run for weeks in the tray): past MAX_LOG the log is rotated, so at most
+// two files of about MAX_LOG each are kept
+const MAX_LOG = Number(process.env.RUMBLE_MAX_LOG) || 2 * 1024 * 1024; // env override for testing
+const MAX_LINE = 4000;
+let logBytes = null; // bytes in the current log; read from disk on the first write
 for (const level of ['log', 'info', 'warn', 'error']) {
   console[level] = (...a) => {
-    const line = a.map((x) => (typeof x === 'string' ? x : x instanceof Error ? x.stack : JSON.stringify(x))).join(' ');
-    try { fs.appendFileSync(LOG, `${new Date().toISOString()} ${line}\n`); } catch { /* nowhere to write */ }
+    let line = a.map((x) => (typeof x === 'string' ? x : x instanceof Error ? x.stack : JSON.stringify(x))).join(' ');
+    if (line.length > MAX_LINE) line = `${line.slice(0, MAX_LINE)}… (${line.length - MAX_LINE} more characters)`;
+    const text = `${new Date().toISOString()} ${line}\n`;
+    try {
+      if (logBytes === null) { try { logBytes = fs.statSync(LOG).size; } catch { logBytes = 0; } }
+      if (logBytes + text.length > MAX_LOG) rotateLog();
+      fs.appendFileSync(LOG, text);
+      logBytes += Buffer.byteLength(text);
+    } catch { /* nowhere to write */ }
   };
 }
 
