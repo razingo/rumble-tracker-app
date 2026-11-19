@@ -35,6 +35,8 @@ it. Starting the exe again while it's running just brings the window back.
 The exe isn't code-signed (that costs money every year), so Windows SmartScreen may warn you the first time. Click
 **More info → Run anyway**. You can check that your download is the published one: each release lists the SHA-256
 checksums of the zip and the exe; in PowerShell, `Get-FileHash .\RumbleTracker.exe` should show the same value.
+Releases are built by GitHub Actions from this repository's source; with the GitHub CLI you can confirm that too:
+`gh attestation verify RumbleTracker.exe --repo razingo/rumble-tracker-app`.
 
 ## Your data
 
@@ -56,7 +58,9 @@ that *Import backup…* restores, also on another PC).
 After a game patch, new events, minis and shop offers arrive without a new exe: the tracker checks for a new data pack
 when it starts and every 6 hours, at <https://razingo.github.io/rumble-tracker-data/>. Packs are signed, and the
 tracker only installs a pack with a valid signature from the key built into the exe, so nobody else can push data to
-your tracker. If the page says its game data is older than your game, a pack for the new build isn't out yet.
+your tracker. If the page says its game data is older than your game, a pack for the new build isn't out yet. If it
+says a newer version of the tracker is needed, new packs can only be verified by a newer exe: download the latest
+release (your data is kept).
 
 ## Privacy
 
@@ -115,6 +119,7 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 | `gamedata/` | the game data and art (© Blizzard, see NOTICE), filled by `npm run fetch-gamedata`, served as `/static/…`; not in the repository |
 | `desktop/` | the Windows exe's launcher (app window, tray icon) and its icon |
 | `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip, with the game data from `gamedata/` built in) |
+| `.github/workflows/` | `release.yml`: builds and attests releases on GitHub Actions when a `v<version>` tag is pushed |
 | `docs/` | the player guide and its screenshots |
 
 **Security.** The server listens on 127.0.0.1 only and answers only the tracker's own page: requests for another host

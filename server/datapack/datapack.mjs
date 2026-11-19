@@ -43,7 +43,7 @@ export async function updateDataPack({ base, current, dir, staticDir, publicKeys
   // verify the signature over the manifest's exact bytes before trusting its contents; its checksums cover the files
   const sig = Buffer.from((await fetchBuf(new URL('manifest.sig', root), 4096)).toString('utf8').trim(), 'base64');
   if (!keys.some((k) => { try { return verify(null, body, k, sig); } catch { return false; } })) {
-    throw new Error('data pack signature is not valid: pack ignored');
+    throw Object.assign(new Error('data pack signature is not valid: pack ignored'), { code: 'BAD_SIGNATURE' });
   }
   const remote = JSON.parse(body.toString('utf8'));
   if (remote.format !== 1 || !remote.files || !remote.dataVersion) throw new Error('not a data pack manifest');

@@ -297,7 +297,7 @@ function buildState(requested) {
       dataVersion: gameData?.dataVersion || null,
       gameBuild: gameBuildSeen,
       stale: !!(gameBuildSeen && gameData?.gameBuild && compareBuilds(gameBuildSeen, gameData.gameBuild) > 0),
-      pack: typeof dataPack === 'undefined' ? null : { configured: !!dataPack.url, lastCheck: dataPack.lastCheck, result: dataPack.result, error: dataPack.error },
+      pack: typeof dataPack === 'undefined' ? null : { configured: !!dataPack.url, lastCheck: dataPack.lastCheck, result: dataPack.result, error: dataPack.error, needsAppUpdate: dataPack.needsAppUpdate },
     },
     // shop with unit IDs resolved to slugs (null if unknown), plus G.R.I.D. history
     shop: acc && acc.shop ? withSlugs(acc.shop) : null,
@@ -645,7 +645,7 @@ async function notifyTick() {
       id, label: accountLabel(id), shop: acc.shop, currencies: acc.snapshot.currencies,
       units: acc.snapshot.units.map((u) => ({ ...u, slug: unitSlug(u.id), name: nameOf.get(unitSlug(u.id)) })),
     }));
-  const due = dueNotifications({ now, accounts: list, events: eventsTable, store: storeTable, rules, plans, settings: notifySettings, multi: list.length > 1 })
+  const due = dueNotifications({ now, accounts: list, events: eventsTable, store: storeTable, rules, plans, settings: notifySettings, multi: list.length > 1, appUpdateNeeded: dataPack.needsAppUpdate })
     .filter((n) => !sentLog.sent[n.key]);
   if (!due.length && !(sentLog.pending.length && !inQuietHours(notifySettings.quiet))) return;
   const stamp = new Date(now).toISOString();
@@ -688,7 +688,10 @@ notifyTick().catch(notifyFailed);
 const config = await readJson(path.join(DATA, 'config.json'), {});
 // (the exe sets RUMBLE_DEFAULT_DATA_PACK_URL; config.json overrides it)
 const dataPackUrl = process.env.RUMBLE_DATA_PACK_URL || config.dataPackUrl || process.env.RUMBLE_DEFAULT_DATA_PACK_URL || '';
-const dataPack = { url: dataPackUrl, lastCheck: null, result: null, error: null };
+const dataPack = { url: dataPackUrl, lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false };
+// Two signature failures in a row (rechecked after 15 minutes) mean packs are signed with a key this version doesn't
+// know: ask the user to download the current version. A verified pack clears it.
+const RECHECK_MS = Number(process.env.RUMBLE_PACK_RECHECK_MS) || 15 * 60 * 1000; // env override for testing
 async function checkDataPack() {
   if (!dataPackUrl) return;
   dataPack.lastCheck = new Date().toISOString();
@@ -696,6 +699,8 @@ async function checkDataPack() {
     const r = await updateDataPack({ base: dataPackUrl, current: gameData, dir: GAMEDATA, staticDir: STATIC });
     dataPack.result = r.reason;
     dataPack.error = null;
+    dataPack.badSignatures = 0;
+    if (dataPack.needsAppUpdate) { dataPack.needsAppUpdate = false; rev++; }
     if (r.updated) {
       await loadTables();
       rev++;
@@ -705,6 +710,11 @@ async function checkDataPack() {
     dataPack.error = e.message;
     console.log(`Data pack check failed: ${e.message}`);
     errorLog.add('data pack', e.message);
+    if (e.code === 'BAD_SIGNATURE') {
+      dataPack.badSignatures++;
+      if (dataPack.badSignatures === 1) setTimeout(checkDataPack, RECHECK_MS);
+      else if (!dataPack.needsAppUpdate) { dataPack.needsAppUpdate = true; rev++; notifyTick().catch(notifyFailed); }
+    }
   }
 }
 if (dataPackUrl && !allowedUrl(dataPackUrl)) console.log('Data pack address ignored: it must be https.');

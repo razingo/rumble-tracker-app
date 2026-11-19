@@ -256,11 +256,20 @@ function render() {
   if (ui.open) renderDrawer();
 }
 
-/** Banner shown when the game is newer than the game data. */
+const RELEASES_URL = 'https://github.com/razingo/rumble-tracker-app/releases/latest';
+
+/** Banner when a newer tracker version is needed for game-data updates, or when the game is newer than the data. */
 function renderDataBanner() {
   const el = $('#dataBanner');
   const d = state?.dataStatus;
   if (!el) return;
+  if (d?.pack?.needsAppUpdate) {
+    el.hidden = false;
+    el.innerHTML = `<b>A newer version of the tracker is needed.</b> New game data can't be verified by this version, so
+      it isn't installed. Download the latest RumbleTracker from GitHub Releases; your data is kept.
+      <button class="chip" data-open-releases>Download the latest version</button>`;
+    return;
+  }
   el.hidden = !d?.stale;
   if (!d?.stale) return;
   el.innerHTML = `<b>The game was updated to ${esc(d.gameBuild)}.</b> The tracker's game data is from ${esc(d.dataBuild)}, so new minis,
@@ -818,6 +827,7 @@ function bindStatic() {
   });
   $('#show').addEventListener('change', (e) => { ui.show = e.target.value; store.set('show', ui.show); renderFilters(); renderGrid(); });
   $('#quitBtn').addEventListener('click', quitTracker);
+  $('#dataBanner').addEventListener('click', (e) => { if (e.target.closest('[data-open-releases]')) openExternal(RELEASES_URL); });
   // restore the minimum width after a resize
   let sizeTimer;
   window.addEventListener('resize', () => {

@@ -15,6 +15,7 @@ export const NOTIFY_TYPES = [
   { id: 'rotation', label: 'Dungeon faction, dungeon or raid/siege changes', on: false, whenPlaying: false },
   { id: 'upgradeReady', label: 'A mini is ready to upgrade', on: true, whenPlaying: false },
   { id: 'planAffordable', label: 'Enough tickets for a reward goal', on: true, whenPlaying: true },
+  { id: 'appUpdate', label: 'A newer tracker version is needed', on: true, whenPlaying: true },
 ];
 
 export function defaultSettings() {
@@ -66,6 +67,12 @@ export function dueNotifications(ctx) {
   const add = (type, key, title, body) => out.push({ type, key, title, body });
   const who = (a) => (ctx.multi ? ` (${a.label})` : '');
   const balanceOf = (a, id) => a.currencies?.find((c) => c.id === id)?.balance ?? 0;
+
+  // game-data updates need a newer version of the tracker (sent once; keys expire after 30 days)
+  if (ctx.appUpdateNeeded && on('appUpdate')) {
+    add('appUpdate', 'app-update-needed', 'Tracker update needed',
+      'New game data needs a newer version of Rumble Collection Tracker. Download it from GitHub Releases.');
+  }
 
   // shop: free gift, daily reset, new G.R.I.D.
   for (const a of ctx.accounts) {
