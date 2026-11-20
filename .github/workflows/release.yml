@@ -103,7 +103,8 @@ jobs:
             if [ -s dist/CHANGES.md ]; then
               echo "## What's new"
               echo
-              cat dist/CHANGES.md
+              # The changelog wraps its bullets; release notes would show each wrap as a line break.
+              sed -e ':a' -e 'N' -e '$!ba' -e 's/\n  \([^ ]\)/ \1/g' dist/CHANGES.md
               echo
               echo "## Download"
               echo
