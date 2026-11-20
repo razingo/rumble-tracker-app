@@ -21,7 +21,7 @@ Please don't include account names, e-mail addresses or other personal details.
 
 ### Details (added by the tracker)
 <!-- In the tracker: Report a problem → Copy report, and paste the block here. Or fill in what you know:
-App version (shown in the tracker's window when it starts):
+App version (at the top of the tracker's window, next to its name):
 Windows version:
 -->
 ```

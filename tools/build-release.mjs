@@ -94,7 +94,7 @@ try {
   await rm(OUT, { recursive: true, force: true });
 } catch (e) {
   fail(e.code === 'EBUSY' || e.code === 'EPERM' ? 'dist/release is in use: quit RumbleTracker.exe (tray icon → ' +
-    'Quit tracker) and build again.' : e.message);
+    'Quit the tracker) and build again.' : e.message);
 }
 await mkdir(BUILD, { recursive: true });
 await writeFile(path.join(BUILD, 'app.bin'), Buffer.concat([head, indexBuf, data]));

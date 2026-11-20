@@ -36,8 +36,8 @@ Firefox only, the tracker opens as a normal browser tab.
 The first time you close the window, the tracker asks whether to keep running in the tray or quit, and remembers
 your answer (you can change it in **⚙ Settings**). In the tray it runs as an icon in the taskbar's notification area
 (click **^** if it's hidden), so notifications still arrive. Click the icon to bring the window back, or right-click it
-for *Open data folder* and *Quit tracker*. **⏻ Quit** at the top of the page stops it too, and starting the exe again
-while it runs just shows the window. To start it whenever you sign in to Windows, tick *Start with Windows* in
+for *Open data folder* and *Quit the tracker*. **⏻ Quit** at the top of the page stops it too, and starting the exe
+again while it runs just shows the window. To start it whenever you sign in to Windows, tick *Start with Windows* in
 **⚙ Settings**.
 
 ### "Windows protected your PC"
@@ -77,19 +77,20 @@ the background and every place it stores something.
 ## Game data updates
 
 After a game patch, new events, minis and shop offers arrive without a new exe: the tracker checks for a new data pack
-when it starts and every 6 hours, at <https://razingo.github.io/rumble-tracker-data/>. Packs are signed, and the
-tracker only installs a pack with a valid signature from the key built into the exe, so nobody else can push data to
-your tracker. If the page says its game data is older than your game, a pack for the new build isn't out yet. If it
-says a newer version of the tracker is needed, new packs can only be verified by a newer exe: download the latest
-release (your data is kept). When a new version of the tracker is released, a pop-up (and one notification) says so;
-*Later* hides it until the tracker restarts.
+([rumble-tracker-data](https://github.com/razingo/rumble-tracker-data)) when it starts and every 6 hours. Packs are
+signed, and the tracker only installs a pack with a valid signature from the key built into the exe, so nobody else can
+push data to your tracker. If the page says its game data is older than your game, a pack for the new build isn't out
+yet. If it says a newer version of the tracker is needed, new packs can only be verified by a newer exe: download the
+latest release (your data is kept). When a new version of the tracker is released, a pop-up (and one notification)
+says so; *Later* hides it until the tracker restarts.
 
 ## Privacy
 
 - The tracker only **reads** the game's saved data (from the Windows registry). It never changes it, and it ignores
   the login tokens stored next to it.
-- It sends nothing about you anywhere. Its only network requests are the data pack downloads (on first start and
-  the update checks).
+- It sends nothing about you anywhere. It only downloads: the data pack (on first start and at each update check)
+  and, when you click *Download now*, a new version from GitHub Releases. *Report a problem* and the other links
+  open in your own browser.
 - The local page is only reachable from this PC, and only by the tracker's own page.
 
 ## Found a problem?
@@ -98,6 +99,11 @@ Click **Report a problem** in the tracker. It shows a short report with technica
 errors, with user names, account IDs and other personal details removed) and opens it as a pre-filled
 [issue](https://github.com/razingo/rumble-tracker-app/issues), which you can edit before you press Submit. This needs a
 free GitHub account. You can also open an issue yourself with the *Bug report* template.
+
+## Support
+
+The tracker is free, with nothing to buy or unlock, and it stays that way. If you'd like to say thanks,
+**☕ Buy me a coffee** at the top of the page is a voluntary way to support its development.
 
 ## Options
 
@@ -132,11 +138,22 @@ checksum checks as players' trackers. Then open http://localhost:8765. Your data
 folder, or to the folder in `RUMBLE_DATA_DIR`.
 
 `npm test` runs the tests, which need neither game data nor a save. `npm run check-style` checks the files against
-`.editorconfig` (140-character lines, LF, no trailing spaces); CI runs both.
+`.editorconfig` (lines up to 140 characters and comments up to 120, LF, no tabs or trailing spaces); CI runs both.
+
+Environment variables for development and testing:
+
+| Variable | What it does |
+|---|---|
+| `RUMBLE_DATA_DIR` | The data folder, instead of `data/` (from source) or `%APPDATA%\RumbleTracker` (exe) |
+| `PORT` | One fixed port; `RUMBLE_FIRST_PORT` moves the range of 20 ports the exe tries instead |
+| `RUMBLE_DATA_PACK_URL` | The data pack address for `fetch-gamedata` and the update checks (from source there are none by default) |
+| `RUMBLE_ISSUES_REPO` | The repository *Report a problem* opens issues in, as `owner/name` |
+| `RUMBLE_RELEASE_OUT` | Where `npm run build-release` writes, instead of `dist/release` |
+| `GIT` | The Git the tools run, when it isn't in Git for Windows' usual place |
 
 | Folder | What |
 |---|---|
-| `server/` | The local server. `main.mjs` starts the parts and runs the timers. `host.mjs` connects it to the exe's launcher when there is one. Also the shared state (`context.mjs`), game tables (`tables.mjs`), the user's files (`userdata.mjs`, `store.mjs`), the page's state (`state.mjs`), backups, request filtering (`guard.mjs`), Start with Windows (`autostart.mjs`), what closing the window does (`window.mjs`) and the Windows programs it runs (`system.mjs`) |
+| `server/` | The local server. `main.mjs` starts the parts and runs the timers. `host.mjs` connects it to the exe's launcher when there is one. Also the shared state (`context.mjs`), game tables (`tables.mjs`), the user's files (`userdata.mjs`, `store.mjs`), the page's state (`state.mjs`), backups, request filtering (`guard.mjs`), Start with Windows (`autostart.mjs`), what closing the window does (`window.mjs`), the problem report's details (`report.mjs`) and the Windows programs it runs (`system.mjs`) |
 | `server/scan/` | Reading the save on a timer (`scanner.mjs`) and the history kept from it (`history.mjs`) |
 | `server/http/` | The HTTP server and static files (`server.mjs`), the API routes (`routes.mjs`) and the handlers that change the user's data (`handlers.mjs`) |
 | `server/update/` | In-app updates: the download and its checks (`appupdate.mjs`), and *Download now* (`updater.mjs`) |
@@ -146,7 +163,7 @@ folder, or to the folder in `RUMBLE_DATA_DIR`.
 | `web/` | The page. `scripts/app.js` starts it and switches tabs, `core.js` holds what the modules share, and each tab, dialog and menu has its own module; the Army tab also has `army-code.js` (army codes) and `army-pools.js`. `scripts/lib/` has the code the server and build tools use too: shared names and units, formatting, the protobuf reader and writer, schedules, PvP seasons, input limits and the reward-tree planner |
 | `gamedata/` | Game data and art (© Blizzard, see NOTICE), served as `/static/…`. Not in the repository; `npm run fetch-gamedata` fills it |
 | `desktop/` | The exe's launcher (`launcher.cjs`), the tray icon (`tray.ps1`), Windows integration (`integration.ps1`), the question when the window closes (`close-dialog.ps1`) and the icon |
-| `tools/` | Downloading game data (`fetch-gamedata.mjs`), building the release (`build-release.mjs`, Node.js 25.5+) and the style check (`check-style.mjs`) |
+| `tools/` | Downloading game data (`fetch-gamedata.mjs`), building the release (`build-release.mjs`, Node.js 25.5+) and the style check (`check-style.mjs`); `git.mjs` finds Git for the ones that need it |
 | `test/` | Node's built-in test runner. `helpers.mjs` builds save values and a tracker in a temporary folder; the tray and integration tests run on Windows only |
 | `.github/workflows/` | `test.yml` runs the tests and the style check on every push; `release.yml` builds and attests a release when a `v<version>` tag is pushed, once the tests of that commit passed |
 | `docs/` | The player guide with its screenshots, and how the tracker works in the background |

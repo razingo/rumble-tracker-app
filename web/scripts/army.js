@@ -39,9 +39,9 @@ const emptyDraft = () => ({ id: null, name: 'New army', leader: null, minis: [nu
   talents: {}, description: '', tags: [] });
 
 // The name, description and tag fields of an army, the same on the Army and Armory tabs. `attrs` are the field's own
-// attributes (id, classes, data-*); every field gets the "keep" class so a redraw doesn't interrupt typing.
-const attributes = ({ cls = '', ...rest }) => [`class="keep${cls ? ` ${cls}` : ''}"`,
-  ...Object.entries(rest).map(([k, v]) => `${k}="${esc(v)}"`)].join(' ');
+// attributes (id, cls for its classes, data-*).
+const attributes = ({ cls, ...rest }) => [cls ? `class="${cls}"` : '',
+  ...Object.entries(rest).map(([k, v]) => `${k}="${esc(v)}"`)].filter(Boolean).join(' ');
 
 export const nameField = (attrs, value, placeholder = 'Name this army') =>
   `<input ${attributes(attrs)} value="${esc(value || '')}" maxlength="${LIMITS.armyName}"
@@ -157,7 +157,7 @@ function armyToolbar(d) {
         suggestions: tagsInUse() })}
     </div>
     <span class="code-box">
-      <input id="armyCode" class="keep mono" placeholder="Paste a rumblo: army code" aria-label="Army code"
+      <input id="armyCode" class="mono" placeholder="Paste a rumblo: army code" aria-label="Army code"
         value="${esc(builder.codeText || '')}">
       <button class="chip" data-army-action="import">Import code</button>
       <button class="chip" data-army-action="export">Copy code</button>
@@ -372,13 +372,7 @@ async function exportCode() {
 }
 
 async function deleteSaved() {
-  const d = builder.draft;
-  if (!d.id) return;
-  const ok = await confirmDialog(`"${d.name}" is removed from your saved armies.`,
-    { title: 'Delete this army?', ok: 'Delete', danger: true });
-  if (!ok) return;
-  await persistArmies((state.savedArmies || []).filter((x) => x.id !== d.id));
-  setDraft({ ...d, id: null });
+  if (builder.draft.id && await deleteSavedArmy(builder.draft)) renderArmy();
 }
 
 /** Saves the draft, over its saved army or (`asNew`, or when it has none) as a new one. */
@@ -615,10 +609,17 @@ export function syncDraft(id, change) {
 }
 
 /** The Armory deleted a saved army: the builder keeps it as an unsaved army. */
-export function detachDraft(id) {
-  if (builder.draft?.id !== id) return;
-  builder.draft = { ...builder.draft, id: null };
-  saveDraftLocal();
+/** Asks, then deletes a saved army; a draft editing it becomes a new army. Returns whether it was deleted. */
+export async function deleteSavedArmy(army) {
+  const ok = await confirmDialog(`"${army.name}" is removed from your saved armies.`,
+    { title: 'Delete this army?', ok: 'Delete', danger: true });
+  if (!ok) return false;
+  await persistArmies((state.savedArmies || []).filter((a) => a.id !== army.id));
+  if (builder.draft?.id === army.id) {
+    builder.draft = { ...builder.draft, id: null };
+    saveDraftLocal();
+  }
+  return true;
 }
 
 /** After a restore the draft is loaded again from the restored data. */

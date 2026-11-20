@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rumble Collection Tracker</title>
-  <link rel="icon" href="/favicon.iconImage">
+  <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/styles/style.css">
   <link rel="stylesheet" href="/fonts/fonts.css">
   <link rel="stylesheet" href="/styles/theme-rumble.css">
@@ -26,16 +26,17 @@
       <div class="account">
         <label for="account">Account</label>
         <select id="account"></select>
-        <input id="accountLabel" class="keep" placeholder="Name this account">
+        <input id="accountLabel" placeholder="Name this account">
       </div>
     </div>
     <div class="topbar-row topbar-actions">
       <a class="coffee-button" href="https://buymeacoffee.com/razingo" target="_blank" rel="noopener noreferrer"
-        title="Support the tracker">☕ Buy me a coffee</a>
+        title="The tracker is free. This is a voluntary way to support it.">☕ Buy me a coffee</a>
       <div id="status" class="status">Connecting…</div>
       <span class="topbar-spacer"></span>
       <button class="chip report-button" id="reportButton" aria-haspopup="dialog">🐞 Report a problem</button>
-      <button class="chip" id="settingsButton" aria-haspopup="dialog" title="Start with Windows and notifications">⚙ Settings</button>
+      <button class="chip" id="settingsButton" aria-haspopup="dialog"
+        title="Start with Windows, closing the window and notifications">⚙ Settings</button>
       <div class="backup">
         <button class="chip" id="backupButton" aria-haspopup="menu" aria-expanded="false">Backup ▾</button>
         <div class="backup-menu" id="backupMenu" role="menu" hidden>
@@ -106,7 +107,8 @@
 
   <footer class="site-foot">
     Unofficial fan tool, not affiliated with or endorsed by Blizzard Entertainment. Warcraft Rumble and its game art
-    and data © Blizzard Entertainment, Inc.  </footer>
+    and data © Blizzard Entertainment, Inc.
+  </footer>
 
   <!-- report.js first: it reports script errors from the start -->
   <script type="module" src="/scripts/report.js"></script>

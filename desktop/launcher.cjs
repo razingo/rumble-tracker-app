@@ -31,8 +31,8 @@ const usePort = (p) => {
   PAGE = `http://localhost:${p}/`;
 };
 const args = new Set(process.argv.slice(2));
-// --background (used by Start with Windows) starts with only the tray icon; --no-browser does the same, for tests.
-const NO_WINDOW = args.has('--background') || args.has('--no-browser');
+// --background (used by Start with Windows) starts with only the tray icon
+const NO_WINDOW = args.has('--background');
 // --after-update=<pid>:<port>: started by an app update; waits for the old instance (pid) to stop
 const afterUpdate = (() => {
   const m = /^--after-update=(\d+):(\d+)$/.exec(process.argv.slice(2).find((a) => a.startsWith('--after-update=')) || '');
@@ -61,7 +61,7 @@ const rotateLog = () => {
 };
 // The tracker can run for weeks in the tray, so the log is rotated once it passes MAX_LOG. At most two files of about
 // MAX_LOG each are kept.
-const MAX_LOG = Number(process.env.RUMBLE_MAX_LOG) || 2 * 1024 * 1024; // env override for testing
+const MAX_LOG = 2 * 1024 * 1024;
 const MAX_LINE = 4000;
 let logBytes = null; // bytes in the current log; read from disk on the first write
 for (const level of ['log', 'info', 'warn', 'error']) {

@@ -19,10 +19,10 @@ are added to the history. Nothing is sent anywhere.
 ## The tray icon
 
 What closing the window does is your choice in **⚙ Settings**: keep running in the tray, so notifications still
-arrive, or quit. Until you choose, closing the window asks, and your answer is saved there. Left-click
-the icon to open the window; right-click for *Open data folder* and *Quit tracker*. *Quit tracker*, **⏻ Quit** on the
-page and Windows signing out or shutting down all stop it the same way: it finishes a read in progress, writes the
-day's backup and saves everything first.
+arrive, or quit. Until you choose, closing the window asks, and your answer is saved there. Left-click the icon to open
+the window; right-click for *Open data folder* and *Quit the tracker*. *Quit the tracker*, **⏻ Quit** on the page and
+Windows signing out or shutting down all stop it the same way: it finishes a read in progress, writes the day's backup
+and saves everything first.
 
 ## Backups
 
@@ -43,9 +43,9 @@ last good one.
 ## Game data updates
 
 New events, minis and shop offers after a game patch come as a **data pack** from
-<https://razingo.github.io/rumble-tracker-data/>, checked at start and every 6 hours. A pack is installed only if its
-signature is valid (the key is built into the exe) and every file matches its SHA-256 checksum. An open window loads
-the new data by itself.
+[rumble-tracker-data](https://github.com/razingo/rumble-tracker-data), checked at start and every 6 hours. A pack is
+installed only if its signature is valid (the key is built into the exe) and every file matches its SHA-256 checksum.
+An open window loads the new data by itself.
 
 ## App updates
 

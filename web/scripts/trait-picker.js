@@ -25,7 +25,7 @@ export function traitPicker({ scope, traits, filter, open, query = '', count, la
           aria-pressed="${any}" data-trait-mode="any" title="Minis with any selected trait">Match any</button></span>
         ${filter.traits.length ? '<button class="chip small-chip" data-trait-clear>Clear</button>' : ''}
       </div>
-      <input class="trait-search keep" type="search" placeholder="Search traits…" value="${esc(query)}">
+      <input class="trait-search" type="search" placeholder="Search traits…" value="${esc(query)}">
       <div class="trait-list">${chosen.map(option).join('')}${chosen.length && rest.length
         ? '<hr class="trait-separator">' : ''}${rest.map(option).join('')}</div>
     </div>`;

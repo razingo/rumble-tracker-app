@@ -1,6 +1,6 @@
 # Tray icon of RumbleTracker.exe (started by desktop/launcher.cjs, Windows Forms).
 # Talks to the launcher through standard output, one line each: "ready" (icon shown), "open" (open the window),
-# "quit" (Quit tracker), "shutdown" (Windows is signing out or shutting down), "game 1" / "game 0" (whether
+# "quit" (Quit the tracker), "shutdown" (Windows is signing out or shutting down), "game 1" / "game 0" (whether
 # Warcraft Rumble runs; sent when it changes). Exits when the tracker process ends.
 # Environment: RT_TITLE, RT_DATA (data folder), RT_EXE (icon), RT_PARENT (tracker process id), RT_GAME (the game's
 # process name).
@@ -29,7 +29,7 @@ $open = $menu.Items.Add('Open tracker')
 $open.Font = New-Object System.Drawing.Font($open.Font, [System.Drawing.FontStyle]::Bold)
 $folder = $menu.Items.Add('Open data folder')
 [void]$menu.Items.Add('-')
-$quit = $menu.Items.Add('Quit tracker')
+$quit = $menu.Items.Add('Quit the tracker')
 $open.add_Click({ Say 'open' })
 $folder.add_Click({ Start-Process explorer.exe -ArgumentList ('"' + $env:RT_DATA + '"') })
 $quit.add_Click({ $tray.Visible = $false; Say 'quit'; [System.Windows.Forms.Application]::Exit() })

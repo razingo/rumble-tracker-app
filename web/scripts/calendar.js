@@ -1,6 +1,5 @@
 // Calendar tab: the event schedules from gamedata/events.json and the events the save reports as running.
 import { $, imageUrl, getJson, post, RULES, BY_SLUG, TAG_ICONS, state, onTablesReload, ui, ANKH_ID } from './core.js';
-import { iconImage } from './drawer.js';
 import { STORE, loadStore } from './grid.js';
 import { SECOND, MINUTE, DAY } from './lib/constants.js';
 import { esc, fmt, plural, when, dayOnly, dayWithYear, longDay, timeOnly, span, ago, titleCase } from './lib/format.js';
@@ -411,7 +410,7 @@ function renderCalendarTimeline(now) {
     </div>
     <div class="cal-slide-row">
       <span class="muted small">Earlier · later</span>
-      <input type="range" class="cal-slider keep" data-calendar-slider min="${-TIMELINE_RANGE}" max="${TIMELINE_RANGE}"
+      <input type="range" class="cal-slider" data-calendar-slider min="${-TIMELINE_RANGE}" max="${TIMELINE_RANGE}"
         step="1" value="${off}" list="calendarTicks" aria-label="Move the timeline (days from today)">
       <datalist id="calendarTicks"><option value="0"></option></datalist>
     </div>
@@ -486,10 +485,10 @@ function rotationRow(w, rot, now, nowLine) {
   for (let seg = rotationAt(rot, w.from); seg.start < w.to; seg = rotationAt(rot, seg.end)) segments.push(seg);
   const bars = segments.map((seg) => {
     const left = w.pct(seg.start), width = w.pct(seg.end) - left;
-    const iconImage = rotationIcon(rot, seg.item);
-    const cls = ['cal-bar', 'rotation-bar', iconImage ? 'has-icon' : '', ...barEdges(w, seg.start, seg.end, now)].filter(Boolean).join(' ');
+    const icon = rotationIcon(rot, seg.item);
+    const cls = ['cal-bar', 'rotation-bar', icon ? 'has-icon' : '', ...barEdges(w, seg.start, seg.end, now)].filter(Boolean).join(' ');
     return `<span class="${cls}" style="left:${left}%;width:${width}%;--event-color:${rotationColor(rot, seg.item)}"
-      title="${esc(rotationName(seg.item))}: ${esc(when(seg.start))} – ${esc(when(seg.end))}">${iconImage}<span
+      title="${esc(rotationName(seg.item))}: ${esc(when(seg.start))} – ${esc(when(seg.end))}">${icon}<span
       class="bar-label bar-label-name">${esc(rotationName(seg.item))}</span></span>`;
   }).join('');
   return `<div class="cal-row-label rotation-row"><span>${esc(rot.label)}</span></div><div class="cal-track">${bars}${nowLine}</div>`;

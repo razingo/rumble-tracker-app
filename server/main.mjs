@@ -185,7 +185,7 @@ const windowWatch = STANDALONE ? createWindowWatch(ctx, { ask: () => host.askOnC
 
 const server = createHttpServer(ctx, { scan, shutdown, startUpdate, notifier, gameRunning, autostart, window: windowWatch });
 server.listen(ctx.port, '127.0.0.1', () => {
-  console.log(`Rumble tracker running at http://localhost:${ctx.port}`);
+  console.log(`Rumble Collection Tracker running at http://localhost:${ctx.port}`);
   console.log(`Data folder: ${ctx.paths.DATA}`);
   // Only the count, as account names are chosen by the player and the log may be attached to bug reports.
   console.log(`Accounts found: ${ctx.accounts.size}${ctx.scan.lastErrorLog ? `  (error: ${ctx.scan.lastErrorLog})` : ''}`);

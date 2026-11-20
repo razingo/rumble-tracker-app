@@ -2,6 +2,7 @@
 // losses the server works out from honor and Victory Point changes. The calculations are in lib/pvp-season.js.
 import { poll } from './app.js';
 import { loadEvents } from './calendar.js';
+import { chartFrame, yLabel, linePath, timeScale } from './chart.js';
 import { $, store, imageUrl, getJson, post, state, onTablesReload, ui } from './core.js';
 import { alertDialog } from './dialogs.js';
 import { esc, fmt, plural, when, dayOnly, span, ago } from './lib/format.js';
@@ -33,33 +34,30 @@ function pvpReward(r) {
   return `<span class="pvp-reward">${icon}<span>${esc(amount)}${esc(r.label)}${options}</span></span>`;
 }
 
+/** A season chart's frame: full width, dates under the ends. */
+const seasonFrame = (H, label, t0, t1) => ({ W: 1100, H, pad: 44, label, from: dayOnly(t0), to: dayOnly(t1), cls: 'chart pvp-chart' });
+
 function pvpHonorChart(log, season) {
   const pts = log.map((e) => ({ t: Date.parse(e.t), honor: e.honor, e }));
   if (pts.length < 2) return '<p class="muted small">The chart fills in as the tracker sees your honor change.</p>';
-  const W = 1100, H = 170, pad = 44;
   const t0 = Math.min(Date.parse(season.start), pts[0].t), t1 = Math.max(Date.now(), pts[pts.length - 1].t);
+  const size = seasonFrame(170, 'Honor this season', t0, t1);
+  const { W, H, pad } = size;
   const lo = Math.min(...pts.map((p) => p.honor)), hi = Math.max(...pts.map((p) => p.honor));
   const range = Math.max(200, hi - lo), base = lo - range * 0.1, top = hi + range * 0.1;
-  const x = (t) => pad + ((t - t0) / Math.max(1, t1 - t0)) * (W - pad - 8);
+  const x = timeScale(size, t0, t1);
   const y = (v) => 8 + (1 - (v - base) / (top - base)) * (H - 16);
   // Rank floors inside the visible range.
   const floors = PVP.ranks.filter((r) => r.from > base && r.from < top)
     .map((r) => `<line x1="${pad}" x2="${W}" y1="${y(r.from).toFixed(1)}" y2="${y(r.from).toFixed(1)}"
       class="floor"/><text x="${W - 4}" y="${(y(r.from) - 3).toFixed(1)}" class="tick" text-anchor="end">${esc(r.name)}</text>`).join('');
-  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.honor).toFixed(1)}`).join(' ');
   const dots = pts.filter((p) => p.e.wins || p.e.losses).map((p) => {
     const cls = p.e.wins && !p.e.losses ? 'win' : p.e.losses && !p.e.wins ? 'loss' : 'mixed';
     return `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.honor).toFixed(1)}" r="3.5"
       class="${cls}"><title>${esc(when(p.t))}: ${fmt(p.honor)} honor (${pvpResult(p.e)})</title></circle>`;
   }).join('');
-  return `<svg class="chart pvp-chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="Honor this season">
-    <line x1="${pad}" y1="${H}" x2="${W}" y2="${H}" class="axis"/>${floors}
-    <text x="${pad - 4}" y="${(y(hi) + 4).toFixed(1)}" class="tick" text-anchor="end">${fmt(hi)}</text>
-    <text x="${pad - 4}" y="${(y(lo) + 4).toFixed(1)}" class="tick" text-anchor="end">${fmt(lo)}</text>
-    <path d="${path}" fill="none" stroke="var(--gold-1)" stroke-width="2" stroke-linejoin="round"/>${dots}
-    <text x="${pad}" y="${H + 14}" class="tick">${esc(dayOnly(t0))}</text>
-    <text x="${W}" y="${H + 14}" class="tick" text-anchor="end">${esc(dayOnly(t1))}</text>
-  </svg>`;
+  return chartFrame(size, `${floors}${yLabel(pad, (y(hi) + 4).toFixed(1), fmt(hi))}${yLabel(pad, (y(lo) + 4).toFixed(1), fmt(lo))}
+    ${linePath(pts.map((p) => [x(p.t), y(p.honor)]), 'var(--gold-1)')}${dots}`);
 }
 
 function pvpResult(e) {
@@ -300,24 +298,17 @@ export async function renderPvp() {
 /** The win rate over the season after each match, with 50% marked. */
 function pvpWinRateChart(series, season) {
   if (series.length < 2) return '<p class="muted small">The chart needs at least two matches.</p>';
-  const W = 1100, H = 150, pad = 44;
   const t0 = Math.min(Date.parse(season.start), series[0].t), t1 = Math.max(Date.now(), series[series.length - 1].t);
-  const x = (t) => pad + ((t - t0) / Math.max(1, t1 - t0)) * (W - pad - 8);
+  const size = seasonFrame(150, 'Win rate this season', t0, t1);
+  const { W, H, pad } = size;
+  const x = timeScale(size, t0, t1);
   const y = (r) => 8 + (1 - r) * (H - 16);
-  const path = series.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.rate).toFixed(1)}`).join(' ');
   const last = series[series.length - 1];
-  return `<svg class="chart pvp-chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="Win rate this season">
-    <line x1="${pad}" y1="${H}" x2="${W}" y2="${H}" class="axis"/>
-    <line x1="${pad}" x2="${W}" y1="${y(0.5).toFixed(1)}" y2="${y(0.5).toFixed(1)}" class="floor"/>
-    <text x="${pad - 4}" y="${(y(1) + 4).toFixed(1)}" class="tick" text-anchor="end">100%</text>
-    <text x="${pad - 4}" y="${(y(0.5) + 4).toFixed(1)}" class="tick" text-anchor="end">50%</text>
-    <text x="${pad - 4}" y="${(y(0) + 4).toFixed(1)}" class="tick" text-anchor="end">0%</text>
-    <path d="${path}" fill="none" stroke="var(--gold-1)" stroke-width="2" stroke-linejoin="round"/>
+  const percent = (r) => yLabel(pad, (y(r) + 4).toFixed(1), `${r * 100}%`);
+  return chartFrame(size, `<line x1="${pad}" x2="${W}" y1="${y(0.5).toFixed(1)}" y2="${y(0.5).toFixed(1)}" class="floor"/>
+    ${percent(1)}${percent(0.5)}${percent(0)}${linePath(series.map((p) => [x(p.t), y(p.rate)]), 'var(--gold-1)')}
     <circle cx="${x(last.t).toFixed(1)}" cy="${y(last.rate).toFixed(1)}" r="3.5"
-      class="win"><title>${Math.round(last.rate * 100)}% after ${last.wins + last.losses} matches</title></circle>
-    <text x="${pad}" y="${H + 14}" class="tick">${esc(dayOnly(t0))}</text>
-    <text x="${W}" y="${H + 14}" class="tick" text-anchor="end">${esc(dayOnly(t1))}</text>
-  </svg>`;
+      class="win"><title>${Math.round(last.rate * 100)}% after ${last.wins + last.losses} matches</title></circle>`);
 }
 
 export function bindPvp() {

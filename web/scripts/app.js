@@ -170,36 +170,24 @@ function requestRender() {
 }
 document.addEventListener('focusout', () => setTimeout(() => { if (dirty) requestRender(); }, 0));
 
+// Each tab's page, apart from Collection, which render() always redraws
+const TAB_PAGES = { army: renderArmy, armory: renderArmory, calendar: renderCalendar, pvp: renderPvp, grid: renderGridTab,
+  progress: renderProgress };
+
 export function setTab(tab) {
   ui.tab = tab;
   store.set('tab', tab);
   if (location.hash.slice(1) !== tab) history.replaceState(null, '', `#${tab}`);
   for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
-  $('#tab-collection').hidden = tab !== 'collection';
-  $('#tab-army').hidden = tab !== 'army';
-  $('#tab-armory').hidden = tab !== 'armory';
-  $('#tab-calendar').hidden = tab !== 'calendar';
-  $('#tab-pvp').hidden = tab !== 'pvp';
-  $('#tab-grid').hidden = tab !== 'grid';
-  $('#tab-progress').hidden = tab !== 'progress';
-  if (tab === 'progress') renderProgress();
-  if (tab === 'army') renderArmy();
-  if (tab === 'armory') renderArmory();
-  if (tab === 'calendar') renderCalendar();
-  if (tab === 'pvp') renderPvp();
-  if (tab === 'grid') renderGridTab();
+  for (const page of document.querySelectorAll('main[id^="tab-"]')) page.hidden = page.id !== `tab-${tab}`;
+  TAB_PAGES[tab]?.();
 }
 
 function render() {
   if (!state) return;
   renderDataBanner();
   renderAccounts();
-  if (ui.tab === 'army') renderArmy();
-  if (ui.tab === 'armory') renderArmory();
-  if (ui.tab === 'calendar') renderCalendar();
-  if (ui.tab === 'pvp') renderPvp();
-  if (ui.tab === 'grid') renderGridTab();
-  if (ui.tab === 'progress') renderProgress();
+  TAB_PAGES[ui.tab]?.();
   renderCurrencies();
   renderSummary();
   renderNeeds();

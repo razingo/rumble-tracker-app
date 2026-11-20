@@ -85,7 +85,7 @@ export function renderPool(kind) {
   });
   el.innerHTML = `<div class="pool-head">
       <h2>${kind === 'leaders' ? 'Leaders' : 'Units & Spells'}</h2>
-      <input class="pool-search keep" type="search" data-pool-search="${kind}" placeholder="Search…" value="${esc(p.q)}">
+      <input class="pool-search" type="search" data-pool-search="${kind}" placeholder="Search…" value="${esc(p.q)}">
     </div>
     ${(() => {
       const sortSel = `<select data-pool-sort="${kind}" aria-label="Sort">${sorts.map(([k, l]) =>

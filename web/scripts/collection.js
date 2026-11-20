@@ -72,10 +72,14 @@ function lastEventFor(id) {
   return null;
 }
 
-export function miniOptions(currentSlug) {
+/** The select and Save button that say which mini an unknown one is (also in its side panel). */
+export const unitNameForm = (u) => `<select data-unit-name="${u.id}">${miniOptions()}</select>
+  <button class="button" data-unit-save="${u.id}">Save</button>`;
+
+function miniOptions() {
   const taken = new Set(state.units.map((u) => u.slug).filter(Boolean));
   const groups = { Unit: [], Leader: [], Spell: [] };
-  for (const m of MINIS) if (!taken.has(m.slug) || m.slug === currentSlug) groups[m.category].push(m);
+  for (const m of MINIS) if (!taken.has(m.slug)) groups[m.category].push(m);
   return '<option value="">Choose a mini…</option>' + Object.entries(groups)
     .map(([g, list]) => `<optgroup label="${g}s">${list.map((m) =>
       `<option value="${m.slug}">${esc(m.name)}</option>`).join('')}</optgroup>`)
@@ -93,8 +97,7 @@ export function renderNeeds() {
         <span class="small">${rarityName(u.rarity)} · level ${totalLevel(u)} · XP level
           ${u.xpLevel}${u.xpLevel < RULES.maxXpLevel ? ` (${u.xp}/${u.xpNeeded})` : ' (max)'} · ${u.stars}
           stars${ev ? ` · last change: ${esc(eventText(ev))} ${ago(ev.t)}` : ''}</span></div>
-      <select class="keep" data-unit-name="${u.id}">${miniOptions(null)}</select>
-      <button class="button" data-unit-save="${u.id}">Save</button></div>`);
+      ${unitNameForm(u)}</div>`);
   }
   if (unknownUnits.length > 12) rows.push(`<div class="row small">…and ${unknownUnits.length - 12} more. Level up or
     upgrade a mini in the game and it moves to the top, ready to name.</div>`);
@@ -252,16 +255,17 @@ export function renderFilters() {
 /** Card frame class for the mini's family (theme-art.css). */
 const frameCls = (m) => `frame-${String(m?.family || 'neutral').toLowerCase()}`;
 
+/** A card without levels, for a mini that is always owned or one not owned. `open` is its data attribute. */
+const plainCard = (m, open, note, cls = '') => `<button class="card${cls} ${frameCls(m)}" ${open}>
+    <img class="art" src="/static/${m.art}" alt="" loading="lazy">
+    <div class="name">${esc(m.name)}</div>
+    <div class="meta">${esc(m.category)} · ${esc(m.family)}</div>
+    <div class="small">${note}</div>
+  </button>`;
+
 function cardForUnit(u) {
   const m = miniOf(u);
-  if (u.synthetic) {
-    return `<button class="card ${frameCls(m)}" data-unit-open="${u.id}">
-      <img class="art" src="/static/${m.art}" alt="" loading="lazy">
-      <div class="name">${esc(m.name)}</div>
-      <div class="meta">${m.category} · ${esc(m.family)}</div>
-      <div class="small">Always owned · no levels or upgrades</div>
-    </button>`;
-  }
+  if (u.synthetic) return plainCard(m, `data-unit-open="${u.id}"`, 'Always owned · no levels or upgrades');
   const up = nextUpgrade(u);
   const slots = talentSlots(u);
   const flags = [];
@@ -304,12 +308,8 @@ function armyStrip(u) {
 }
 
 function cardForMissing(m) {
-  return `<button class="card missing ${frameCls(m)}" data-mini-open="${m.slug}">
-    <img class="art" src="/static/${m.art}" alt="" loading="lazy">
-    <div class="name">${esc(m.name)}</div>
-    <div class="meta">${m.category} · ${esc(m.family)}</div>
-    <div class="small">Not owned${state.units.some((u) => !u.slug) ? ' or not identified yet' : ''}</div>
-  </button>`;
+  const note = `Not owned${state.units.some((u) => !u.slug) ? ' or not identified yet' : ''}`;
+  return plainCard(m, `data-mini-open="${m.slug}"`, note, ' missing');
 }
 
 function sortUnits(list) {

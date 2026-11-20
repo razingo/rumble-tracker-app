@@ -32,7 +32,8 @@ The second row holds the status and the buttons:
 | | |
 |---|---|
 | Status | *Live · last scan 5s ago* means the tracker is reading your save. *Game closed* means Warcraft Rumble isn't running, so the save can't change and the tracker waits for the game to start. Anything else is covered in [Tips](#tips). |
-| **⚙ Settings** | Start with Windows and notifications ([below](#settings)) |
+| **☕ Buy me a coffee** | A voluntary way to support the tracker, which is free and stays free. Opens in your browser. |
+| **⚙ Settings** | Start with Windows, what closing the window does, and notifications ([below](#settings)) |
 | **🐞 Report a problem** | Tell us about a bug ([below](#report-a-problem)). A red dot means the tracker noticed an error. |
 | **Backup** | Save or restore everything you entered ([below](#backup)) |
 | **⏻ Quit** | Stops the tracker. Closing the window keeps it running in the tray or quits it, as you chose in **⚙ Settings**. |
@@ -53,7 +54,10 @@ still missing.
 
 Further down, filter the grid of minis by type (units, leaders, spells), faction and traits, and use *Show* (owned, or
 owned + not owned) and *Sort*. Click a mini for its details: level, XP, stars and rarity, the next upgrade and its cost,
-its stats at its level, traits and talents.
+traits and talents, and its stats, which the slider shows at any level.
+
+A leader's details also hold its **Army slots**. Copy each slot's type and tier (Bronze to Diamond) and the Boost from
+the game's Army screen: the Army tab plays minis at the levels these give, and the Valor count above comes from them.
 
 Two things need you now and then:
 
@@ -67,12 +71,18 @@ Two things need you now and then:
 ![The Army tab](screenshots/army.png)
 
 Build an army of a leader and six minis from your collection, and see each mini at the level it would play at in its
-slot. Each slot shows the mini's level, its talent and the slot's type; the **Boost** slot gives the mini there full
-XP level. The average gold cost and average level sit at the top of the board.
+slot. Click a leader or a mini in the lists below the board, or drag it onto a slot. Drag a mini from one slot to
+another to swap them, or back to the lists to take it out. Search the lists, filter them by type, faction and trait,
+and sort them.
 
-Save the army with *Save* or *Save as copy*, start over with *New*, and give it a description and tags such as "pvp" or
-"event". *Copy code* gives the game's army code to paste into Warcraft Rumble, and *Import code* loads one, for
-example from a friend or a guide. The army you're editing is kept automatically, even if you close the window.
+Each slot shows the mini's level, its talent and the slot's type, from the leader's army slots (see
+[Collection](#collection)); click the talent to choose another. The **Boost** slot gives the mini there full XP level.
+The average gold cost and average level sit at the top of the board.
+
+Save the army with *Save* or *Save as copy*, start over with *New*, empty the board with *Clear army* and remove a
+saved army with *Delete*. Give it a description and tags such as "pvp" or "event". *Copy code* gives the game's army
+code to paste into Warcraft Rumble, and *Import code* loads one, for example from a friend or a guide. The army you're
+editing is kept automatically, even if you close the window.
 
 ## Armory
 
@@ -80,7 +90,7 @@ example from a friend or a guide. The army you're editing is kept automatically,
 
 All your saved armies as cards, with their leader, minis and levels. Search by name, description, tag or mini, or click
 a tag to filter. Names, descriptions and tags can be edited right on the card. **Edit** opens the army on the Army tab,
-and **Copy code** copies its army code.
+**Copy code** copies its army code and **Delete** removes it.
 
 ## G.R.I.D.
 
@@ -105,8 +115,9 @@ event using it now and lists the events that use it next. Tickets reset when an 
 using shows as –.
 
 **Running now** lists the events the game says are on, with how long they last and your tickets. Open an event's
-**reward tree** to see what each step costs, and pick rewards to see the cheapest way to them. Set one as a **reward
-goal** and the tracker can notify you when you have enough tickets. **Shop offers** has today's daily offers and the
+**reward tree** to see what each step costs and the event's challenges. Click a reward to see the cheapest way to it,
+Ctrl+click to add more (Enter and Space work too), and *Clear* to start over. Set your picks as a **reward goal** and
+the tracker can notify you when you have enough tickets. **Shop offers** has today's daily offers and the
 special offers from your save, with prices and when they reset.
 
 Further down:
@@ -117,6 +128,8 @@ Further down:
 3. **Dungeons, raids & sieges** and **How events repeat**.
 
 ## PvP
+
+![The PvP tab](screenshots/pvp.png)
 
 The PvP season, your rank and your matches. **Rank** shows your honor and how much is left to the next rank;
 **Season** has the end date and the maps; **Modifiers** the three in play now and the next ones (they change every 3
@@ -164,10 +177,12 @@ in `RumbleTracker.exe`.
 ### Notifications
 
 Pick the Windows notifications you want: the free gift, the daily shop reset, a new G.R.I.D., events starting or
-ending soon, a mini ready to upgrade, enough tickets for a reward goal, the PvP season ending (time to claim your
-Victory Road rewards), new PvP modifiers and a new tracker version. Clicking one opens the tracker.
+ending soon, a new dungeon faction, dungeon or raid/siege, a mini ready to upgrade, enough tickets for a reward goal,
+the PvP season ending (time to claim your Victory Road rewards), new PvP modifiers and a new tracker version. Clicking
+one opens the tracker.
 
 - *For* sends them for all accounts or just one.
+- For an event or the PvP season ending, set how many hours before the end the notification comes.
 - Types left unticked under *Also while playing* are skipped while Warcraft Rumble is running.
 - During *Quiet hours*, notifications are held until the quiet hours end.
 
@@ -188,7 +203,8 @@ issue on GitHub with **Ctrl+V**.
 
 *Add the details below* includes the tracker's version, the game build, the game-data status and recent errors. User
 names, account IDs and other personal details are removed, and your collection and save data are never included.
-Open *Details that would be added* to see exactly what's sent.
+Open *Details that would be added* to see exactly what's sent. *Clear errors* empties the list of recent errors and
+removes the red dot.
 
 ## Backup
 

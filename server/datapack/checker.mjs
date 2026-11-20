@@ -3,8 +3,9 @@
 // know, so the page asks for the current version. A verified pack clears that.
 import { updateDataPack, newerVersion } from './datapack.mjs';
 import { latestAppOf } from '../update/appupdate.mjs';
+import { MINUTE } from '../../web/scripts/lib/constants.js';
 
-const RECHECK_MS = Number(process.env.RUMBLE_PACK_RECHECK_MS) || 15 * 60 * 1000; // env override for testing
+const RECHECK_MS = 15 * MINUTE;
 
 /** onUpdated() runs after new tables are loaded, onNews() when there is something to tell the player. */
 export function createPackChecker(ctx, { onUpdated = () => {}, onNews = () => {}, update = updateDataPack } = {}) {

@@ -1,5 +1,6 @@
 // Progress tab: daily income from the lifetime totals, level growth, and when every owned mini could be legendary.
 // The history comes from the server (progress.json).
+import { chartFrame, yLabel, linePath } from './chart.js';
 import { $, RULES, state } from './core.js';
 import { HOUR, DAY } from './lib/constants.js';
 import { esc, fmt, dateTime, dayWithYear, span } from './lib/format.js';
@@ -39,9 +40,15 @@ function dailyDeltas(get) {
   return out.slice(-30);
 }
 
+const TOO_SHORT = '<p class="muted small">Needs at least two days of history.</p>';
+// a day's chart frame: dates as month-day under the ends
+const dayFrame = (data, size, label) => ({ ...size, label, from: data[0].day.slice(5), to: data[data.length - 1].day.slice(5) });
+
 function barChart(data, color, unit) {
-  if (data.length < 2) return '<p class="muted small">Needs at least two days of history.</p>';
-  const W = 560, H = 160, pad = 28, bw = Math.max(4, (W - pad) / data.length - 3);
+  if (data.length < 2) return TOO_SHORT;
+  const size = { W: 560, H: 160, pad: 28 };
+  const { W, H, pad } = size;
+  const bw = Math.max(4, (W - pad) / data.length - 3);
   const max = Math.max(1, ...data.map((d) => d.value));
   const bars = data.map((d, i) => {
     const h = Math.max(1, (d.value / max) * (H - 24));
@@ -50,33 +57,22 @@ function barChart(data, color, unit) {
       <rect class="hit" x="${x - 1}" y="0" width="${bw + 2}" height="${H}" fill="transparent"><title>${esc(d.day)}:
         ${fmt(Math.round(d.value))} ${unit}</title></rect></g>`;
   }).join('');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${esc(unit)} per day">
-    <line x1="${pad}" y1="${H}" x2="${W}" y2="${H}" class="axis"/>
-    <text x="${pad - 4}" y="12" class="tick" text-anchor="end">${fmt(Math.round(max))}</text>
-    <text x="${pad - 4}" y="${H}" class="tick" text-anchor="end">0</text>
-    ${bars}
-    <text x="${pad}" y="${H + 14}" class="tick">${esc(data[0].day.slice(5))}</text>
-    <text x="${W}" y="${H + 14}" class="tick" text-anchor="end">${esc(data[data.length - 1].day.slice(5))}</text>
-  </svg>`;
+  return chartFrame(dayFrame(data, size, `${unit} per day`),
+    `${yLabel(pad, 12, fmt(Math.round(max)))}${yLabel(pad, H, '0')}${bars}`);
 }
+
 function lineChart(data, color, unit) {
-  if (data.length < 2) return '<p class="muted small">Needs at least two days of history.</p>';
-  const W = 560, H = 160, pad = 36;
+  if (data.length < 2) return TOO_SHORT;
+  const size = { W: 560, H: 160, pad: 36 };
+  const { W, H, pad } = size;
   const vals = data.map((d) => d.value);
   const lo = Math.min(...vals), hi = Math.max(...vals), range = Math.max(1, hi - lo);
   const x = (i) => pad + (i / (data.length - 1)) * (W - pad - 6);
   const y = (v) => 8 + (1 - (v - lo) / range) * (H - 16);
-  const path = data.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d.value).toFixed(1)}`).join(' ');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${esc(unit)} over time">
-    <line x1="${pad}" y1="${H}" x2="${W}" y2="${H}" class="axis"/>
-    <text x="${pad - 4}" y="12" class="tick" text-anchor="end">${fmt(hi)}</text>
-    <text x="${pad - 4}" y="${H}" class="tick" text-anchor="end">${fmt(lo)}</text>
-    <path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-    ${data.map((d, i) => `<circle cx="${x(i)}" cy="${y(d.value)}" r="4" fill="${color}" stroke="var(--panel)"
-      stroke-width="2"><title>${esc(d.day)}: ${fmt(d.value)} ${unit}</title></circle>`).join('')}
-    <text x="${pad}" y="${H + 14}" class="tick">${esc(data[0].day.slice(5))}</text>
-    <text x="${W}" y="${H + 14}" class="tick" text-anchor="end">${esc(data[data.length - 1].day.slice(5))}</text>
-  </svg>`;
+  const dots = data.map((d, i) => `<circle cx="${x(i)}" cy="${y(d.value)}" r="4" fill="${color}" stroke="var(--panel)"
+    stroke-width="2"><title>${esc(d.day)}: ${fmt(d.value)} ${unit}</title></circle>`).join('');
+  return chartFrame(dayFrame(data, size, `${unit} over time`), `${yLabel(pad, 12, fmt(hi))}${yLabel(pad, H, fmt(lo))}
+    ${linePath(data.map((d, i) => [x(i), y(d.value)]), color)}${dots}`);
 }
 
 function legendaryProjection() {

@@ -1,4 +1,4 @@
-# npm run check-style checks these rules in CI (Markdown is left out).
+# npm run check-style checks these rules in CI (Markdown is left out), and keeps comments within 120 characters.
 root = true
 
 [*]

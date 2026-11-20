@@ -6,13 +6,13 @@
 // app ID notifications are sent under. It installs downloaded updates, opens links in the default browser and opens
 // Windows' snipping overlay for the server.
 
-let launcher = null; // { options, applyUpdate, openLink, takeScreenshot, askOnClose }
+let launcher = null;
 let quitHandler = null;
 const game = { running: null, failed: false, listeners: [] };
 let identity = { appId: null, launch: null };
 
 export const host = {
-  /** Called by the launcher with its options ({ port, dataDir }) and the functions described below. */
+  /** Called by the launcher with { options: { port, dataDir }, applyUpdate, openLink, takeScreenshot, askOnClose }. */
   attach(hooks) { launcher = hooks; },
 
   /** Whether the server runs inside RumbleTracker.exe. */

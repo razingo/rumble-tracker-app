@@ -1,10 +1,9 @@
 // Armory tab: the saved armies as cards, with their name, description and tags editable in place.
 import { setTab } from './app.js';
 import { encodeArmyCode } from './army-code.js';
-import { nameField, descriptionField, tagEditor, armyStats, persistArmies, editArmy, syncDraft, detachDraft } from './army.js';
+import { nameField, descriptionField, tagEditor, armyStats, persistArmies, editArmy, syncDraft, deleteSavedArmy } from './army.js';
 import { toggleIn } from './collection.js';
 import { $, showMessage, copyText, BY_SLUG, state } from './core.js';
-import { confirmDialog } from './dialogs.js';
 import { esc, plural } from './lib/format.js';
 import { tagKey } from './lib/limits.js';
 import { rarityColor } from './units.js';
@@ -73,7 +72,7 @@ export function renderArmory() {
 
   page.innerHTML = `<div class="panel armory-toolbar">
       <h2>Armory <span class="muted small">${plural(all.length, 'saved army', 'saved armies')}</span></h2>
-      <input id="armorySearch" class="keep" type="search" placeholder="Search names, descriptions, tags, minis…" value="${esc(view.q)}">
+      <input id="armorySearch" type="search" placeholder="Search names, descriptions, tags, minis…" value="${esc(view.q)}">
       ${tags.length ? `<div class="chips">${tags.map((t) => `<button class="chip small-chip"
         aria-pressed="${view.tags.some((x) => x.toLowerCase() === t.tag.toLowerCase())}"
         data-armory-tag-filter="${esc(t.tag)}">${esc(t.tag)}<small>${t.count}</small></button>`).join('')}</div>` : ''}
@@ -168,15 +167,6 @@ async function copyCode(army, msg) {
   }
 }
 
-async function deleteArmy(army) {
-  const ok = await confirmDialog(`"${army.name}" is removed from your saved armies.`,
-    { title: 'Delete this army?', ok: 'Delete', danger: true });
-  if (!ok) return;
-  await persistArmies((state.savedArmies || []).filter((a) => a.id !== army.id));
-  detachDraft(army.id);
-  renderArmory();
-}
-
 async function cardClick(e) {
   const filter = e.target.closest('[data-armory-tag-filter]');
   if (filter) {
@@ -196,7 +186,7 @@ async function cardClick(e) {
     editArmy(army);
     setTab('army');
   } else if (act.dataset.armoryAction === 'copy') await copyCode(army, card.querySelector('.armory-message'));
-  else if (act.dataset.armoryAction === 'delete') await deleteArmy(army);
+  else if (act.dataset.armoryAction === 'delete' && await deleteSavedArmy(army)) renderArmory();
 }
 
 export function bindArmory() {

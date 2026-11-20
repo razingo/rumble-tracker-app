@@ -1,6 +1,6 @@
 // The side panel for one mini: its stats and talents, which mini a new unit is, and a leader's army slots.
 import { poll } from './app.js';
-import { miniOptions } from './collection.js';
+import { unitNameForm } from './collection.js';
 import { $, post, RULES, BY_SLUG, TAG_ICONS, state } from './core.js';
 import { alertDialog } from './dialogs.js';
 import { esc, fmt, plural } from './lib/format.js';
@@ -159,8 +159,7 @@ function statsSection(m, level) {
 function drawerSections(u, m, level) {
   const parts = [drawerHead(u, m)];
   if (u && !m) {
-    parts.push(`<h3>Which mini is this?</h3><div class="row"><select data-unit-name="${u.id}">${miniOptions(null)}</select>
-      <button class="button" data-unit-save="${u.id}">Save</button></div>`);
+    parts.push(`<h3>Which mini is this?</h3><div class="row">${unitNameForm(u)}</div>`);
   }
   if (m) parts.push(`<p class="description">${esc(m.description)}</p>`);
   if (u?.synthetic) {

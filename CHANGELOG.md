@@ -3,6 +3,13 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.9.0
+
+- The tracker's icon shows in its window and browser tab again.
+- The tray menu says *Quit the tracker*, like the close question and ⚙ Settings.
+- The player guide now covers what was missing: dragging minis on the Army tab, its lists' filters, a leader's army
+  slots, Delete and Clear army, Ctrl+click on reward trees, all notification types, and a PvP screenshot.
+
 ## 0.8.4
 
 - If you reopen the window from the tray while the "Close the tracker?" question is open, the tracker keeps running.
