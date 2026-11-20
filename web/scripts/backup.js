@@ -45,10 +45,10 @@ export function bindBackupMenu() {
   const menu = $('#backupMenu');
   const setMenu = (open) => {
     menu.hidden = !open;
-    $('#backupBtn').setAttribute('aria-expanded', String(open));
+    $('#backupButton').setAttribute('aria-expanded', String(open));
     if (open) renderBackupList();
   };
-  $('#backupBtn').addEventListener('click', (e) => {
+  $('#backupButton').addEventListener('click', (e) => {
     e.stopPropagation();
     setMenu(menu.hidden);
   });

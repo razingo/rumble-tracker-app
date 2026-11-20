@@ -66,10 +66,10 @@ test('notifies about the PvP season ending soon and new modifiers', () => {
     modifiers: { m1: { name: 'One' }, m2: { name: 'Two' } },
   };
   const accounts = [{ id: 'a', label: 'Main', pvp: { season: 'x', honor: 1200 } }];
-  // 24 h before the end is within the default 48 h
+  // 24 hours before the end is within the default 48
   const end = dueNotifications(ctx({ pvp, accounts })).find((n) => n.type === 'pvpSeasonEnd');
   assert.equal(end.key, 'pvpEnd:s1');
-  assert.match(end.title, /Season 1 ends in 24 h/);
+  assert.match(end.title, /Season 1 ends in 24 hours/);
   assert.match(end.body, /Silver/);
   // Modifiers are off by default; on, announced in the first hours of a set.
   const s = defaultSettings();

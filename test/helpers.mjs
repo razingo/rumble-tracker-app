@@ -1,4 +1,4 @@
-// Shared test helpers: a protobuf writer for hand-built save values, and a tracker context in a temporary folder with
+// Shared test helpers: hand-built save values (written with lib/protobuf.js), and a tracker context in a temporary folder with
 // small made-up game tables (tests don't need the real game data).
 import os from 'node:os';
 import path from 'node:path';
@@ -6,48 +6,21 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { createContext } from '../server/context.mjs';
 import { createTables } from '../server/tables.mjs';
 import { loadUserData } from '../server/userdata.mjs';
+import { int, embedded, fixed64 } from '../web/scripts/lib/protobuf.js';
 
-export const varint = (n) => {
-  let v = BigInt(n);
-  const out = [];
-  do {
-    let b = Number(v & 0x7fn);
-    v >>= 7n;
-    if (v) b |= 0x80;
-    out.push(b);
-  } while (v);
-  return Buffer.from(out);
-};
-export const tag = (fn, wt) => varint((fn << 3) | wt);
-export const int = (fn, n) => Buffer.concat([tag(fn, 0), varint(n)]);
-export const msg = (fn, ...parts) => {
-  const body = Buffer.concat(parts);
-  return Buffer.concat([tag(fn, 2), varint(body.length), body]);
-};
-export const fixed64 = (fn, n) => {
-  const b = Buffer.alloc(8);
-  b.writeBigUInt64LE(BigInt(n));
-  return Buffer.concat([tag(fn, 1), b]);
-};
-export const str = (fn, s) => msg(fn, Buffer.from(s, 'utf8'));
-export const double = (fn, n) => {
-  const b = Buffer.alloc(8);
-  b.writeDoubleLE(n);
-  return Buffer.concat([tag(fn, 1), b]);
-};
-export const id = (fn, a, b) => msg(fn, fixed64(1, a), fixed64(2, b));
+export const id = (fn, a, b) => embedded(fn, fixed64(1, a), fixed64(2, b));
 export const hexId = (a, b) => a.toString(16).padStart(16, '0') + b.toString(16).padStart(16, '0');
 
 /** A MiniProgressionManagerState value: units [{ a, b, level, xp, xpNeeded, xpLevel, rarity, stars }]. */
-export const unitsValue = (units) => Buffer.concat(units.map((u) => msg(1,
+export const unitsValue = (units) => Buffer.concat(units.map((u) => embedded(1,
   id(1, u.a, u.b), int(2, u.level ?? 1), int(3, u.xp ?? 0), int(6, u.xpNeeded ?? 10), int(7, u.xpLevel ?? 1),
-  int(8, 0), int(10, u.stars ?? 0), msg(9, int(1, u.talents ?? 0), int(2, u.rarity ?? 0)))));
+  int(8, 0), int(10, u.stars ?? 0), embedded(9, int(1, u.talents ?? 0), int(2, u.rarity ?? 0)))));
 /** A currencies value: [{ a, b, balance, lifetime }]. */
 export const currenciesValue = (list) => Buffer.concat(list.flatMap((c) =>
-  [msg(1, id(1, c.a, c.b), int(2, c.balance)), msg(4, id(1, c.a, c.b), int(2, c.lifetime ?? c.balance))]));
+  [embedded(1, id(1, c.a, c.b), int(2, c.balance)), embedded(4, id(1, c.a, c.b), int(2, c.lifetime ?? c.balance))]));
 /** A PvpPlayerRankState value. */
-export const pvpValue = ({ season = [1, 2], honor, vp }) => Buffer.concat([msg(2, fixed64(1, season[0]),
-  fixed64(2, season[1])), msg(3, int(1, honor), int(2, honor)), msg(4, int(1, vp))]);
+export const pvpValue = ({ season = [1, 2], honor, vp }) => Buffer.concat([embedded(2, fixed64(1, season[0]),
+  fixed64(2, season[1])), embedded(3, int(1, honor), int(2, honor)), embedded(4, int(1, vp))]);
 
 export const RULES = {
   rarities: [{ name: 'Common' }], rarityUpgrade: [{ stars: 5, arcEnergy: 10 }], xpToNext: { 1: 10, 2: 20 }, maxXpLevel: 10,

@@ -3,6 +3,14 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.8.1
+
+- Times in sentences are written out ("5 minutes ago", "ends in 3 hours", "every 24 hours"); countdowns keep their
+  short form ("4h 12m").
+- The G.R.I.D. tab says "Level" instead of "Lvl", like the other tabs.
+- For developers: the scripts in `tools/` use kebab-case names (`build-release.mjs` and so on); the npm scripts are
+  unchanged.
+
 ## 0.8.0
 
 - The Settings note and the guide now say correctly that notifications left unticked under *Also while playing* are

@@ -137,15 +137,15 @@ folder, or to the folder in `RUMBLE_DATA_DIR`.
 |---|---|
 | `server/` | The local server. `main.mjs` starts the parts and runs the timers. `host.mjs` connects it to the exe's launcher when there is one. Also the shared state (`context.mjs`), game tables (`tables.mjs`), the user's files (`userdata.mjs`, `store.mjs`), the page's state (`state.mjs`), backups, request filtering (`guard.mjs`), Start with Windows (`autostart.mjs`) and the Windows programs it runs (`system.mjs`) |
 | `server/scan/` | Reading the save on a timer (`scanner.mjs`) and the history kept from it (`history.mjs`) |
-| `server/http/` | The HTTP server and routes (`server.mjs`) and the API handlers (`handlers.mjs`) |
+| `server/http/` | The HTTP server and static files (`server.mjs`), the API routes (`routes.mjs`) and the handlers that change the user's data (`handlers.mjs`) |
 | `server/update/` | In-app updates: the download and its checks (`appupdate.mjs`), and *Download now* (`updater.mjs`) |
-| `server/game/` | The save: reading it from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), currency names, PvP match results and whether the game runs (`watch.mjs`) |
+| `server/game/` | The save: reading it from the registry (`prefs.mjs`), decoding it (`model.mjs`, with `web/scripts/lib/protobuf.js`), currency names, PvP match results and whether the game runs (`watch.mjs`) |
 | `server/notifications/` | What's due (`notify.mjs`), sending it (`runner.mjs`) and the Windows notification itself (`toast.mjs`) |
 | `server/datapack/` | Signed game-data updates (`datapack.mjs`), when to check (`checker.mjs`), the first start's download (`firstrun.mjs`) and the accepted public keys |
-| `web/` | The page. `scripts/app.js` starts it and switches tabs, `core.js` holds what the modules share, and each tab, dialog and menu has its own module. `scripts/lib/` has the code the server and build tools use too: shared names and units, formatting, schedules, PvP seasons, input limits and the reward-tree planner |
+| `web/` | The page. `scripts/app.js` starts it and switches tabs, `core.js` holds what the modules share, and each tab, dialog and menu has its own module; the Army tab also has `army-code.js` (army codes) and `army-pools.js`. `scripts/lib/` has the code the server and build tools use too: shared names and units, formatting, the protobuf reader and writer, schedules, PvP seasons, input limits and the reward-tree planner |
 | `gamedata/` | Game data and art (© Blizzard, see NOTICE), served as `/static/…`. Not in the repository; `npm run fetch-gamedata` fills it |
 | `desktop/` | The exe's launcher (`launcher.cjs`), the tray icon (`tray.ps1`), Windows integration (`integration.ps1`) and the icon |
-| `tools/` | Downloading game data (`fetch_gamedata.mjs`), building the release (`build_release.mjs`, Node.js 25.5+) and the style check (`check_style.mjs`) |
+| `tools/` | Downloading game data (`fetch-gamedata.mjs`), building the release (`build-release.mjs`, Node.js 25.5+) and the style check (`check-style.mjs`) |
 | `test/` | Node's built-in test runner. `helpers.mjs` builds save values and a tracker in a temporary folder; the tray and integration tests run on Windows only |
 | `.github/workflows/` | `test.yml` runs the tests and the style check on every push; `release.yml` tests, builds and attests a release when a `v<version>` tag is pushed |
 | `docs/` | The player guide with its screenshots, and how the tracker works in the background |

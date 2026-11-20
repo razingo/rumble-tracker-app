@@ -2,10 +2,10 @@
 // a number of other minis have been: 12, 16 for leaders, 20 for special leaders. The cooldowns come from the grids the
 // tracker has seen (grid_history.json).
 import { currencyChip } from './collection.js';
-import { $, imageUrl, getJson, RULES, MINIS, BY_SLUG, state, onTablesReload, ui, GRID_CURRENCY_IDS } from './core.js';
+import { $, imageUrl, getJson, MINIS, BY_SLUG, state, onTablesReload, ui, GRID_CURRENCY_IDS } from './core.js';
 import { SECOND, HOUR, DAY } from './lib/constants.js';
 import { esc, fmt, plural, dateTime, dayWithYear, weekdayTime, span } from './lib/format.js';
-import { rarityColor } from './units.js';
+import { rarityColor, ownedUnit, gridRarityOf } from './units.js';
 
 export let STORE = null; // static/store.json
 onTablesReload(() => { STORE = null; });
@@ -14,14 +14,7 @@ export async function loadStore() {
   return STORE;
 }
 
-/** A grid slot's rarity: its index in rules.json (or -1) and a label such as "Epic leader". */
-function gridRarity(id) {
-  const m = /^(\w+?)Rarity_(Troop|Leader)$/.exec(STORE.gridRarity[id]?.name || '');
-  if (!m) return { index: -1, label: '' };
-  return { index: RULES.rarities.findIndex((r) => r.name === m[1]), label: `${m[1]}${m[2] === 'Leader' ? ' leader' : ''}` };
-}
 const isLeaderSlug = (slug) => BY_SLUG.get(slug)?.category === 'Leader';
-const ownedSlug = (slug) => state.units.find((u) => u.slug === slug && !u.synthetic) || null;
 
 /** The minis on cooldown, by slug: { place, limit, lastSeen }. */
 /** How many other minis must be offered before one comes back, by kind. */
@@ -69,14 +62,14 @@ function gridSlot(s) {
       <div class="grid-price">${x.coins != null ? `${fmt(x.coins)} <span class="gold">●</span>` : ''}</div></div>`;
   }
   const m = BY_SLUG.get(s.slug);
-  const own = ownedSlug(s.slug);
+  const own = ownedUnit(s.slug, { alwaysOwned: false });
   const price = STORE.gridRarity[s.rarity]?.coins;
-  const rarity = gridRarity(s.rarity);
-  return `<div class="grid-slot${m ? '' : ' unknown'}" style="--rc:${rarityColor(Math.max(0, rarity.index))}">
+  const rarity = gridRarityOf(STORE.gridRarity[s.rarity]?.name);
+  return `<div class="grid-slot${m ? '' : ' unknown'}" style="--rarity-color:${rarityColor(Math.max(0, rarity.index))}">
     <div class="grid-art">${m ? `<img src="/static/${m.art}" alt="">` : '?'}</div>
     <div class="grid-name">${esc(m?.name || 'New mini (not in the tracker\'s data yet)')}</div>
-    <div class="grid-meta">${esc(rarity.label)}${own ? ` · <span class="cost-ok">Lvl ${own.level}</span>` : m
-      ? ' · <span class="cost-no">not owned</span>' : ''}</div>
+    <div class="grid-meta">${esc(rarity.label)}${own ? ` · <span class="text-good">Level ${own.level}</span>` : m
+      ? ' · <span class="text-warn">not owned</span>' : ''}</div>
     <div class="grid-price">${price != null ? `${fmt(price)} <span class="gold">●</span>` : ''}</div>
   </div>`;
 }
@@ -90,7 +83,7 @@ function gridHeader(shop, currencies) {
     <h2>G.R.I.D.</h2>
     <span class="grid-timer">${timer}</span>
     <span class="muted small">${refresh ? esc(weekdayTime(refresh)) : ''} · every
-      ${Math.round((STORE.rules?.refreshSeconds || DAY / SECOND) * SECOND / HOUR)} h</span>
+      ${plural(Math.round((STORE.rules?.refreshSeconds || DAY / SECOND) * SECOND / HOUR), 'hour')}</span>
     ${currencies.length ? `<div class="currencies grid-currencies">${currencies.map(currencyChip).join('')}</div>` : ''}
   </section>`;
 }
@@ -98,7 +91,7 @@ function gridHeader(shop, currencies) {
 /** A mini as a small chip with its picture. `extra` follows the name. */
 function miniChip(m, slug, { cls = '', title = m?.name || slug, extra = '' } = {}) {
   const art = m ? `<img src="/static/${m.art}" alt="">` : '';
-  const owned = ownedSlug(slug) ? '' : ' not-owned';
+  const owned = ownedUnit(slug, { alwaysOwned: false }) ? '' : ' not-owned';
   return `<span class="cooldown-chip${cls}${owned}" title="${esc(title)}">${art}<span>${esc(m?.name || slug)}</span>${extra}</span>`;
 }
 
@@ -134,7 +127,7 @@ function historyItem(x) {
   if (m) return `<img src="/static/${m.art}" alt="" title="${esc(m.name)}">`;
   const boost = STORE.xpBoosts[x.xpBoost];
   return boost?.icon
-    ? `<img class="history-xp-img" src="${imageUrl('store', boost.icon)}" alt="" title="${esc(boost.name)}">`
+    ? `<img class="history-xp-image" src="${imageUrl('store', boost.icon)}" alt="" title="${esc(boost.name)}">`
     : `<span class="history-xp" title="${esc(boost?.name || 'XP boost')}">XP</span>`;
 }
 

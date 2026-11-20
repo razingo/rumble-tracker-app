@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { updateDataPack } from '../server/datapack/datapack.mjs';
-import { PACK_URL } from '../server/datapack/pack_keys.mjs';
+import { PACK_URL } from '../server/datapack/pack-keys.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = path.join(ROOT, 'gamedata');

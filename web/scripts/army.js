@@ -1,187 +1,37 @@
 // Army tab: the army builder, a leader and six minis, with the level each mini plays at in its slot.
 import { poll } from './app.js';
-import { FAMILIES, allTraits, toggleIn } from './collection.js';
-import { $, store, getJson, post, copyText, RULES, BY_SLUG, TAG_ICONS, state, onTablesReload } from './core.js';
+import { encodeArmyCode, decodeArmyCode } from './army-code.js';
+import { pools, savePools, matchingSlots, renderPool, renderPoolGrid, updatePool, poolClick } from './army-pools.js';
+import { toggleIn } from './collection.js';
+import { $, post, copyText, RULES, BY_SLUG, TAG_ICONS, state } from './core.js';
 import { confirmDialog, alertDialog } from './dialogs.js';
-import { ico, openDrawer } from './drawer.js';
+import { iconImage, openDrawer } from './drawer.js';
 import { SECOND } from './lib/constants.js';
 import { esc } from './lib/format.js';
-import { LIMITS, withTag } from './lib/limits.js';
-import { traitPicker, bindTraitPicker } from './trait-picker.js';
-import { rarityColor, miniOf, effectivePicks, armyOf, totalLevel } from './units.js';
+import { LIMITS, withTag, tagKey } from './lib/limits.js';
+import { bindTraitPicker } from './trait-picker.js';
+import { rarityColor, ownedUnit, miniOf, effectivePicks, armyOf, familiesOf, levelInSlot, talentIndex } from './units.js';
 
 // The army builder: the draft being edited and the state of its pickers and pop-ups.
-const builder = { draft: null, draftAccount: null, nameText: '', codeMsg: null, codeText: '', talentPop: null,
+export const builder = { draft: null, draftAccount: null, nameText: '', codeMsg: null, codeText: '', talentPop: null,
   poolTraitOpen: null, poolTraitQ: {}, pools: null };
 
-const DMG_TAG = { AOE: 'AoE', Squad: 'Squad', OneTarget: 'One-Target' };
-
-/** What a slot type can match: the mini's families, roles, traits, damage type and category. */
-function miniTags(m) {
-  const tags = new Set([...familiesOf(m), ...String(m.role).split(','), ...m.traits.map((t) => t.name)]);
-  if (m.category === 'Spell') tags.add('Spell');
-  if (DMG_TAG[m.damageType]) tags.add(DMG_TAG[m.damageType]);
-  if (tags.has('Siege Damage') || tags.has('Siege Specialist')) tags.add('Siege');
-  return tags;
-}
-
-function slotMatches(type, m) {
-  if (!type || !m) return false;
-  if (type === 'Wildcard') return true;
-  return miniTags(m).has(type);
-}
-
-const ownedUnit = (slug) => state.units.find((u) => u.slug === slug) || null;
-
 // Faction pennant
-const FAMILY_NAMES = ['Alliance', 'Horde', 'Undead', 'Beast', 'Blackrock', 'Cenarion'];
 // Faction pairs with a combined icon (static/icons/fam).
 const FAMILY_COMBOS = ['AllianceHorde', 'AllianceUndead', 'BeastAlliance', 'BeastBlackrock', 'BlackrockAlliance',
   'BlackrockUndead', 'HordeBeast', 'HordeBlackrock', 'UndeadBeast', 'UndeadHorde'];
 
-/** A mini's families. For a leader, every faction among its fixed board slots. */
-export function familiesOf(m) {
-  if (m.families?.length > 1) return m.families; // multi-faction minis
-  if (m.category === 'Leader') {
-    const fams = [...new Set((m.fixedArmySlots || []).filter((t) => FAMILY_NAMES.includes(t)))];
-    if (fams.length > 1) return fams;
-  }
-  return [m.family];
-}
-
-function famFlag(m) {
+function familyFlag(m) {
   const fams = familiesOf(m);
   if (fams.length === 1) {
-    return `<span class="fam-flag fam-${fams[0].toLowerCase()}" title="${esc(fams[0])}">${ico(TAG_ICONS[fams[0]], fams[0])}</span>`;
+    return `<span class="family-flag family-${fams[0].toLowerCase()}"
+      title="${esc(fams[0])}">${iconImage(TAG_ICONS[fams[0]], fams[0])}</span>`;
   }
   const combo = FAMILY_COMBOS.find((c) => c === fams[0] + fams[1] || c === fams[1] + fams[0]);
-  const icon = combo ? `<img class="ico" src="/static/icons/fam/${combo}.png" alt="">` : ico(TAG_ICONS[fams[0]], fams[0]);
-  return `<span class="fam-flag fam-split" style="--fam-a:var(--fam-${fams[0].toLowerCase()});--fam-b:var(--fam-${fams[1].toLowerCase()})"
+  const icon = combo ? `<img class="icon" src="/static/icons/fam/${combo}.png" alt="">` : iconImage(TAG_ICONS[fams[0]], fams[0]);
+  return `<span class="family-flag family-split"
+    style="--family-a:var(--family-${fams[0].toLowerCase()});--family-b:var(--family-${fams[1].toLowerCase()})"
     title="${esc(fams.join(' + '))}">${icon}</span>`;
-}
-
-/** The level unit u plays at in slot i of leader L's army. */
-function levelInSlot(u, L, i) {
-  const A = RULES.armySlots;
-  const slot = armyOf(L)[i];
-  const tier = A.tiers[slot.tier];
-  if (!u || u.synthetic) return { level: null, match: false, bonus: 0, boosted: false, xpMax: false };
-  const m = miniOf(u);
-  const match = i === A.leaderSlot ? u.id === L.id : slotMatches(slot.type, m);
-  const xp = slot.boost ? Math.max(u.xpLevel, RULES.maxXpLevel) : u.xpLevel;
-  const bonus = match ? tier.bonus : 0;
-  return {
-    level: Math.min(RULES.maxLevel, xp + u.rarity + u.talents + bonus),
-    match, bonus,
-    boosted: slot.boost && u.xpLevel < RULES.maxXpLevel,
-    xpMax: xp >= RULES.maxXpLevel,
-  };
-}
-
-// Game army codes
-// A code is "rumblo:" and base64 protobuf { 1: leader index, 2: leader talent, 3: [{ 1: mini index, 2: talent }] x6 },
-// with the game's short IDs as indices (static/army_code_minis.json).
-let CODE_TABLE = null;
-onTablesReload(() => { CODE_TABLE = null; });
-async function codeTable() {
-  if (!CODE_TABLE) {
-    const t = await getJson('/static/army_code_minis.json', 'the army code table');
-    const toSlug = new Map(Object.entries(t.shortIds).map(([id, slug]) => [Number(id), slug]));
-    const toId = new Map([...toSlug].map(([id, slug]) => [slug, id]));
-    // Codes list talents in the game's order; talentOrder[slug][gameIndex] gives the tracker's index.
-    const order = t.talentOrder || {};
-    const toApp = (slug, gameIdx) => order[slug]?.[gameIdx] ?? gameIdx;
-    const toGame = (slug, appIdx) => {
-      const k = order[slug]?.indexOf(appIdx) ?? -1;
-      return k >= 0 ? k : appIdx;
-    };
-    CODE_TABLE = { prefix: t.prefix || 'rumblo:', toSlug, toId, toApp, toGame };
-  }
-  return CODE_TABLE;
-}
-
-function pbVarint(n, out) {
-  do {
-    let b = n & 0x7f;
-    n >>>= 7;
-    if (n) b |= 0x80;
-    out.push(b);
-  } while (n);
-}
-
-export async function encodeArmyCode(d) {
-  const table = await codeTable();
-  const idx = (slug) => table.toId.get(slug) ?? -1;
-  const talentOf = (slug) => table.toGame(slug, talentIndex(d, BY_SLUG.get(slug), ownedUnit(slug)) ?? 0);
-  if (idx(d.leader) < 0) throw new Error('Choose a leader first.');
-  const out = [];
-  out.push(0x08);
-  pbVarint(idx(d.leader), out);
-  out.push(0x10);
-  pbVarint(talentOf(d.leader), out);
-  for (const slug of d.minis) {
-    if (!slug || idx(slug) < 0) continue;
-    const inner = [0x08];
-    pbVarint(idx(slug), inner);
-    inner.push(0x10);
-    pbVarint(talentOf(slug), inner);
-    out.push(0x1a);
-    pbVarint(inner.length, out);
-    out.push(...inner);
-  }
-  return `${table.prefix}${btoa(String.fromCharCode(...out))}`;
-}
-
-async function decodeArmyCode(code) {
-  const table = await codeTable();
-  const raw = atob(code.trim().replace(/^rumblo:/i, ''));
-  const b = Uint8Array.from(raw, (c) => c.charCodeAt(0));
-  const varint = (p) => {
-    let r = 0, s = 0, x;
-    do {
-      x = b[p++];
-      r |= (x & 0x7f) << s;
-      s += 7;
-    } while (x & 0x80);
-    return [r, p];
-  };
-  const fields = (s, e) => {
-    const res = [];
-    let p = s;
-    while (p < e) {
-      let t;
-      [t, p] = varint(p);
-      const fn = t >> 3, wt = t & 7;
-      if (wt === 0) {
-        let v;
-        [v, p] = varint(p);
-        res.push({ fn, v });
-      }
-      else if (wt === 2) {
-        let l;
-        [l, p] = varint(p);
-        res.push({ fn, sub: fields(p, p + l) });
-        p += l;
-      }
-      else throw new Error('Not a Warcraft Rumble army code.');
-    }
-    return res;
-  };
-  const top = fields(0, b.length);
-  const slugAt = (i) => {
-    const s = table.toSlug.get(i);
-    if (!s) throw new Error(`Unknown mini number ${i} in code.`);
-    return s;
-  };
-  const leader = slugAt(top.find((f) => f.fn === 1)?.v ?? -1);
-  const talents = { [leader]: table.toApp(leader, top.find((f) => f.fn === 2)?.v ?? 0) };
-  const minis = top.filter((f) => f.fn === 3).map((f) => {
-    const slug = slugAt(f.sub.find((x) => x.fn === 1)?.v ?? 0);
-    talents[slug] = table.toApp(slug, f.sub.find((x) => x.fn === 2)?.v ?? 0);
-    return slug;
-  });
-  while (minis.length < 6) minis.push(null);
-  return { leader, minis: minis.slice(0, 6), talents };
 }
 
 // Draft
@@ -197,9 +47,10 @@ export const nameField = (attrs, value, placeholder = 'Name this army') =>
   `<input ${attributes(attrs)} value="${esc(value || '')}" maxlength="${LIMITS.armyName}"
     placeholder="${esc(placeholder)}" aria-label="Army name">`;
 
-export const descriptionField = (attrs, text) =>
+export const descriptionField = (attrs, description) =>
   `<textarea ${attributes(attrs)} rows="2" maxlength="${LIMITS.description}"
-    placeholder="Description (optional). When to use it, what it counters." aria-label="Army description">${esc(text || '')}</textarea>`;
+    placeholder="Description (optional). When to use it, what it counters."
+    aria-label="Army description">${esc(description || '')}</textarea>`;
 
 /**
  * Tag chips with remove buttons (`removeAttr` is the buttons' data attribute) and an input for new tags. With
@@ -225,21 +76,6 @@ function tagsInUse() {
   return [...used, ...(builder.draft?.tags || []).filter((t) => !used.some((x) => x.toLowerCase() === t.toLowerCase()))];
 }
 
-/**
- * A key in a tag box: Enter or a comma adds the typed tag, Backspace in an empty box removes the last one. Returns the
- * new tags, or null when the key changes nothing.
- */
-export function tagKey(e, tags, known) {
-  const input = e.target;
-  if (e.key === 'Enter' || e.key === ',') {
-    e.preventDefault();
-    const next = withTag(tags, input.value, known);
-    input.value = '';
-    return next;
-  }
-  if (e.key === 'Backspace' && !input.value && tags.length) return tags.slice(0, -1);
-  return null;
-}
 // The server keeps the draft (drafts.json, one per account). Saves wait a moment, so typing makes one save.
 function loadDraft() {
   const d = state.draft;
@@ -273,18 +109,11 @@ window.addEventListener('pagehide', () => {
 });
 
 /** The unit in slot i of the draft; slot 0 is the leader. */
-function draftUnit(i) {
+export function draftUnit(i) {
   const d = builder.draft;
   return ownedUnit(i === 0 ? d.leader : d.minis[i - 1]);
 }
 
-/** The talent a mini uses in an army: the army's choice, else the first one the player has unlocked, else the first. */
-function talentIndex(army, m, u) {
-  if (!m?.talents.length) return null;
-  const chosen = army.talents?.[m.slug];
-  if (Number.isInteger(chosen) && chosen >= 0 && chosen < m.talents.length) return chosen;
-  return (u ? effectivePicks(u)[0] : null) ?? 0;
-}
 const equippedTalent = (u) => talentIndex(builder.draft, miniOf(u), u);
 
 /**
@@ -318,7 +147,7 @@ function armyToolbar(d) {
   return `<div class="army-toolbar panel">
     <label>Saved armies <select id="armySaved"><option value="">(unsaved)</option>${options}</select></label>
     ${nameField({ id: 'armyName' }, builder.nameText, d.id ? `Rename "${d.name}"` : 'Name this army')}
-    <button class="btn" data-army-action="save">${d.id ? 'Save' : 'Save as new'}</button>
+    <button class="button" data-army-action="save">${d.id ? 'Save' : 'Save as new'}</button>
     ${d.id ? '<button class="chip" data-army-action="saveas">Save as copy</button>' : ''}
     <button class="chip" data-army-action="new">New</button>
     ${d.id ? '<button class="chip danger" data-army-action="delete">Delete</button>' : ''}
@@ -333,7 +162,7 @@ function armyToolbar(d) {
       <button class="chip" data-army-action="import">Import code</button>
       <button class="chip" data-army-action="export">Copy code</button>
     </span>
-    ${builder.codeMsg ? `<span class="small ${builder.codeMsg.ok ? 'cost-ok' : 'cost-no'}">${esc(builder.codeMsg.text)}</span>` : ''}
+    ${builder.codeMsg ? `<span class="small ${builder.codeMsg.ok ? 'text-good' : 'text-warn'}">${esc(builder.codeMsg.text)}</span>` : ''}
   </div>`;
 }
 
@@ -354,22 +183,23 @@ function armySlot(i, s, leader) {
     : u ? '<span class="muted">–</span>' : '';
   const talentButton = u && talent
     ? `<button class="army-talent${effectivePicks(u).includes(ti) ? '' : ' locked'}" data-army-talent="${i}"
-      title="Talent: ${esc(talent.name)}. Click to choose another.">${ico(talent.icon,
-      talent.name).replace('class="ico"', 'class="ico talent-ico"')}</button>`
+      title="Talent: ${esc(talent.name)}. Click to choose another.">${iconImage(talent.icon,
+      talent.name).replace('class="icon"', 'class="icon talent-icon"')}</button>`
     : '';
-  return `<div class="${cls}" data-army-drop-slot="${i}" style="--tc:${tier.color};--rc:${u ? rarityColor(u.rarity) : 'var(--line)'}">
+  return `<div class="${cls}" data-army-drop-slot="${i}" style="--type-color:${tier.color};--rarity-color:${u
+    ? rarityColor(u.rarity) : 'var(--line)'}">
     <div class="army-slot-head${typeIcon ? ' has-icon' : ''}" title="${esc(typeLabel)} · ${tier.name}${tier.bonus
       ? ` +${tier.bonus}` : ''}${slot.boost ? ' · Boost' : ''}">
-      ${typeIcon ? `<span class="medal">${ico(typeIcon, typeLabel)}</span>` : ''}<span
+      ${typeIcon ? `<span class="medal">${iconImage(typeIcon, typeLabel)}</span>` : ''}<span
         class="army-slot-label">${esc(typeLabel)}</span>${slot.boost ? '<span class="boost-mark">⚡</span>' : ''}
     </div>
     <button class="army-slot-body" data-army-slot="${i}" ${u && i > 0 ? `draggable="true" data-army-drag-slot="${i}"` : ''}
       aria-label="${u ? `Remove ${esc(m.name)}` : 'Empty slot'}" title="${u ? 'Click to remove it, right-click for details' : ''}">
-      ${m ? famFlag(m) : ''}
+      ${m ? familyFlag(m) : ''}
       ${m ? `<img class="portrait" src="/static/${m.art}" alt="" draggable="false">` : '<span class="add">+</span>'}
       ${m ? `<span class="cost">${m.cost}</span>` : ''}
-      ${lv.match && lv.bonus ? `<span class="up" title="Slot bonus +${lv.bonus}">▲${lv.bonus}</span>` : ''}
-      ${m ? `<span class="aname">${esc(m.name)}</span>` : `<span class="aname muted">${empty}</span>`}
+      ${lv.match && lv.bonus ? `<span class="slot-bonus" title="Slot bonus +${lv.bonus}">▲${lv.bonus}</span>` : ''}
+      ${m ? `<span class="army-slot-name">${esc(m.name)}</span>` : `<span class="army-slot-name muted">${empty}</span>`}
     </button>
     <div class="army-slot-foot">${level}${talentButton}</div>
     ${builder.talentPop === i && u && talent ? talentPopup(i, u) : ''}
@@ -428,124 +258,6 @@ export function renderArmy() {
   renderPool('units');
 }
 
-// The Leaders and Units & Spells pools.
-const POOL_DEFAULT = { leaders: { q: '', fam: [], traits: [], traitMode: 'all', sort: 'level' },
-  units: { q: '', fam: [], type: [], traits: [], traitMode: 'all', sort: 'level' } };
-function pools() {
-  if (!builder.pools) {
-    const s = store.get('armyPools', {});
-    builder.pools = { leaders: { ...POOL_DEFAULT.leaders, ...s.leaders, q: '' }, units: { ...POOL_DEFAULT.units, ...s.units, q: '' } };
-  }
-  return builder.pools;
-}
-const savePools = () => store.set('armyPools', builder.pools);
-
-/** The current leader's slots (1-6) this mini matches, Wildcard slots only when asked for. */
-function matchingSlots(m, includeWildcard = false) {
-  const L = draftUnit(0);
-  if (!L || !m) return [];
-  return armyOf(L).map((s, i) => (i > 0 && (includeWildcard || s.type !== 'Wildcard') && slotMatches(s.type, m)
-    ? i : null)).filter((x) => x != null);
-}
-
-function poolItems(kind) {
-  const p = pools()[kind];
-  const d = builder.draft;
-  const used = new Set([d.leader, ...d.minis].filter(Boolean));
-  const q = p.q.trim().toLowerCase();
-  const items = state.units
-    .map((u) => ({ u, m: miniOf(u) }))
-    .filter(({ u, m }) => m && !u.synthetic && (kind === 'leaders' ? m.category === 'Leader' : m.category !== 'Leader'))
-    .filter(({ m }) => !q || m.name.toLowerCase().includes(q))
-    .filter(({ m }) => !p.fam.length || familiesOf(m).some((f) => p.fam.includes(f)))
-    .filter(({ m }) => kind === 'leaders' || !p.type.length || p.type.includes(m.category))
-    .filter(({ m }) => !p.traits.length || p.traits[p.traitMode === 'any' ? 'some' : 'every']((t) => m.traits.some((x) => x.name === t)))
-    .map((x) => ({ ...x, used: used.has(x.u.slug), level: kind === 'leaders' ? totalLevel(x.u) : x.u.level,
-      slots: kind === 'units' ? matchingSlots(x.m) : [] }));
-  const by = {
-    level: (a, b) => b.level - a.level || a.m.name.localeCompare(b.m.name),
-    name: (a, b) => a.m.name.localeCompare(b.m.name),
-    cost: (a, b) => a.m.cost - b.m.cost || a.m.name.localeCompare(b.m.name),
-    match: (a, b) => b.slots.length - a.slots.length || b.level - a.level,
-  }[p.sort] || ((a, b) => b.level - a.level);
-  return items.sort(by);
-}
-
-function poolCard(x, kind) {
-  const { u, m } = x;
-  const L = draftUnit(0);
-  const tip = kind === 'units' && L ? (x.slots.length ? `Matches slot ${x.slots.join(', ')}` : 'No matching slot') : '';
-  return `<button class="pcard${x.used ? ' used' : ''}${x.slots.length ? ' fits' : ''}" draggable="true"
-    data-pool-slug="${u.slug}" data-pool-kind="${kind}" style="--rc:${rarityColor(u.rarity)}"
-    title="${esc(m.name)}${tip ? ` · ${tip}` : ''}${x.used ? ' · in this army' : ''}">
-    <img src="/static/${m.art}" alt="" draggable="false">
-    <span class="pcost">${m.cost}</span>
-    <span class="pname">${esc(m.name)}</span>
-    <span class="plvl">${x.level}</span>
-  </button>`;
-}
-
-function renderPool(kind) {
-  const el = $(`#pool-${kind}`);
-  if (!el) return;
-  const p = pools()[kind];
-  const famChips = FAMILIES.map((f) => `<button class="chip small-chip" aria-pressed="${p.fam.includes(f)}"
-    data-pool-family="${f}" data-pool="${kind}" title="${f}">${ico(TAG_ICONS[f], f)}</button>`);
-  const typeChips = kind === 'units' ? [['Unit', 'Units'], ['Spell', 'Spells']].map(([k, l]) =>
-    `<button class="chip small-chip" aria-pressed="${p.type.includes(k)}" data-pool-type="${k}"
-    data-pool="${kind}">${l}</button>`).join('') : '';
-  const sorts = [['level', 'Level'], ['name', 'Name'], ['cost', 'Cost'], ...(kind === 'units' ? [['match', 'Fits slots']] : [])];
-  // traits present in this pool
-  const inPane = new Set(state.units.map(miniOf).filter((m) => m
-    && (kind === 'leaders' ? m.category === 'Leader' : m.category !== 'Leader')).flatMap((m) => m.traits.map((t) => t.name)));
-  const traits = allTraits().filter((t) => inPane.has(t.name));
-  const picker = traitPicker({
-    scope: kind, traits, filter: p, open: builder.poolTraitOpen === kind, query: builder.poolTraitQ[kind] || '',
-    label: `Traits${p.traits.length ? ` (${p.traits.length})` : ''}`, buttonClass: 'chip small-chip',
-  });
-  el.innerHTML = `<div class="pool-head">
-      <h2>${kind === 'leaders' ? 'Leaders' : 'Units & Spells'}</h2>
-      <input class="pool-search keep" type="search" data-pool-search="${kind}" placeholder="Search…" value="${esc(p.q)}">
-    </div>
-    ${(() => {
-      const sortSel = `<select data-pool-sort="${kind}" aria-label="Sort">${sorts.map(([k, l]) =>
-        `<option value="${k}" ${p.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-      const active = !!(p.q || p.fam.length || p.type?.length || p.traits.length);
-      const clearBtn = `<button class="chip small-chip clear-filters" data-pool-clear="${kind}"
-        ${active ? '' : 'disabled'}>✕ Clear filters</button>`;
-      if (kind !== 'leaders') return `<div class="pool-filters">${typeChips}${famChips.join('')}${picker}${clearBtn}${sortSel}</div>`;
-      // The Leaders pool shows the factions in two rows of three.
-      return `<div class="pool-filters pool-filters-rows">
-        <div class="pool-filter-row">${famChips.slice(0, 3).join('')}${picker}</div>
-        <div class="pool-filter-row">${famChips.slice(3).join('')}${clearBtn}${sortSel}</div>
-      </div>`;
-    })()}
-    <div class="pool-well"><div class="pool-grid" id="pool-grid-${kind}"></div></div>`;
-  renderPoolGrid(kind);
-}
-
-function renderPoolGrid(kind) {
-  const grid = $(`#pool-grid-${kind}`);
-  if (!grid) return;
-  const items = poolItems(kind);
-  grid.innerHTML = items.map((x) => poolCard(x, kind)).join('') || '<p class="muted small">Nothing matches.</p>';
-  if (!grid.dataset.fadeBound) {
-    grid.dataset.fadeBound = '1';
-    grid.addEventListener('scroll', () => poolFade(grid), { passive: true });
-    // Also on first display and on resize.
-    if (window.ResizeObserver) new ResizeObserver(() => poolFade(grid)).observe(grid);
-  }
-  poolFade(grid);
-}
-
-/** Marks the pool edges that have more beyond them, which CSS fades. */
-function poolFade(grid) {
-  const up = grid.scrollTop > 2;
-  const down = grid.scrollTop + grid.clientHeight < grid.scrollHeight - 2;
-  const more = up && down ? 'both' : up ? 'top' : down ? 'bottom' : '';
-  if (grid.dataset.more !== more) grid.dataset.more = more;
-}
-
 // Placing minis
 function placeLeader(slug) {
   builder.draft.leader = slug;
@@ -565,7 +277,7 @@ function placeMini(slug, i) {
 }
 
 /** Adds a pool card. A leader replaces the leader; a mini takes the best empty slot. */
-function addFromPool(slug, kind) {
+export function addFromPool(slug, kind) {
   const d = builder.draft;
   if (kind === 'leaders') return placeLeader(slug);
   if (d.minis.includes(slug)) {
@@ -603,13 +315,13 @@ function talentPopup(i, u) {
   const m = miniOf(u);
   const owned = new Set(effectivePicks(u));
   const current = equippedTalent(u);
-  return `<div class="talent-pop" role="dialog" aria-label="Choose a talent for ${esc(m.name)}">
-    <div class="talent-pop-title">${esc(m.name)}: talent</div>
-    ${m.talents.map((t, k) => `<button class="talent-opt${k === current ? ' on' : ''}${owned.has(k) ? '' : ' locked'}"
+  return `<div class="talent-popup" role="dialog" aria-label="Choose a talent for ${esc(m.name)}">
+    <div class="talent-popup-title">${esc(m.name)}: talent</div>
+    ${m.talents.map((t, k) => `<button class="talent-option${k === current ? ' on' : ''}${owned.has(k) ? '' : ' locked'}"
       data-army-talent-pick="${k}">
       <img src="/static/${t.icon}" alt="">
       <span><b>${esc(t.name)}</b>${owned.has(k) ? '' : ' <small class="muted">(not unlocked)</small>'}<span
-        class="small desc">${esc(t.description)}</span></span>
+        class="small description">${esc(t.description)}</span></span>
     </button>`).join('')}
   </div>`;
 }
@@ -620,87 +332,103 @@ export async function persistArmies(list) {
   await poll();
 }
 
-async function armyAction(act) {
+/** Replaces the draft, saves it and redraws the board. */
+function setDraft(draft) {
+  builder.draft = draft;
+  saveDraftLocal();
+  renderArmy();
+}
+
+/** Empties the board but keeps the name and the saved army. */
+function clearBoard() {
+  builder.talentPop = null;
+  setDraft({ ...builder.draft, leader: null, minis: [null, null, null, null, null, null], talents: {} });
+}
+
+async function importCode() {
+  const text = ($('#armyCode')?.value || '').trim();
+  builder.codeText = text;
+  try {
+    const army = await decodeArmyCode(text);
+    builder.codeMsg = { ok: true, text: 'Army imported.' };
+    // a failed import keeps the text for correction
+    builder.codeText = '';
+    setDraft({ ...emptyDraft(), name: 'Imported army', ...army });
+  } catch (err) {
+    builder.codeMsg = { ok: false, text: err.message || 'Could not read that code.' };
+    renderArmy();
+  }
+}
+
+async function exportCode() {
+  try {
+    const code = await encodeArmyCode(builder.draft);
+    builder.codeText = code;
+    builder.codeMsg = { ok: true, text: (await copyText(code)) ? 'Code copied.' : 'Code ready. Copy it from the box.' };
+  } catch (err) {
+    builder.codeMsg = { ok: false, text: err.message };
+  }
+  renderArmy();
+}
+
+async function deleteSaved() {
+  const d = builder.draft;
+  if (!d.id) return;
+  const ok = await confirmDialog(`"${d.name}" is removed from your saved armies.`,
+    { title: 'Delete this army?', ok: 'Delete', danger: true });
+  if (!ok) return;
+  await persistArmies((state.savedArmies || []).filter((x) => x.id !== d.id));
+  setDraft({ ...d, id: null });
+}
+
+/** Saves the draft, over its saved army or (`asNew`, or when it has none) as a new one. */
+async function saveArmy(asNew) {
   const d = builder.draft;
   const list = [...(state.savedArmies || [])];
-  if (act === 'new') { builder.draft = emptyDraft(); builder.nameText = ''; saveDraftLocal(); renderArmy(); return; }
-  if (act === 'clear') {
-    // Empties the board but keeps the name and the saved army.
-    builder.draft = { ...d, leader: null, minis: [null, null, null, null, null, null], talents: {} };
-    builder.talentPop = null;
-    saveDraftLocal(); renderArmy(); return;
-  }
-  if (act === 'import') {
-    const text = ($('#armyCode')?.value || '').trim();
-    builder.codeText = text;
-    try {
-      const a = await decodeArmyCode(text);
-      builder.draft = { ...emptyDraft(), name: 'Imported army', ...a };
-      builder.codeMsg = { ok: true, text: 'Army imported.' };
-      builder.codeText = ''; // a failed import keeps the text for correction
-      saveDraftLocal();
-    } catch (err) { builder.codeMsg = { ok: false, text: err.message || 'Could not read that code.' }; }
-    renderArmy(); return;
-  }
-  if (act === 'export') {
-    try {
-      const code = await encodeArmyCode(d);
-      builder.codeText = code;
-      builder.codeMsg = { ok: true, text: (await copyText(code)) ? 'Code copied.' : 'Code ready. Copy it from the box.' };
-    } catch (err) { builder.codeMsg = { ok: false, text: err.message }; }
-    renderArmy(); return;
-  }
-  if (act === 'delete' && d.id) {
-    if (!(await confirmDialog(`"${d.name}" is removed from your saved armies.`,
-      { title: 'Delete this army?', ok: 'Delete', danger: true }))) return;
-    await persistArmies(list.filter((a) => a.id !== d.id));
-    builder.draft = { ...d, id: null };
-    saveDraftLocal(); renderArmy(); return;
-  }
-  if (act === 'save' || act === 'saveas') {
-    const id = act === 'save' && d.id ? d.id : `a${Date.now().toString(36)}`;
-    // Typed name, else the saved name, else a generated one.
-    const typed = ($('#armyName')?.value || '').trim();
-    const leaderName = d.leader ? BY_SLUG.get(d.leader)?.name : null;
-    const fallback = act === 'save' && d.id ? d.name : `${leaderName ? `${leaderName} army` : 'Army'} ${list.length + 1}`;
-    const name = typed || fallback;
-    // A tag typed but not confirmed with Enter is kept too.
-    d.tags = withTag(d.tags || [], $('#armyTagInput')?.value || '', tagsInUse()) || d.tags || [];
-    const entry = { id, name, leader: d.leader, minis: d.minis, talents: d.talents, description: d.description || '', tags: d.tags || [] };
-    const idx = list.findIndex((a) => a.id === id);
-    if (idx >= 0) list[idx] = entry;
-    else list.push(entry);
-    await persistArmies(list);
-    builder.draft = { ...d, id, name };
-    builder.nameText = '';
-    builder.codeMsg = { ok: true, text: `Saved "${name}".` };
-    saveDraftLocal(); renderArmy();
+  const replace = !asNew && d.id;
+  const id = replace ? d.id : `a${Date.now().toString(36)}`;
+  // the typed name, else the saved name, else a generated one
+  const leaderName = d.leader ? BY_SLUG.get(d.leader)?.name : null;
+  const fallback = replace ? d.name : `${leaderName ? `${leaderName} army` : 'Army'} ${list.length + 1}`;
+  const name = ($('#armyName')?.value || '').trim() || fallback;
+  // a tag typed but not confirmed with Enter is kept too
+  const tags = withTag(d.tags || [], $('#armyTagInput')?.value || '', tagsInUse()) || d.tags || [];
+  const entry = { id, name, leader: d.leader, minis: d.minis, talents: d.talents, description: d.description || '', tags };
+  const at = list.findIndex((x) => x.id === id);
+  if (at >= 0) list[at] = entry;
+  else list.push(entry);
+  await persistArmies(list);
+  builder.nameText = '';
+  builder.codeMsg = { ok: true, text: `Saved "${name}".` };
+  setDraft({ ...d, id, name, tags });
+}
+
+async function runArmyAction(name) {
+  try {
+    await ARMY_ACTIONS[name]?.();
+  } catch (err) {
+    alertDialog(err.message, { title: 'Something went wrong' });
   }
 }
 
-/** Changes a pool's filters, remembers them and redraws the pool. */
-function updatePool(kind, change) {
-  change(pools()[kind]);
-  savePools();
-  renderPool(kind);
-}
+// what the toolbar's buttons do (data-army-action)
+const ARMY_ACTIONS = {
+  new: () => {
+    builder.nameText = '';
+    setDraft(emptyDraft());
+  },
+  clear: clearBoard,
+  import: importCode,
+  export: exportCode,
+  delete: deleteSaved,
+  save: () => saveArmy(false),
+  saveas: () => saveArmy(true),
+};
 
 function closePopups() {
-  if (builder.talentPop != null) { builder.talentPop = null; renderArmy(); }
-}
-
-/** Clicks on a pool's filters and tiles. Returns false when the click wasn't one of them. */
-function poolClick(t) {
-  const kind = t.dataset.pool;
-  if (t.dataset.poolSlug) addFromPool(t.dataset.poolSlug, t.dataset.poolKind);
-  else if (t.dataset.poolFamily) updatePool(kind, (p) => toggleIn(p.fam, t.dataset.poolFamily));
-  else if (t.dataset.poolType) updatePool(kind, (p) => toggleIn(p.type, t.dataset.poolType));
-  else if (t.dataset.poolTrait) updatePool(kind, (p) => toggleIn(p.traits, t.dataset.poolTrait));
-  // Clear filters keeps the sort and the trait match mode.
-  else if (t.dataset.poolClear) updatePool(t.dataset.poolClear,
-    (p) => Object.assign(p, { q: '', fam: [], traits: [], ...(p.type ? { type: [] } : {}) }));
-  else return false;
-  return true;
+  if (builder.talentPop == null) return;
+  builder.talentPop = null;
+  renderArmy();
 }
 
 /** Clicks on the board: slots, talents, tags and the action buttons. */
@@ -727,7 +455,7 @@ function boardClick(t) {
     saveDraftLocal();
     renderArmy();
   } else if (t.dataset.armyAction) {
-    armyAction(t.dataset.armyAction).catch((err) => alertDialog(err.message, { title: 'Something went wrong' }));
+    runArmyAction(t.dataset.armyAction);
   }
 }
 
@@ -847,7 +575,7 @@ export function bindArmy() {
   });
   page.addEventListener('click', (e) => {
     // A click outside an open pop-up closes it.
-    if (builder.talentPop != null && !e.target.closest('.talent-pop,[data-army-talent]')) { builder.talentPop = null; renderArmy(); }
+    if (!e.target.closest('.talent-popup,[data-army-talent]')) closePopups();
     const t = e.target.closest(CLICKABLE);
     if (t && !poolClick(t)) boardClick(t);
   });

@@ -55,10 +55,10 @@ export function renderUpdate() {
     }
     else if (u.state === 'restarting') body = '<p>Installing. The tracker restarts in a moment and this window reloads by itself.</p>';
     else {
-      body = `${u.state === 'failed' ? `<p class="cost-no">The update didn't work: ${esc(u.error || 'unknown error')}</p>` : ''}
+      body = `${u.state === 'failed' ? `<p class="text-warn">The update didn't work: ${esc(u.error || 'unknown error')}</p>` : ''}
         <p>${u.auto ? 'The tracker can download and install it now, then restart. Your data is kept.'
           : 'Download it from GitHub Releases; your data is kept.'}</p>
-        <div class="dialog-actions"><button class="btn" data-update-now>${u.auto && u.state !== 'failed'
+        <div class="dialog-actions"><button class="button" data-update-now>${u.auto && u.state !== 'failed'
           ? 'Download now' : 'Open GitHub Releases'}</button>
           <button class="chip" data-update-later>Later</button></div>`;
     }

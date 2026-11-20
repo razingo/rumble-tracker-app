@@ -20,7 +20,7 @@ $ink = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(25
 $g.DrawString('R', $font, $ink, (New-Object System.Drawing.RectangleF 0, 1, 32, 32), $sf)
 $g.Dispose()
 $tray = New-Object System.Windows.Forms.NotifyIcon
-# the exe's icon; the fallback if it can't be read
+# the exe's icon, or the fallback when it can't be read
 try { $tray.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($env:RT_EXE) }
 catch { $tray.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon()) }
 $tray.Text = $env:RT_TITLE
@@ -37,8 +37,8 @@ $tray.add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Say 'open' } })
 $tray.ContextMenuStrip = $menu
 $tray.Visible = $true
 $parent = [int]$env:RT_PARENT
-# Windows signing out or shutting down: tell the tracker (it writes its backup and stops), then give it a few
-# seconds. A hidden top-level window receives WM_ENDSESSION; it needs a little C#.
+# When Windows signs out or shuts down, the tracker is told so it can write its backup and stop, and it gets a few
+# seconds for that. A hidden top-level window receives WM_ENDSESSION, which takes a little C#.
 try {
   Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
 using System; using System.Diagnostics; using System.Windows.Forms;
@@ -57,7 +57,7 @@ public class RtEndSession : NativeWindow {
 '@
   $endSession = New-Object RtEndSession $parent
 } catch { [Console]::Error.WriteLine("shutdown watch: $_") }
-# every 2 s: exit when the tracker process ends; report whether Warcraft Rumble runs ("game 1" / "game 0") when it changes
+# Every 2 seconds: exit when the tracker process has ended, and report a change in whether Warcraft Rumble runs.
 $global:lastGame = ''
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 2000

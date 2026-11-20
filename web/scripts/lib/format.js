@@ -1,5 +1,5 @@
 // Display formatting shared by the page and the server. Numbers and dates are always shown in en-US.
-import { MINUTE, HOUR, MB } from './constants.js';
+import { SECOND, MINUTE, HOUR, DAY, MB } from './constants.js';
 
 const LOCALE = 'en-US';
 
@@ -34,30 +34,30 @@ export function localDay(t = Date.now()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** A duration in short form: "2d 3h", "4h 12m", "35m". */
+/** A countdown in short form: "2d 3h", "4h 12m", "35m". */
 export function span(ms) {
   const m = Math.max(0, Math.round(ms / MINUTE));
-  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), min = m % 60;
+  const perDay = DAY / MINUTE, perHour = HOUR / MINUTE;
+  const d = Math.floor(m / perDay), h = Math.floor((m % perDay) / perHour), min = m % perHour;
   if (d) return `${d}d ${h}h`;
   if (h) return `${h}h ${min}m`;
   return `${min}m`;
 }
 
-/** A duration for a sentence: "2 days", "5 h", "20 min". */
+/** A duration for a sentence: "2 days", "5 hours", "20 minutes". */
 export function spanWords(ms) {
-  const h = Math.round(ms / HOUR);
-  if (h >= 48) return `${Math.round(h / 24)} days`;
-  if (h >= 1) return `${h} h`;
-  return `${Math.max(1, Math.round(ms / MINUTE))} min`;
+  if (ms >= 2 * DAY) return plural(Math.round(ms / DAY), 'day');
+  if (ms >= HOUR) return plural(Math.round(ms / HOUR), 'hour');
+  return plural(Math.max(1, Math.round(ms / MINUTE)), 'minute');
 }
 
-/** How long ago a time was: "12s ago", "5 min ago", "3 h ago", then the date. */
+/** How long ago a time was: "12 seconds ago", "5 minutes ago", "3 hours ago", then the date. */
 export function ago(t) {
   if (!t) return 'never';
-  const s = Math.max(0, Math.round((Date.now() - new Date(t)) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const ms = Math.max(0, Date.now() - new Date(t));
+  if (ms < MINUTE) return `${plural(Math.round(ms / SECOND), 'second')} ago`;
+  if (ms < HOUR) return `${plural(Math.round(ms / MINUTE), 'minute')} ago`;
+  if (ms < DAY) return `${plural(Math.round(ms / HOUR), 'hour')} ago`;
   return dateTime(t);
 }
 

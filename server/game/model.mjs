@@ -1,6 +1,6 @@
 // Decodes save records into units, currencies and shop data; detects changes between scans and learns the XP table
 // and purchase costs.
-import { parseMessage, sub, first, num, readId } from './protobuf.mjs';
+import { parseMessage, fieldsOf, findField, numberOf, readId, textOf } from '../../web/scripts/lib/protobuf.js';
 
 /**
  * Unit record fields:
@@ -12,24 +12,24 @@ export function parseUnits(buf) {
   return parseMessage(buf)
     .filter((f) => f.fn === 1 && f.wt === 2)
     .map((f) => {
-      const p = sub(buf, f);
-      const u = { id: readId(buf, first(p, 1)), level: 0, xp: 0, xpNeeded: 0, xpLevel: 0, bonus: 0, talents: 0,
+      const p = fieldsOf(buf, f);
+      const u = { id: readId(buf, findField(p, 1)), level: 0, xp: 0, xpNeeded: 0, xpLevel: 0, bonus: 0, talents: 0,
         rarity: 0, stars: 0, xpWeight: 0 };
       for (const x of p) {
         switch (x.fn) {
-          case 2: u.level = num(x); break;
-          case 3: u.xp = num(x); break;
+          case 2: u.level = numberOf(x); break;
+          case 3: u.xp = numberOf(x); break;
           case 5: u.xpWeight = x.wt === 1 ? Math.round(x.f64 * 1000) / 1000 : 0; break;
-          case 6: u.xpNeeded = num(x); break;
-          case 7: u.xpLevel = num(x); break;
-          case 8: u.bonus = num(x); break;
+          case 6: u.xpNeeded = numberOf(x); break;
+          case 7: u.xpLevel = numberOf(x); break;
+          case 8: u.bonus = numberOf(x); break;
           case 9: {
-            const q = sub(buf, x);
-            u.talents = num(first(q, 1));
-            u.rarity = num(first(q, 2));
+            const q = fieldsOf(buf, x);
+            u.talents = numberOf(findField(q, 1));
+            u.rarity = numberOf(findField(q, 2));
             break;
           }
-          case 10: u.stars = num(x); break;
+          case 10: u.stars = numberOf(x); break;
         }
       }
       return u;
@@ -43,12 +43,12 @@ export function parseCurrencies(buf) {
   const map = new Map();
   for (const f of parseMessage(buf)) {
     if (f.wt !== 2 || (f.fn !== 1 && f.fn !== 4)) continue;
-    const p = sub(buf, f);
-    const id = readId(buf, first(p, 1));
+    const p = fieldsOf(buf, f);
+    const id = readId(buf, findField(p, 1));
     if (!id) continue;
     const c = map.get(id) || { id, balance: 0, lifetime: 0 };
-    if (f.fn === 1) c.balance = num(first(p, 2));
-    else c.lifetime = num(first(p, 2));
+    if (f.fn === 1) c.balance = numberOf(findField(p, 2));
+    else c.lifetime = numberOf(findField(p, 2));
     map.set(id, c);
   }
   return [...map.values()];
@@ -63,11 +63,11 @@ export function parseActiveEvents(buf) {
   const ids = new Set();
   for (const slot of parseMessage(buf)) {
     if (slot.fn !== 5 || slot.wt !== 2) continue; // store slots
-    for (const offer of sub(buf, slot)) {
+    for (const offer of fieldsOf(buf, slot)) {
       if (offer.fn !== 7 || offer.wt !== 2) continue;
-      for (const ev of sub(buf, offer)) {
+      for (const ev of fieldsOf(buf, offer)) {
         if (ev.fn !== 16 || ev.wt !== 2) continue;
-        const id = readId(buf, first(sub(buf, ev), 2));
+        const id = readId(buf, findField(fieldsOf(buf, ev), 2));
         if (id) ids.add(id);
       }
     }
@@ -81,7 +81,7 @@ export function parseIncomeBonuses(buf) {
   const ids = new Set();
   for (const f of parseMessage(buf)) {
     if (f.fn !== 23 || f.wt !== 2) continue;
-    const id = readId(buf, first(sub(buf, f), 3));
+    const id = readId(buf, findField(fieldsOf(buf, f), 3));
     if (id) ids.add(id);
   }
   return [...ids];
@@ -90,7 +90,7 @@ export function parseIncomeBonuses(buf) {
 const timeOf = (buf, f) => {
   // a time is { 1: fixed64 milliseconds }
   if (!f || f.wt !== 2) return null;
-  const t = first(sub(buf, f), 1);
+  const t = findField(fieldsOf(buf, f), 1);
   const ms = t && t.wt === 1 ? Number(t.u64) : 0;
   return ms > 1.3e12 && ms < 2.2e12 ? new Date(ms).toISOString() : null;
 };
@@ -104,32 +104,34 @@ const timeOf = (buf, f) => {
 export function parseStore(buf) {
   if (!buf || !buf.length) return null;
   const top = parseMessage(buf);
-  const rows = top.filter((f) => f.fn === 2 && f.wt === 2).map((row) => sub(buf, row).filter((s) => s.fn === 1 && s.wt === 2).map((s) => {
-    const p = sub(buf, s);
-    const mini = readId(buf, first(p, 1)) || null;
-    const xpBoost = readId(buf, first(p, 2)) || null;
-    const rarity = readId(buf, first(p, 13)) || null;
+  const rows = top.filter((f) => f.fn === 2 && f.wt === 2).map((row) =>
+    fieldsOf(buf, row).filter((s) => s.fn === 1 && s.wt === 2).map((s) => {
+    const p = fieldsOf(buf, s);
+    const mini = readId(buf, findField(p, 1)) || null;
+    const xpBoost = readId(buf, findField(p, 2)) || null;
+    const rarity = readId(buf, findField(p, 13)) || null;
     return mini || xpBoost ? { mini, xpBoost, rarity } : { bought: true };
   })).reverse(); // top row first
   const offers = top.filter((f) => f.fn === 5 && f.wt === 2).map((f) => {
-    const p = sub(buf, f);
-    const inner = first(p, 7) && sub(buf, first(p, 7));
-    const minis = (inner || []).filter((x) => x.fn === 11 && x.wt === 2).map((x) => readId(buf, first(sub(buf, x), 2))).filter(Boolean);
+    const p = fieldsOf(buf, f);
+    const inner = findField(p, 7) && fieldsOf(buf, findField(p, 7));
+    const minis = (inner || []).filter((x) => x.fn === 11 && x.wt === 2).map((x) =>
+      readId(buf, findField(fieldsOf(buf, x), 2))).filter(Boolean);
     const tomeF = (inner || []).find((x) => x.fn === 12 && x.wt === 2);
     return {
-      offer: readId(buf, first(p, 1)),
-      slot: readId(buf, first(p, 8)) || null,
-      expires: timeOf(buf, first(p, 2)),
+      offer: readId(buf, findField(p, 1)),
+      slot: readId(buf, findField(p, 8)) || null,
+      expires: timeOf(buf, findField(p, 2)),
       minis,
-      tome: tomeF ? readId(buf, first(sub(buf, tomeF), 2)) || null : null,
-      family: inner ? readId(buf, first(inner, 13)) || null : null,
+      tome: tomeF ? readId(buf, findField(fieldsOf(buf, tomeF), 2)) || null : null,
+      family: inner ? readId(buf, findField(inner, 13)) || null : null,
     };
   }).filter((o) => o.offer);
   const limited = top.filter((f) => f.fn === 12 && f.wt === 2).map((f) => {
-    const p = sub(buf, f);
-    return { offer: readId(buf, first(p, 1)), expires: timeOf(buf, first(p, 2)) };
+    const p = fieldsOf(buf, f);
+    return { offer: readId(buf, findField(p, 1)), expires: timeOf(buf, findField(p, 2)) };
   }).filter((o) => o.offer);
-  return { grid: { rows, refresh: timeOf(buf, first(top, 3)) }, offers, limited };
+  return { grid: { rows, refresh: timeOf(buf, findField(top, 3)) }, offers, limited };
 }
 
 /**
@@ -172,11 +174,11 @@ export function storeFieldsForLog(buf) {
 /** Game build that wrote the save, from CommerceState f1.f3 ("16.1.2.119766.dp-…" -> "16.1.2.119766"). */
 export function parseGameBuild(buf) {
   if (!buf || !buf.length) return null;
-  const f1 = first(parseMessage(buf), 1);
+  const f1 = findField(parseMessage(buf), 1);
   if (!f1 || f1.wt !== 2) return null;
-  const f3 = first(sub(buf, f1), 3);
+  const f3 = findField(fieldsOf(buf, f1), 3);
   if (!f3 || f3.wt !== 2) return null;
-  const m = /^(\d+\.\d+\.\d+\.\d+)/.exec(buf.subarray(f3.start, f3.end).toString('utf8'));
+  const m = /^(\d+\.\d+\.\d+\.\d+)/.exec(textOf(buf, f3));
   return m ? m[1] : null;
 }
 
@@ -193,7 +195,7 @@ export function parseOwnedAvatars(buf) {
   const ids = new Set();
   for (const f of parseMessage(buf)) {
     if (f.fn !== 1 || f.wt !== 2) continue;
-    const id = readId(buf, first(sub(buf, f), 1));
+    const id = readId(buf, findField(fieldsOf(buf, f), 1));
     if (id) ids.add(id);
   }
   return [...ids];

@@ -1,6 +1,6 @@
 # Creates desktop/icon.ico and web/favicon.ico from gamedata/art/kobold-miner.webp: the kobold on a solid rounded
 # square inside a gold frame.
-# Usage: powershell -ExecutionPolicy Bypass -File desktop\make_icon.ps1 [-Background '#1d2b6b'] [-Preview <png>]
+# Usage: powershell -ExecutionPolicy Bypass -File desktop\make-icon.ps1 [-Background '#1d2b6b'] [-Preview <png>]
 # (needs gamedata/; .webp decoding needs Windows 11 or the WebP Image Extensions). -Preview only writes a 256 px PNG.
 # PNG-encoded sizes: full portrait at 48-256 px, face crop at 16-32 px.
 param([string]$Background = '#1d2b6b', [string]$Preview = '')
@@ -29,13 +29,13 @@ function Render([int]$size, [System.Windows.Int32Rect]$crop) {
   $box = New-Object System.Windows.Rect 0, 0, $size, $size
   $inner = New-Object System.Windows.Rect $frame, $frame, ($size - 2 * $frame), ($size - 2 * $frame)
   $ri = [Math]::Max(1, $r - $frame)
-  # frame: dark outline, gold band (lighter at the top), then the solid background
+  # the frame is a dark outline and a gold band, lighter at the top, around the solid background
   $dc.DrawRoundedRectangle((& $brush (& $rgb 74 42 6)), $null, $box, $r, $r)
   $gold = New-Object System.Windows.Media.LinearGradientBrush (& $rgb 255 214 102), (& $rgb 196 128 24), 90
   $o = [Math]::Max(1, $size / 64)
   $dc.DrawRoundedRectangle($gold, $null, (New-Object System.Windows.Rect $o, $o, ($size - 2 * $o), ($size - 2 * $o)), ($r - $o), ($r - $o))
   $dc.DrawRoundedRectangle((& $brush $color), $null, $inner, $ri, $ri)
-  # the kobold, clipped to the background; a little larger than it so it fills the square
+  # the kobold, clipped to the background and a little larger than it, so it fills the square
   $dc.PushClip((New-Object System.Windows.Media.RectangleGeometry $inner, $ri, $ri))
   $cropped = New-Object System.Windows.Media.Imaging.CroppedBitmap $img, $crop
   $pad = $size * 0.02
@@ -74,6 +74,6 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 foreach ($d in $pngs) { $w.Write($d) }
 $w.Flush()
 [System.IO.File]::WriteAllBytes($out, $ms.ToArray())
-# also the page's favicon (taskbar icon of the app window)
+# also the page's favicon, the app window's taskbar icon
 [System.IO.File]::WriteAllBytes((Join-Path $root 'web\favicon.ico'), $ms.ToArray())
 "Wrote $out ($($ms.Length) bytes, sizes $($sizes -join ', '))"

@@ -130,7 +130,7 @@ export async function poll() {
     setState(s);
     ui.account = s.account;
     state.connError = null;
-    $('#quitBtn').hidden = !s.standalone;
+    $('#quitButton').hidden = !s.standalone;
     if (s.appVersion) {
       $('#appVersion').textContent = `v${s.appVersion}`;
       $('#appVersion').hidden = false;
@@ -247,7 +247,7 @@ function bindHeader() {
     }
     poll();
   });
-  $('#quitBtn').addEventListener('click', quitTracker);
+  $('#quitButton').addEventListener('click', quitTracker);
   let sizeTimer;
   window.addEventListener('resize', () => {
     clearTimeout(sizeTimer);

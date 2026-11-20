@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256 } from '../server/datapack/datapack.mjs';
 import { POWERSHELL } from '../server/system.mjs';
-import { PACK_PUBLIC_KEYS } from '../server/datapack/pack_keys.mjs';
+import { PACK_PUBLIC_KEYS } from '../server/datapack/pack-keys.mjs';
 import { APP_NAME, EXE_NAME, REPO } from '../web/scripts/lib/constants.js';
 import { megabytes } from '../web/scripts/lib/format.js';
 
@@ -34,7 +34,7 @@ if (process.platform !== 'win32') fail('build on Windows (the exe is made from t
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major < 25 || (major === 25 && minor < 5)) fail(`needs Node.js 25.5 or newer for --build-sea (this is ${process.versions.node}).`);
 if (!PACK_PUBLIC_KEYS.some((k) => k.includes('BEGIN PUBLIC KEY'))) {
-  fail('server/datapack/pack_keys.mjs has no data pack key, so the release would never accept a data pack.');
+  fail('server/datapack/pack-keys.mjs has no data pack key, so the release would never accept a data pack.');
 }
 // In GitHub Actions, players' issues and updates must point at the repository that builds the release.
 if (process.env.GITHUB_REPOSITORY && process.env.GITHUB_REPOSITORY !== REPO) {

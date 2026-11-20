@@ -2,22 +2,22 @@
 // The save has no match history or win/loss counts. Each finished match adds Victory Points (VP), base x loss for a
 // loss and base x win for a win, more on a win streak. Wins add honor and losses usually take some. So a VP change tells
 // how many wins and losses happened since the last scan, and honor breaks ties, as two losses can equal one win in VP.
-import { parseMessage, sub, first, num, readId } from './protobuf.mjs';
+import { parseMessage, fieldsOf, findField, numberOf, readId } from '../../web/scripts/lib/protobuf.js';
 
 /** { season: save id, honor, honor2, vp } from PvpPlayerRankState, or null. honor2 is a second honor value
  *  (equal to honor so far; maybe the season's best). */
 export function parsePvp(buf) {
   if (!buf || !buf.length) return null;
   const f = parseMessage(buf);
-  const seasonField = first(f, 2);
-  const rank = first(f, 3);
-  const vp = first(f, 4);
-  const r = rank && rank.wt === 2 ? sub(buf, rank) : [];
+  const seasonField = findField(f, 2);
+  const rank = findField(f, 3);
+  const vp = findField(f, 4);
+  const r = rank && rank.wt === 2 ? fieldsOf(buf, rank) : [];
   return {
     season: seasonField ? readId(buf, seasonField) || null : null,
-    honor: num(first(r, 1)),
-    honor2: num(first(r, 2)),
-    vp: vp && vp.wt === 2 ? num(first(sub(buf, vp), 1)) : 0,
+    honor: numberOf(findField(r, 1)),
+    honor2: numberOf(findField(r, 2)),
+    vp: vp && vp.wt === 2 ? numberOf(findField(fieldsOf(buf, vp), 1)) : 0,
   };
 }
 

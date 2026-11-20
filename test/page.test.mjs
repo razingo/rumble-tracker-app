@@ -4,12 +4,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { occurrences, rotationAt, rotationName } from '../web/scripts/lib/schedule.js';
 import { DAY, HOUR, MINUTE } from '../web/scripts/lib/constants.js';
-import { fmt, esc, span, spanWords, localDay, when, dayOnly, titleCase, plural, megabytes } from '../web/scripts/lib/format.js';
+import { fmt, esc, span, spanWords, ago, localDay, when, dayOnly, titleCase, plural, megabytes } from '../web/scripts/lib/format.js';
 import { seasonAt, rankOf, nextRank, setAt, record, streak, matchesWithMods, modifierStats, withModifiers,
   winRateSeries } from '../web/scripts/lib/pvp-season.js';
-import { setTables, setState } from '../web/scripts/core.js';
+import { setTables, setState, getJson, post } from '../web/scripts/core.js';
 import { nextUpgrade, xpToMax, armyOf, totalLevel, armyTotals, remainingToLegendary, effectivePicks,
-  unitName } from '../web/scripts/units.js';
+  unitName, gridRarityOf, familiesOf } from '../web/scripts/units.js';
 
 test('schedules handle the n-th weekday of a month, fixed days and one-off events', () => {
   // 2nd Wednesday of every month, 18:00 UTC, 7 days
@@ -135,13 +135,21 @@ test('formats numbers, dates, durations and day keys in en-US', () => {
   assert.equal(span(4 * HOUR + 12 * MINUTE), '4h 12m');
   assert.equal(span(-5), '0m');
   assert.equal(spanWords(3 * DAY), '3 days');
-  assert.equal(spanWords(5 * HOUR), '5 h');
-  assert.equal(spanWords(20 * MINUTE), '20 min');
+  assert.equal(spanWords(5 * HOUR), '5 hours');
+  assert.equal(spanWords(HOUR), '1 hour');
+  assert.equal(spanWords(20 * MINUTE), '20 minutes');
   assert.equal(localDay(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
   assert.match(when(new Date(2026, 10, 19, 19, 0)), /^Thu, Nov 19, 7:00\sPM$/);
   assert.equal(dayOnly(new Date(2026, 10, 19)), 'Nov 19');
   assert.equal(titleCase('MAJOR TOME'), 'Major Tome');
   assert.equal(titleCase('Major tome'), 'Major tome');
+  assert.equal(plural(1, 'mini'), '1 mini');
+  assert.equal(plural(1200, 'army', 'armies'), '1,200 armies');
+  assert.equal(megabytes(3 * 1024 * 1024), '3.0');
+  assert.equal(ago(Date.now() - 5 * 1000), '5 seconds ago');
+  assert.equal(ago(Date.now() - MINUTE), '1 minute ago');
+  assert.equal(ago(Date.now() - 3 * HOUR), '3 hours ago');
+  assert.equal(ago(null), 'never');
 });
 
 test('cleans tags, keeps them unique ignoring case and keeps the known spelling', async () => {
@@ -154,6 +162,19 @@ test('cleans tags, keeps them unique ignoring case and keeps the known spelling'
   assert.equal(withTag(['Tank'], 'tank'), null);
   assert.equal(withTag(['Tank'], '  '), null);
   assert.equal(withTag(Array.from({ length: 20 }, (_, i) => `t${i}`), 'new'), null);
+});
+
+test('a tag box adds a tag on Enter or a comma and removes the last on Backspace', async () => {
+  const { tagKey } = await import('../web/scripts/lib/limits.js');
+  const key = (k, value) => ({ key: k, target: { value }, preventDefault() { this.prevented = true; } });
+  const enter = key('Enter', ' rush ');
+  assert.deepEqual(tagKey(enter, ['Tank'], ['Rush']), ['Tank', 'Rush']);
+  assert.equal(enter.prevented, true);
+  assert.equal(enter.target.value, '');
+  assert.equal(tagKey(key(',', 'tank'), ['Tank'], []), null);
+  assert.deepEqual(tagKey(key('Backspace', ''), ['Tank', 'Rush'], []), ['Tank']);
+  assert.equal(tagKey(key('Backspace', 'r'), ['Tank'], []), null);
+  assert.equal(tagKey(key('a', ''), ['Tank'], []), null);
 });
 
 test('the reward tree finds the cheapest path and pays shared requirements once', async () => {
@@ -172,4 +193,57 @@ test('the reward tree finds the cheapest path and pays shared requirements once'
   assert.equal(p.cheapest(['1-1']).cost, 45); // needs both A and B
   assert.equal(p.cheapest(['2-0', '1-1']).cost, 66); // A and B paid once
   assert.equal(p.cheapest([]).cost, 0);
+});
+
+test('a G.R.I.D. slot\'s rarity comes from its store name and the rules', () => {
+  setTables(RULES, { minis: [] });
+  assert.deepEqual(gridRarityOf('EpicRarity_Leader'), { index: 2, label: 'Epic leader' });
+  assert.deepEqual(gridRarityOf('CommonRarity_Troop'), { index: 0, label: 'Common' });
+  assert.deepEqual(gridRarityOf('MythicRarity_Troop'), { index: -1, label: 'Mythic' });
+  assert.deepEqual(gridRarityOf(undefined), { index: -1, label: '' });
+});
+
+test('requests turn failures into messages the page can show', async () => {
+  const realFetch = globalThis.fetch;
+  const answer = (status, body) => async () => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
+  try {
+    globalThis.fetch = answer(200, { ok: 1 });
+    assert.deepEqual(await getJson('/x', 'the thing'), { ok: 1 });
+    globalThis.fetch = answer(404, 'nope');
+    await assert.rejects(getJson('/x', 'the thing'), (e) => e.status === 404 && /Could not load the thing \(HTTP 404\)/.test(e.message));
+    globalThis.fetch = answer(400, { error: 'That name is too long.' });
+    await assert.rejects(post('/x', {}), /That name is too long\./);
+    globalThis.fetch = answer(200, 'not json');
+    await assert.rejects(getJson('/x', 'the thing'), /isn't valid JSON/);
+    globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    await assert.rejects(post('/x', {}), /The tracker isn't responding/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('an army code reads back as the army it was made from', async () => {
+  const { encodeArmyCode, decodeArmyCode } = await import('../web/scripts/army-code.js');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ prefix: 'rumblo:', shortIds: { 5: 'lead', 300: 'a', 7: 'b' } }));
+  try {
+    setTables(RULES, { minis: [{ slug: 'lead', talents: [{}, {}] }, { slug: 'a', talents: [{}] }, { slug: 'b', talents: [] }] });
+    setState({ units: [] });
+    const army = { leader: 'lead', minis: ['a', null, 'b', null, null, null], talents: { lead: 1 } };
+    const code = await encodeArmyCode(army);
+    assert.match(code, /^rumblo:/);
+    assert.deepEqual(await decodeArmyCode(code), { leader: 'lead', minis: ['a', 'b', null, null, null, null],
+      talents: { lead: 1, a: 0, b: 0 } });
+    await assert.rejects(decodeArmyCode('rumblo:!!!'), /Not a Warcraft Rumble army code/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('a leader belongs to every faction among its fixed army slots', () => {
+  assert.deepEqual(familiesOf({ family: 'Horde', category: 'Leader', fixedArmySlots: ['Horde', 'Alliance', 'Melee'] }),
+    ['Horde', 'Alliance']);
+  assert.deepEqual(familiesOf({ family: 'Horde', category: 'Leader', fixedArmySlots: ['Horde', 'Melee'] }), ['Horde']);
+  assert.deepEqual(familiesOf({ family: 'Beast', families: ['Beast', 'Undead'] }), ['Beast', 'Undead']);
+  assert.deepEqual(familiesOf({ family: 'Undead', category: 'Unit' }), ['Undead']);
 });

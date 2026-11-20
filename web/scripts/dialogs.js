@@ -12,11 +12,11 @@ function showDialog({ title, message, buttons }) {
   const run = () => new Promise((resolve) => {
     const dlg = $('#messageDialog');
     const paragraphs = String(message || '').split(/\n\s*\n/).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
-    dlg.innerHTML = `<form method="dialog" class="dialog-form msg-form">
+    dlg.innerHTML = `<form method="dialog" class="dialog-form message-form">
       ${title ? `<div class="dialog-head"><h2>${esc(title)}</h2></div>` : ''}
-      <div class="msg-body">${paragraphs}</div>
-      <div class="msg-actions">${buttons.map((b, i) => `<button value="${i}"
-        class="${b.primary ? `btn${b.danger ? ' danger' : ''}` : 'chip'}">${esc(b.label)}</button>`).join('')}</div>
+      <div class="message-body">${paragraphs}</div>
+      <div class="message-actions">${buttons.map((b, i) => `<button value="${i}"
+        class="${b.primary ? `button${b.danger ? ' danger' : ''}` : 'chip'}">${esc(b.label)}</button>`).join('')}</div>
     </form>`;
     dlg.addEventListener('close', () => {
       const i = Number(dlg.returnValue);
@@ -24,7 +24,7 @@ function showDialog({ title, message, buttons }) {
     }, { once: true });
     dlg.returnValue = '';
     dlg.showModal();
-    (dlg.querySelector('.btn') || dlg.querySelector('button'))?.focus();
+    (dlg.querySelector('.button') || dlg.querySelector('button'))?.focus();
   });
   const next = queue.then(run);
   queue = next.catch(() => {});

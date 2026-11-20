@@ -3,15 +3,31 @@
 import { RULES, BY_SLUG, state } from './core.js';
 
 export const rarityName = (r) => RULES.rarities[r]?.name ?? `Rarity ${r}`;
-export const rarityColor = (r) => `var(--r${r})`;
+export const rarityColor = (r) => `var(--rarity-${r})`;
+/**
+ * The account's unit of a mini, or null. Minis every player owns have no levels in the save; they count only with
+ * `alwaysOwned`.
+ */
+export const ownedUnit = (slug, { alwaysOwned = true } = {}) =>
+  state.units.find((u) => u.slug === slug && (alwaysOwned || !u.synthetic)) || null;
+/**
+ * A G.R.I.D. slot's rarity from its store name, such as "EpicRarity_Leader": its index in rules.json (or -1) and a
+ * label such as "Epic leader".
+ */
+export function gridRarityOf(name) {
+  const m = /^(\w+?)Rarity_(Troop|Leader)$/.exec(name || '');
+  if (!m) return { index: -1, label: '' };
+  return { index: RULES.rarities.findIndex((r) => r.name === m[1]), label: `${m[1]}${m[2] === 'Leader' ? ' leader' : ''}` };
+}
+export const FAMILIES = ['Alliance', 'Horde', 'Undead', 'Beast', 'Blackrock', 'Cenarion'];
 export const miniOf = (u) => (u && u.slug ? BY_SLUG.get(u.slug) : null);
 // A mini the game data doesn't have yet, usually one added by a patch.
 export const unitName = (u) => miniOf(u)?.name ?? `New mini ${u.id.slice(0, 8)}`;
 // Currencies are found by their ID, which is the same for every player; names are only shown.
 const currencyOf = (role) => state.currencies.find((c) => c.id === RULES.currencyIds[role]);
 export const balance = (role) => currencyOf(role)?.balance ?? 0;
-export const curName = (role) => currencyOf(role)?.name || state.currencyNames?.[RULES.currencyIds[role]] || role;
-export const coreName = (role) => curName(role).replace(/s$/, '');
+export const currencyName = (role) => currencyOf(role)?.name || state.currencyNames?.[RULES.currencyIds[role]] || role;
+export const coreName = (role) => currencyName(role).replace(/s$/, '');
 
 export function nextUpgrade(u) {
   if (u.synthetic || u.rarity >= RULES.rarityUpgrade.length) return null;
@@ -95,4 +111,59 @@ export function remainingToLegendary(u) {
     if (s.core) out.cores[s.core] = (out.cores[s.core] || 0) + 1;
   }
   return out;
+}
+
+// Army slots
+
+const DMG_TAG = { AOE: 'AoE', Squad: 'Squad', OneTarget: 'One-Target' };
+
+/** What a slot type can match: the mini's families, roles, traits, damage type and category. */
+function miniTags(m) {
+  const tags = new Set([...familiesOf(m), ...String(m.role).split(','), ...m.traits.map((t) => t.name)]);
+  if (m.category === 'Spell') tags.add('Spell');
+  if (DMG_TAG[m.damageType]) tags.add(DMG_TAG[m.damageType]);
+  if (tags.has('Siege Damage') || tags.has('Siege Specialist')) tags.add('Siege');
+  return tags;
+}
+
+export function slotMatches(type, m) {
+  if (!type || !m) return false;
+  if (type === 'Wildcard') return true;
+  return miniTags(m).has(type);
+}
+
+/** A mini's families. For a leader, every faction among its fixed board slots. */
+export function familiesOf(m) {
+  if (m.families?.length > 1) return m.families; // multi-faction minis
+  if (m.category === 'Leader') {
+    const fams = [...new Set((m.fixedArmySlots || []).filter((t) => FAMILIES.includes(t)))];
+    if (fams.length > 1) return fams;
+  }
+  return [m.family];
+}
+
+/** The level unit u plays at in slot i of leader L's army. */
+export function levelInSlot(u, L, i) {
+  const A = RULES.armySlots;
+  const slot = armyOf(L)[i];
+  const tier = A.tiers[slot.tier];
+  if (!u || u.synthetic) return { level: null, match: false, bonus: 0, boosted: false, xpMax: false };
+  const m = miniOf(u);
+  const match = i === A.leaderSlot ? u.id === L.id : slotMatches(slot.type, m);
+  const xp = slot.boost ? Math.max(u.xpLevel, RULES.maxXpLevel) : u.xpLevel;
+  const bonus = match ? tier.bonus : 0;
+  return {
+    level: Math.min(RULES.maxLevel, xp + u.rarity + u.talents + bonus),
+    match, bonus,
+    boosted: slot.boost && u.xpLevel < RULES.maxXpLevel,
+    xpMax: xp >= RULES.maxXpLevel,
+  };
+}
+
+/** The talent a mini uses in an army: the army's choice, else the first one the player has unlocked, else the first. */
+export function talentIndex(army, m, u) {
+  if (!m?.talents.length) return null;
+  const chosen = army.talents?.[m.slug];
+  if (Number.isInteger(chosen) && chosen >= 0 && chosen < m.talents.length) return chosen;
+  return (u ? effectivePicks(u)[0] : null) ?? 0;
 }

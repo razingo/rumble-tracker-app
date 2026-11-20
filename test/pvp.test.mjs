@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePvp, inferMatches, vpValues, pvpReading, manualResult } from '../server/game/pvp.mjs';
-import { int, msg, fixed64 } from './helpers.mjs';
+import { int, embedded, fixed64 } from '../web/scripts/lib/protobuf.js';
 
 
 const RULES = { base: 80, win: 2, loss: 1, streak: [{ upTo: 3, x: 1 }, { upTo: 5, x: 1.25 }] };
@@ -9,8 +9,8 @@ const at = (honor, vp, season = 's27') => ({ season, honor, vp });
 const match = (from, to) => inferMatches(from, to, RULES);
 
 test('reads season, honor and Victory Points', () => {
-  const buf = Buffer.concat([msg(2, fixed64(1, 0x33b4f294d8d12b57n), fixed64(2, 0xccdf8287c654e6c9n)),
-    msg(3, int(1, 9002), int(2, 9002)), msg(4, int(1, 160))]);
+  const buf = Buffer.concat([embedded(2, fixed64(1, 0x33b4f294d8d12b57n), fixed64(2, 0xccdf8287c654e6c9n)),
+    embedded(3, int(1, 9002), int(2, 9002)), embedded(4, int(1, 160))]);
   assert.deepEqual(parsePvp(buf), { season: '33b4f294d8d12b57ccdf8287c654e6c9', honor: 9002, honor2: 9002, vp: 160 });
   assert.equal(parsePvp(Buffer.alloc(0)), null);
 });

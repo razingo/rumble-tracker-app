@@ -1,19 +1,23 @@
 // Collection tab: currencies, summary, what's needed next, the upgrade planner, filters, the mini grid and recent
 // changes.
-import { familiesOf } from './army.js';
 import { $, store, RULES, MINIS, TAG_ICONS, state, GRID_CURRENCY_IDS, ANKH_ID } from './core.js';
-import { ico } from './drawer.js';
+import { iconImage } from './drawer.js';
 import { esc, fmt, ago } from './lib/format.js';
 import { traitPicker, bindTraitPicker } from './trait-picker.js';
-import { rarityName, rarityColor, miniOf, unitName, balance, curName, coreName, nextUpgrade, talentSlots,
-  effectivePicks, isLeader, armyOf, hasBoost, totalLevel, armyTotals, remainingToLegendary } from './units.js';
+import { rarityName, rarityColor, FAMILIES, miniOf, unitName, balance, currencyName, coreName, nextUpgrade,
+  talentSlots, effectivePicks, isLeader, armyOf, hasBoost, totalLevel, armyTotals, remainingToLegendary, familiesOf } from './units.js';
+
+// Versions up to 0.8.0 saved these without the tab's name.
+for (const key of ['filters', 'show', 'sort', 'planExpanded']) {
+  store.rename(key, `collection${key[0].toUpperCase()}${key.slice(1)}`);
+}
 
 // What the Collection shows, kept between visits.
 const view = {
-  show: store.get('show', 'owned'),
-  sort: store.get('sort', 'level'),
-  planExpanded: store.get('planExpanded', false),
-  filters: { types: [], families: [], traits: [], traitMode: 'all', ...store.get('filters', {}) },
+  show: store.get('collectionShow', 'owned'),
+  sort: store.get('collectionSort', 'level'),
+  planExpanded: store.get('collectionPlanExpanded', false),
+  filters: { types: [], families: [], traits: [], traitMode: 'all', ...store.get('collectionFilters', {}) },
   traitPickerOpen: false,
   traitSearch: '',
 };
@@ -21,8 +25,8 @@ const view = {
 /** A currency chip with its icon, name and balance; the tooltip has the total earned. */
 export function currencyChip(c) {
   const icon = RULES.currencyIcons?.[c.id];
-  return `<div class="cur" title="${esc(c.name)} · earned all time: ${fmt(c.lifetime)}">${icon
-    ? `<img class="cur-ico" src="/static/${icon}" alt="">` : ''}<span>${esc(c.name)}</span><b>${fmt(c.balance)}</b></div>`;
+  return `<div class="currency" title="${esc(c.name)} · earned all time: ${fmt(c.lifetime)}">${icon
+    ? `<img class="currency-icon" src="/static/${icon}" alt="">` : ''}<span>${esc(c.name)}</span><b>${fmt(c.balance)}</b></div>`;
 }
 
 export function renderCurrencies() {
@@ -48,18 +52,18 @@ export function renderSummary() {
   const coresText = Object.entries(toLeg.cores).map(([k, v]) => `${v} ${coreName(k).replace(/ Upgrade Core$/, '')}`).join(', ') || 'none';
   $('#summary').innerHTML = [
     ['Minis owned', `${units.length} / ${MINIS.length}`, `${identified} identified`],
-    ['Upgrades ready now', ready, `enough stars, ${curName('arcEnergy')} and cores`],
+    ['Upgrades ready now', ready, `enough stars, ${currencyName('arcEnergy')} and cores`],
     ['Open talent slots', openSlots, 'buy in the G.R.I.D.'],
     ['Talents to tick', picksMissing, 'minis with unrecorded talents'],
-    [`${curName('arcEnergy')} to all legendary`, fmt(toLeg.arcEnergy), `upgrade cores: ${coresText}`],
+    [`${currencyName('arcEnergy')} to all legendary`, fmt(toLeg.arcEnergy), `upgrade cores: ${coresText}`],
     ...(() => {
       const a = armyTotals(units);
       if (!a.leaders) return [];
-      return [[`${curName('valor')} for Diamond slots`, fmt(a.goldReady * a.cost),
+      return [[`${currencyName('valor')} for Diamond slots`, fmt(a.goldReady * a.cost),
         `${a.goldReady} Gold slot${a.goldReady === 1
           ? '' : 's'} ready · ${fmt(a.notDiamond * a.cost)} for all ${a.slots} · have ${fmt(balance('valor'))}`]];
     })(),
-  ].map(([k, v, s]) => `<div class="stat-card"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div
+  ].map(([k, v, s]) => `<div class="stat-card"><div class="stat-label">${esc(k)}</div><div class="stat-value">${esc(v)}</div><div
     class="small">${esc(s)}</div></div>`).join('');
 }
 
@@ -90,7 +94,7 @@ export function renderNeeds() {
           ${u.xpLevel}${u.xpLevel < RULES.maxXpLevel ? ` (${u.xp}/${u.xpNeeded})` : ' (max)'} · ${u.stars}
           stars${ev ? ` · last change: ${esc(eventText(ev))} ${ago(ev.t)}` : ''}</span></div>
       <select class="keep" data-unit-name="${u.id}">${miniOptions(null)}</select>
-      <button class="btn" data-unit-save="${u.id}">Save</button></div>`);
+      <button class="button" data-unit-save="${u.id}">Save</button></div>`);
   }
   if (unknownUnits.length > 12) rows.push(`<div class="row small">…and ${unknownUnits.length - 12} more. Level up or
     upgrade a mini in the game and it moves to the top, ready to name.</div>`);
@@ -107,11 +111,11 @@ function planArt(u) {
 }
 
 function planRow(u, pct, label, togo, togoUnit, extra = '') {
-  return `<button class="plan-row" style="--rc:${rarityColor(u.rarity)}" data-unit-open="${u.id}">
+  return `<button class="plan-row" style="--rarity-color:${rarityColor(u.rarity)}" data-unit-open="${u.id}">
     ${planArt(u)}
     <div><b>${esc(unitName(u))}</b> <span class="small">${esc(label)}</span>
       <div class="bar${togoUnit === 'stars' ? ' stars' : ''}"><span style="width:${pct}%"></span></div>${extra}</div>
-    <div class="togo">${fmt(togo)}<small>${togoUnit} to go</small></div>
+    <div class="to-go">${fmt(togo)}<small>${togoUnit} to go</small></div>
   </button>`;
 }
 
@@ -143,11 +147,12 @@ export function renderPlanner() {
     planRow(u, Math.round(pct * 100), `XP level ${u.xpLevel} → ${u.xpLevel + 1} · ${fmt(u.xp)}/${fmt(u.xpNeeded)}`, togo, 'XP')).join('');
 
   const starsHtml = shownStars.map(({ u, up, pct, togo }) => {
-    const costs = [`${fmt(up.arcEnergy)} ${curName('arcEnergy')}`, up.core ? `1 ${coreName(up.core)}` : null].filter(Boolean).join(' + ');
+    const costs = [`${fmt(up.arcEnergy)} ${currencyName('arcEnergy')}`,
+      up.core ? `1 ${coreName(up.core)}` : null].filter(Boolean).join(' + ');
     const status = up.ready
       ? '<span class="flag good">Ready - upgrade now</span>'
       : togo === 0
-        ? `<span class="flag warn">Stars done · need ${[!up.arcOk ? curName('arcEnergy') : '',
+        ? `<span class="flag warn">Stars done · need ${[!up.arcOk ? currencyName('arcEnergy') : '',
           !up.coreOk ? coreName(up.core) : ''].filter(Boolean).join(' + ')}</span>`
         : '';
     return planRow(u, Math.round(pct * 100), `${rarityName(u.rarity)} → ${rarityName(up.to)} · ${u.stars}/${up.stars} stars · ${costs}`,
@@ -168,7 +173,6 @@ export function renderPlanner() {
 }
 
 const TYPES = [['Unit', 'Units'], ['Leader', 'Leaders'], ['Spell', 'Spells'], ['unknown', 'New / unknown']];
-export const FAMILIES = ['Alliance', 'Horde', 'Undead', 'Beast', 'Blackrock', 'Cenarion'];
 
 export function allTraits() {
   const map = new Map();
@@ -203,7 +207,7 @@ function gridPool() {
 
 const filtersActive = () => view.filters.types.length + view.filters.families.length + view.filters.traits.length > 0;
 
-function saveFilters() { store.set('filters', view.filters); }
+function saveFilters() { store.set('collectionFilters', view.filters); }
 
 export function toggleIn(list, value) {
   const i = list.indexOf(value);
@@ -223,7 +227,7 @@ export function renderFilters() {
 
   const famChips = FAMILIES
     .map((fam) => `<button class="chip" aria-pressed="${f.families.includes(fam)}"
-      data-filter-family="${fam}">${ico(TAG_ICONS[fam], fam)}${fam}<small>${count('families',
+      data-filter-family="${fam}">${iconImage(TAG_ICONS[fam], fam)}${fam}<small>${count('families',
       (m) => !!m && familiesOf(m).includes(fam))}</small></button>`)
     .join('');
 
@@ -265,16 +269,17 @@ function cardForUnit(u) {
   if (u.talents < slots) flags.push('<span class="flag good">Talent slot open</span>');
   if (effectivePicks(u).length < u.talents) flags.push('<span class="flag warn">Tick talents</span>');
   if (isLeader(u) && armyOf(u).some((s) => s.type === 'Wildcard')) flags.push(`<span
-    class="flag wild">${ico(TAG_ICONS.Wildcard, 'Wildcard')}Wildcard</span>`);
+    class="flag wild">${iconImage(TAG_ICONS.Wildcard, 'Wildcard')}Wildcard</span>`);
   if (hasBoost(u)) flags.push('<span class="flag boost" title="Its army has a Boost slot, so that mini plays at XP ' +
     'level 20"><svg class="boost-bolt" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 0 2 9h5l-1.5 7L14 ' +
     '6.5H8.8z"/></svg>Boost</span>');
   const xpPct = u.xpLevel >= RULES.maxXpLevel ? 100 : Math.round((u.xp / Math.max(1, u.xpNeeded)) * 100);
   const starsTxt = up ? `${u.stars}/${up.stars} stars` : 'Max rarity';
   const starsPct = up ? Math.min(100, Math.round((u.stars / up.stars) * 100)) : 100;
-  return `<button class="card ${frameCls(m)}${isLeader(u) ? ' leader' : ''}" style="--rc:${rarityColor(u.rarity)}" data-unit-open="${u.id}">
+  return `<button class="card ${frameCls(m)}${isLeader(u) ? ' leader' : ''}"
+    style="--rarity-color:${rarityColor(u.rarity)}" data-unit-open="${u.id}">
     ${m ? `<img class="art" src="/static/${m.art}" alt="" loading="lazy">` : '<div class="art unknown">?</div>'}
-    <div class="lvl">${totalLevel(u)}<small>level</small></div>
+    <div class="level">${totalLevel(u)}<small>level</small></div>
     <div class="name">${esc(unitName(u))}</div>
     <div class="meta">${rarityName(u.rarity)}${m ? ` · ${m.category}` : ''}</div>
     <div class="bar"><span style="width:${xpPct}%"></span></div>
@@ -292,7 +297,7 @@ function armyStrip(u) {
   const cells = armyOf(u).map((s) => {
     const t = tiers[s.tier];
     return `<span class="army-cell${s.type === 'Wildcard' ? ' wild' : ''}${s.boost ? ' boost' : ''}"
-      style="--tc:${t.color}" title="${esc(s.type || 'Type not set')}: ${t.name}${t.bonus
+      style="--type-color:${t.color}" title="${esc(s.type || 'Type not set')}: ${t.name}${t.bonus
       ? ` (+${t.bonus})` : ''}${s.boost ? ' · Boost' : ''}"></span>`;
   }).join('');
   return `<div class="army-strip" aria-label="Army slots">${cells}</div>`;
@@ -361,13 +366,13 @@ export function bindCollection() {
   $('#sort').value = view.sort;
   $('#show').addEventListener('change', (e) => {
     view.show = e.target.value;
-    store.set('show', view.show);
+    store.set('collectionShow', view.show);
     renderFilters();
     renderGrid();
   });
   $('#sort').addEventListener('change', (e) => {
     view.sort = e.target.value;
-    store.set('sort', view.sort);
+    store.set('collectionSort', view.sort);
     renderGrid();
   });
   const refilter = () => {
@@ -381,7 +386,7 @@ export function bindCollection() {
     if (!t) return;
     if (t.hasAttribute('data-planner-toggle')) {
       view.planExpanded = !view.planExpanded;
-      store.set('planExpanded', view.planExpanded);
+      store.set('collectionPlanExpanded', view.planExpanded);
       renderPlanner();
     }
     else if (t.dataset.filterType) {

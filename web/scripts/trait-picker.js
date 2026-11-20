@@ -1,6 +1,6 @@
 // The trait picker on the Collection tab and in the Army tab's two pools. Each picker has a scope ("collection",
 // "leaders" or "units") and its own choice, and its events only reach its own handlers.
-import { ico } from './drawer.js';
+import { iconImage } from './drawer.js';
 import { esc } from './lib/format.js';
 
 /**
@@ -12,7 +12,7 @@ export function traitPicker({ scope, traits, filter, open, query = '', count, la
   const option = (t) => `<label class="trait-option" data-trait-name="${esc(t.name.toLowerCase())}"${q
     && !t.name.toLowerCase().includes(q) ? ' hidden' : ''}>
       <input type="checkbox" data-trait-box="${esc(t.name)}" ${filter.traits.includes(t.name) ? 'checked' : ''}>
-      ${ico(t.icon, t.name)}<span>${esc(t.name)}</span>${count ? `<small>${count(t.name)}</small>` : ''}</label>`;
+      ${iconImage(t.icon, t.name)}<span>${esc(t.name)}</span>${count ? `<small>${count(t.name)}</small>` : ''}</label>`;
   const chosen = traits.filter((t) => filter.traits.includes(t.name));
   const rest = traits.filter((t) => !filter.traits.includes(t.name));
   const any = filter.traitMode === 'any';
@@ -20,7 +20,7 @@ export function traitPicker({ scope, traits, filter, open, query = '', count, la
   const popup = !open ? '' : `<div class="trait-popup${count ? ' with-counts' : ''}" role="dialog" aria-label="Traits"
       data-trait-scope="${scope}">
       <div class="trait-popup-head">
-        <span class="seg"><button class="chip small-chip" aria-pressed="${!any}" data-trait-mode="all"
+        <span class="segmented"><button class="chip small-chip" aria-pressed="${!any}" data-trait-mode="all"
           title="Minis with every selected trait">Match all</button><button class="chip small-chip"
           aria-pressed="${any}" data-trait-mode="any" title="Minis with any selected trait">Match any</button></span>
         ${filter.traits.length ? '<button class="chip small-chip" data-trait-clear>Clear</button>' : ''}

@@ -8,7 +8,7 @@ import { latestAppOf, zipUrl, zipEntry, downloadUpdate } from '../server/update/
 import { sha256 as sha } from '../server/datapack/datapack.mjs';
 
 
-/** A zip like tools/build_release.mjs writes (deflate; `stored` names are kept uncompressed). */
+/** A zip like tools/build-release.mjs writes (deflate; `stored` names are kept uncompressed). */
 function zip(entries, stored = []) {
   const local = [], central = [];
   let pos = 0;

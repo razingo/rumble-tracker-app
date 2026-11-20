@@ -3,7 +3,7 @@
 import { $, RULES, state } from './core.js';
 import { HOUR, DAY } from './lib/constants.js';
 import { esc, fmt, dateTime, dayWithYear, span } from './lib/format.js';
-import { balance, curName, remainingToLegendary } from './units.js';
+import { balance, currencyName, remainingToLegendary } from './units.js';
 
 const MIN_SPAN = 12 * HOUR; // minimum history for rates
 
@@ -93,9 +93,9 @@ function legendaryProjection() {
     const days = left === 0 ? 0 : rate > 0 ? left / rate : Infinity;
     rows.push({ label, left, rate, days, unit });
   };
-  add(curName('arcEnergy'), need.arcEnergy - balance('arcEnergy'), rateOf((p) => lifetimeOf(p, 'arcEnergy')), '');
+  add(currencyName('arcEnergy'), need.arcEnergy - balance('arcEnergy'), rateOf((p) => lifetimeOf(p, 'arcEnergy')), '');
   add('Stars', need.stars, rateOf((p) => p.stars), '');
-  for (const [role, n] of Object.entries(need.cores)) add(curName(role), n - balance(role), rateOf((p) => lifetimeOf(p, role)), '');
+  for (const [role, n] of Object.entries(need.cores)) add(currencyName(role), n - balance(role), rateOf((p) => lifetimeOf(p, role)), '');
   return rows;
 }
 const whenText = (days) => (days === 0 ? 'done' : !isFinite(days) ? 'no income yet' : days > 3650 ? '10+ years'
@@ -107,8 +107,8 @@ export function renderProgress() {
   const pts = progressPoints();
   const since = pts[0] ? new Date(pts[0].t) : null;
   const enough = pts.length >= 2 && pts[pts.length - 1].t - pts[0].t >= MIN_SPAN;
-  const tile = (label, v, sub) => `<div class="stat-card"><div class="k">${esc(label)}</div><div
-    class="v">${v == null ? '–' : esc(v)}</div><div class="small">${esc(sub)}</div></div>`;
+  const tile = (label, v, sub) => `<div class="stat-card"><div class="stat-label">${esc(label)}</div><div
+    class="stat-value">${v == null ? '–' : esc(v)}</div><div class="small">${esc(sub)}</div></div>`;
   const perDay = (v) => (v == null ? null : `${v >= 0 ? '+' : ''}${fmt(Math.round(v))}`);
   const proj = legendaryProjection();
   const slowest = proj.filter((r) => r.left > 0).sort((a, b) => b.days - a.days)[0];
@@ -122,8 +122,8 @@ export function renderProgress() {
         ${enough ? '' : ' Rates appear after 12 hours, charts after two days.'}</span>
     </section>
     <div class="summary">
-      ${tile(`${curName('coins')} per day`, perDay(rateOf((p) => lifetimeOf(p, 'coins'))), 'earned, last 7 days')}
-      ${tile(`${curName('arcEnergy')} per day`, perDay(rateOf((p) => lifetimeOf(p, 'arcEnergy'))), 'earned, last 7 days')}
+      ${tile(`${currencyName('coins')} per day`, perDay(rateOf((p) => lifetimeOf(p, 'coins'))), 'earned, last 7 days')}
+      ${tile(`${currencyName('arcEnergy')} per day`, perDay(rateOf((p) => lifetimeOf(p, 'arcEnergy'))), 'earned, last 7 days')}
       ${tile('Stars per day', perDay(rateOf((p) => p.stars)), 'put into minis, last 7 days')}
       ${tile('Levels per week', levelsWeek == null ? null : `+${(levelsWeek * 7).toFixed(1)}`, 'all minis together')}
     </div>
@@ -144,10 +144,10 @@ export function renderProgress() {
         last 7 days. Cores bought with coins aren't counted.</p>
     </section>
     <div class="progress-charts">
-      <section class="panel"><h2>${esc(curName('coins'))} earned per day</h2>${barChart(dailyDeltas((p) =>
-        lifetimeOf(p, 'coins')), 'var(--gold-2)', curName('coins'))}</section>
-      <section class="panel"><h2>${esc(curName('arcEnergy'))} earned per day</h2>${barChart(dailyDeltas((p) =>
-        lifetimeOf(p, 'arcEnergy')), 'var(--gem-1)', curName('arcEnergy'))}</section>
+      <section class="panel"><h2>${esc(currencyName('coins'))} earned per day</h2>${barChart(dailyDeltas((p) =>
+        lifetimeOf(p, 'coins')), 'var(--gold-2)', currencyName('coins'))}</section>
+      <section class="panel"><h2>${esc(currencyName('arcEnergy'))} earned per day</h2>${barChart(dailyDeltas((p) =>
+        lifetimeOf(p, 'arcEnergy')), 'var(--gem-1)', currencyName('arcEnergy'))}</section>
       <section class="panel"><h2>Total level, all minis</h2>${lineChart((state.progress?.days
         || []).slice(-60).map((d) => ({ day: d.day, value: d.lv })), 'var(--good)', 'levels')}</section>
     </div>`;

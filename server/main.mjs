@@ -15,7 +15,7 @@ import { createScanner } from './scan/scanner.mjs';
 import { allowedUrl } from './datapack/datapack.mjs';
 import { createPackChecker } from './datapack/checker.mjs';
 import { firstRunDownload } from './datapack/firstrun.mjs';
-import { PACK_URL } from './datapack/pack_keys.mjs';
+import { PACK_URL } from './datapack/pack-keys.mjs';
 import { createUpdater } from './update/updater.mjs';
 import { cleanUpdates } from './update/appupdate.mjs';
 import { createNotifier } from './notifications/runner.mjs';

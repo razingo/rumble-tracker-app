@@ -1,11 +1,12 @@
 // Armory tab: the saved armies as cards, with their name, description and tags editable in place.
 import { setTab } from './app.js';
-import { encodeArmyCode, nameField, descriptionField, tagEditor, tagKey, armyStats, persistArmies, editArmy,
-  syncDraft, detachDraft } from './army.js';
+import { encodeArmyCode } from './army-code.js';
+import { nameField, descriptionField, tagEditor, armyStats, persistArmies, editArmy, syncDraft, detachDraft } from './army.js';
 import { toggleIn } from './collection.js';
-import { $, copyText, BY_SLUG, state } from './core.js';
+import { $, showMessage, copyText, BY_SLUG, state } from './core.js';
 import { confirmDialog } from './dialogs.js';
 import { esc, plural } from './lib/format.js';
+import { tagKey } from './lib/limits.js';
 import { rarityColor } from './units.js';
 
 // The Armory's search and tag filter.
@@ -17,7 +18,8 @@ function armoryCard(a) {
   const portrait = (x, i) => x.m
     ? `<span class="armory-mini${i === 0 ? ' armory-leader' : ''}${x.u ? '' : ' missing'}"
       title="${esc(x.m.name)}${x.level != null ? ` · level ${x.level}` : ''}${x.talent
-      ? ` · ${esc(x.talent.name)}` : ''}${x.u ? '' : ' · not owned'}" style="--rc:${x.u ? rarityColor(x.u.rarity) : 'var(--line)'}">
+      ? ` · ${esc(x.talent.name)}` : ''}${x.u ? '' : ' · not owned'}"
+        style="--rarity-color:${x.u ? rarityColor(x.u.rarity) : 'var(--line)'}">
         <img src="/static/${x.m.art}" alt="">
         ${x.level != null ? `<b>${x.level}</b>` : ''}
         ${x.talent ? `<img class="armory-talent" src="/static/${x.talent.icon}" alt="">` : ''}
@@ -30,14 +32,14 @@ function armoryCard(a) {
       <span class="army-stat small-stat" title="Average gold cost"><span class="gold">●</span>${s.avgCost}</span>
     </div>
     <div class="armory-minis">${s.slots.map(portrait).join('')}</div>
-    ${s.missing.length ? `<div class="small cost-no">Not owned on this account: ${s.missing.map(esc).join(', ')}</div>` : ''}
+    ${s.missing.length ? `<div class="small text-warn">Not owned on this account: ${s.missing.map(esc).join(', ')}</div>` : ''}
     ${descriptionField({ cls: 'armory-desc', 'data-armory-field': 'description' }, a.description)}
     ${tagEditor(a.tags || [], { attrs: { cls: 'armory-tag-input' }, removeAttr: 'data-armory-tag-remove',
       listId: 'armoryTagList', cls: 'armory-tags' })}
     <div class="armory-actions">
-      <button class="btn" data-armory-action="edit">Edit</button>
+      <button class="button" data-armory-action="edit">Edit</button>
       <button class="chip" data-armory-action="copy">Copy code</button>
-      <span class="armory-msg small"></span>
+      <span class="armory-message small"></span>
       <button class="chip danger armory-delete" data-armory-action="delete">Delete</button>
     </div>
   </article>`;
@@ -98,21 +100,15 @@ export function renderArmory() {
 
 async function updateSavedArmy(id, change, card) {
   const list = (state.savedArmies || []).map((a) => (a.id === id ? { ...a, ...change } : a));
-  const msg = card?.querySelector('.armory-msg');
+  const msg = card?.querySelector('.armory-message');
   try {
     await persistArmies(list);
     // Redraw at once; the focus is restored.
     renderArmory();
-    const m2 = $(`#tab-armory [data-armory-id="${CSS.escape(id)}"] .armory-msg`);
-    if (m2) {
-      m2.textContent = 'Saved.';
-      m2.className = 'armory-msg small cost-ok';
-    }
+    const m2 = $(`#tab-armory [data-armory-id="${CSS.escape(id)}"] .armory-message`);
+    showMessage(m2, 'Saved.', 'good');
   } catch (err) {
-    if (msg) {
-      msg.textContent = `Not saved. ${err.message}`;
-      msg.className = 'armory-msg small cost-no';
-    }
+    showMessage(msg, `Not saved. ${err.message}`, 'warn');
   }
   syncDraft(id, change);
 }
@@ -166,11 +162,9 @@ async function copyCode(army, msg) {
   try {
     const code = await encodeArmyCode(army);
     const copied = await copyText(code);
-    msg.textContent = copied ? 'Code copied.' : code;
-    msg.className = `armory-msg small ${copied ? 'cost-ok' : 'mono'}`;
+    showMessage(msg, copied ? 'Code copied.' : code, copied ? 'good' : 'code');
   } catch (err) {
-    msg.textContent = err.message;
-    msg.className = 'armory-msg small cost-no';
+    showMessage(msg, err.message, 'warn');
   }
 }
 
@@ -201,7 +195,7 @@ async function cardClick(e) {
   if (act.dataset.armoryAction === 'edit') {
     editArmy(army);
     setTab('army');
-  } else if (act.dataset.armoryAction === 'copy') await copyCode(army, card.querySelector('.armory-msg'));
+  } else if (act.dataset.armoryAction === 'copy') await copyCode(army, card.querySelector('.armory-message'));
   else if (act.dataset.armoryAction === 'delete') await deleteArmy(army);
 }
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rumble Collection Tracker</title>
-  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" href="/favicon.iconImage">
   <link rel="stylesheet" href="/styles/style.css">
   <link rel="stylesheet" href="/fonts/fonts.css">
   <link rel="stylesheet" href="/styles/theme-rumble.css">
@@ -30,14 +30,14 @@
       </div>
     </div>
     <div class="topbar-row topbar-actions">
-      <a class="coffee-btn" href="https://buymeacoffee.com/razingo" target="_blank" rel="noopener noreferrer"
+      <a class="coffee-button" href="https://buymeacoffee.com/razingo" target="_blank" rel="noopener noreferrer"
         title="Support the tracker">☕ Buy me a coffee</a>
       <div id="status" class="status">Connecting…</div>
       <span class="topbar-spacer"></span>
-      <button class="chip report-btn" id="reportBtn" aria-haspopup="dialog">🐞 Report a problem</button>
-      <button class="chip" id="settingsBtn" aria-haspopup="dialog" title="Start with Windows and notifications">⚙ Settings</button>
+      <button class="chip report-button" id="reportButton" aria-haspopup="dialog">🐞 Report a problem</button>
+      <button class="chip" id="settingsButton" aria-haspopup="dialog" title="Start with Windows and notifications">⚙ Settings</button>
       <div class="backup">
-        <button class="chip" id="backupBtn" aria-haspopup="menu" aria-expanded="false">Backup ▾</button>
+        <button class="chip" id="backupButton" aria-haspopup="menu" aria-expanded="false">Backup ▾</button>
         <div class="backup-menu" id="backupMenu" role="menu" hidden>
           <a role="menuitem" href="/api/backup" download>Export backup</a>
           <button role="menuitem" id="backupImport">Import backup…</button>
@@ -47,7 +47,7 @@
         </div>
         <input type="file" id="backupFile" accept="application/json,.json" hidden>
       </div>
-      <button class="chip quit-btn" id="quitBtn" title="Stop the tracker. Closing the window keeps it running in the tray."
+      <button class="chip quit-button" id="quitButton" title="Stop the tracker. Closing the window keeps it running in the tray."
         hidden>⏻ Quit</button>
     </div>
   </header>

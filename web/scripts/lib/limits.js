@@ -35,3 +35,19 @@ export function withTag(tags, raw, known = []) {
   if (!v || tags.some((t) => sameTag(t, v)) || tags.length >= LIMITS.tagsPerArmy) return null;
   return [...tags, known.find((t) => sameTag(t, v)) || v];
 }
+
+/**
+ * A key in a tag box: Enter or a comma adds the typed tag, Backspace in an empty box removes the last one. Returns the
+ * new tags, or null when the key changes nothing.
+ */
+export function tagKey(e, tags, known) {
+  const input = e.target;
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const next = withTag(tags, input.value, known);
+    input.value = '';
+    return next;
+  }
+  if (e.key === 'Backspace' && !input.value && tags.length) return tags.slice(0, -1);
+  return null;
+}

@@ -18,7 +18,20 @@ export const store = {
       // storage unavailable
     }
   },
+  /** Moves a value saved under an older key to its current one, once. */
+  rename(from, to) {
+    try {
+      const ls = globalThis.window?.localStorage;
+      const v = ls?.getItem(from);
+      if (v == null) return;
+      if (ls.getItem(to) == null) ls.setItem(to, v);
+      ls.removeItem(from);
+    } catch {
+      // storage unavailable
+    }
+  },
 };
+
 /** The URL of a game image, as in imageUrl('rewards', 'Tome_Epic'). */
 export const imageUrl = (folder, name) => `/static/${folder}/${encodeURIComponent(name)}.webp`;
 
@@ -47,6 +60,17 @@ export const getJson = (url, what) => request(url, undefined, `load ${what}`);
 export const post = (url, body) => request(url, {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
 }, 'do that');
+
+/**
+ * Shows a short status message in `el`. `kind` is 'good', 'warn', 'code' (shown as code, for copying by hand) or
+ * nothing; the element keeps its other classes.
+ */
+export function showMessage(el, text, kind = '') {
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('text-good', 'text-warn', 'mono');
+  if (kind) el.classList.add({ good: 'text-good', warn: 'text-warn', code: 'mono' }[kind]);
+}
 
 /** Copies text to the clipboard. Returns false when the browser blocks it. */
 export async function copyText(text) {

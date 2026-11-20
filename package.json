@@ -1,6 +1,6 @@
 {
   "name": "rumble-collection-tracker",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Unofficial Warcraft Rumble collection and army tracker (not affiliated with Blizzard Entertainment).",
   "license": "MIT",
@@ -8,9 +8,9 @@
   "scripts": {
     "start": "node server/main.mjs",
     "test": "node --test \"test/*.test.mjs\"",
-    "check-style": "node tools/check_style.mjs",
-    "fetch-gamedata": "node tools/fetch_gamedata.mjs",
-    "build-release": "node tools/build_release.mjs"
+    "check-style": "node tools/check-style.mjs",
+    "fetch-gamedata": "node tools/fetch-gamedata.mjs",
+    "build-release": "node tools/build-release.mjs"
   },
   "engines": {
     "node": ">=22"

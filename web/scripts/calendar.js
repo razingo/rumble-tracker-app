@@ -1,6 +1,6 @@
 // Calendar tab: the event schedules from gamedata/events.json and the events the save reports as running.
 import { $, imageUrl, getJson, post, RULES, BY_SLUG, TAG_ICONS, state, onTablesReload, ui, ANKH_ID } from './core.js';
-import { ico } from './drawer.js';
+import { iconImage } from './drawer.js';
 import { STORE, loadStore } from './grid.js';
 import { SECOND, MINUTE, DAY } from './lib/constants.js';
 import { esc, fmt, plural, when, dayOnly, dayWithYear, longDay, timeOnly, span, ago, titleCase } from './lib/format.js';
@@ -53,18 +53,18 @@ function ticketBalance(ev) {
 }
 
 // Dungeon and raid rotations
-const rotColor = (rot, item) =>
-  (rot.id === 'dungeonFamily' ? `var(--fam-${String(item).toLowerCase()}, var(--ev-default))` : rot.id === 'raid'
-  ? (item.type === 'Siege' ? 'var(--ev-siege)' : 'var(--ev-raid)') : 'var(--ev-dungeon)');
-const rotIcon = (rot, item) => (rot.id === 'dungeonFamily' && TAG_ICONS?.[item]
-  ? `<img class="rotation-ico" src="/static/${TAG_ICONS[item]}" alt="">` : '');
+const rotationColor = (rot, item) =>
+  (rot.id === 'dungeonFamily' ? `var(--family-${String(item).toLowerCase()}, var(--event-default))` : rot.id === 'raid'
+  ? (item.type === 'Siege' ? 'var(--event-siege)' : 'var(--event-raid)') : 'var(--event-dungeon)');
+const rotationIcon = (rot, item) => (rot.id === 'dungeonFamily' && TAG_ICONS?.[item]
+  ? `<img class="rotation-icon" src="/static/${TAG_ICONS[item]}" alt="">` : '');
 
 /** The account's Ankh, which continues a failed dungeon, for the Dungeon card. */
 function ankhLine() {
   const c = state?.currencies?.find((x) => x.id === ANKH_ID);
   const icon = RULES.currencyIcons?.[ANKH_ID];
   return `<div class="rotation-ankh" title="Used to continue failed dungeons">${icon
-    ? `<img class="cur-ico" src="/static/${icon}" alt="">` : ''}${esc(c?.name || 'Ankh')} <b>${fmt(c?.balance
+    ? `<img class="currency-icon" src="/static/${icon}" alt="">` : ''}${esc(c?.name || 'Ankh')} <b>${fmt(c?.balance
     ?? 0)}</b> <small class="muted">continues a failed dungeon</small></div>`;
 }
 
@@ -72,13 +72,13 @@ function renderRotations(now) {
   const card = (rot) => {
     const cur = rotationAt(rot, now);
     const next = [1, 2, 3].map((k) => rotationAt(rot, cur.end + (k - 1) * rot.periodDays * DAY));
-    return `<article class="rotation-card" style="--ev:${rotColor(rot, cur.item)}">
+    return `<article class="rotation-card" style="--event-color:${rotationColor(rot, cur.item)}">
       <div class="card-label">${esc(rot.label)} <span class="muted">· every
         ${rot.periodDays === 7 ? 'week' : `${rot.periodDays / 7} weeks`}</span></div>
-      <div class="rotation-now">${rotIcon(rot, cur.item)}<b>${esc(rotationName(cur.item))}</b></div>
+      <div class="rotation-now">${rotationIcon(rot, cur.item)}<b>${esc(rotationName(cur.item))}</b></div>
       <div class="time-highlight">Changes in ${span(cur.end - now)}</div>
       ${rot.id === 'dungeon' ? ankhLine() : ''}
-      <div class="rotation-next">${next.map((x) => `<span title="${esc(when(x.start))}">${rotIcon(rot,
+      <div class="rotation-next">${next.map((x) => `<span title="${esc(when(x.start))}">${rotationIcon(rot,
         x.item)}${esc(rotationName(x.item))} <small>${esc(dayOnly(x.start))}</small></span>`).join('')}</div>
     </article>`;
   };
@@ -167,8 +167,8 @@ function renderTickets(now) {
     const name = c?.name || 'Event tickets';
     const idle = !c?.event;
     const next = users.filter((u) => u !== c?.event);
-    return `<div class="cur${idle ? ' idle' : ''}" title="${esc(name)}${idle ? ' · no event is using these tickets now' : ''}">
-      ${icon ? `<img class="cur-ico" src="${icon}" alt="">` : ''}<span>${esc(name)}</span><b>${idle ? '–' : fmt(c?.balance ?? 0)}</b>
+    return `<div class="currency${idle ? ' idle' : ''}" title="${esc(name)}${idle ? ' · no event is using these tickets now' : ''}">
+      ${icon ? `<img class="currency-icon" src="${icon}" alt="">` : ''}<span>${esc(name)}</span><b>${idle ? '–' : fmt(c?.balance ?? 0)}</b>
       ${next.length ? `<small class="muted">next: ${esc(next.join(', '))}</small>` : ''}</div>`;
   }).join('');
   return `<div class="currencies cal-tickets">${chips}</div>`;
@@ -263,7 +263,7 @@ function treeTotals(ev, rewards) {
     <span><small>Collectable tickets</small><b>${tickets != null ? fmt(tickets) : '–'}</b></span>
     <span><small>Total rewards cost</small><b>${fmt(total)}</b></span>
     <span><small>Rewards</small><b>${rewards.length}</b></span>
-    ${tickets != null ? `<span class="${enough ? 'cost-ok' : 'cost-no'}"><small>${enough
+    ${tickets != null ? `<span class="${enough ? 'text-good' : 'text-warn'}"><small>${enough
       ? 'Enough for everything' : 'Short of everything by'}</small><b>${enough ? '✓' : fmt(total - tickets)}</b></span>` : ''}
   </div>`;
 }
@@ -333,7 +333,7 @@ function treeGrid(ev, rewards, planner, plan, look) {
       ? ' on-path' : ''}${picked.has(k) ? ' target' : ''}`;
     return `<div class="${cls}" data-tree-pick="${k}" role="button" tabindex="0" aria-pressed="${picked.has(k)}"
       style="left:${(r0.col / cols) * 100}%;top:${r0.row * 118}px" title="${esc(title)}">
-      <div class="tree-ico">${rewardImg(r, ev)}${badge}</div>
+      <div class="tree-icon">${rewardImg(r, ev)}${badge}</div>
       <div class="tree-amt">${look.amountText(r)}</div>
       ${r0.cost != null ? `<div class="tree-cost">${fmt(r0.cost)}<img src="${eventIcon(ev)}" alt=""></div>` : ''}
     </div>`;
@@ -355,8 +355,8 @@ function renderRewardTree(ev) {
     ? { cost: best.cost, targets, claimed: new Set(best.take), picked: new Set(targets.map(rewardKey)),
       path: planner.order.filter((r) => best.take.includes(rewardKey(r))) }
     : null;
-  return `<section class="panel cal-tree" id="calTree" style="--ev:var(--ev-${esc(ev.family)}, var(--ev-default))">
-    <div class="section-head"><img class="tree-head-ico" src="${eventIcon(ev)}" alt=""><h2>${esc(ev.name || ev.id)} rewards</h2>
+  return `<section class="panel cal-tree" id="calendarTree" style="--event-color:var(--event-${esc(ev.family)}, var(--event-default))">
+    <div class="section-head"><img class="tree-head-icon" src="${eventIcon(ev)}" alt=""><h2>${esc(ev.name || ev.id)} rewards</h2>
       <button class="chip" data-calendar-tree="" style="margin-left:auto">Close</button></div>
     ${treeTotals(ev, rewards)}
     <p class="muted small">Collectable means every challenge, random dailies and weeklies at their usual
@@ -378,7 +378,7 @@ function eventCard(r, now) {
   const status = r.unknown
     ? 'Running now'
     : running ? `Ends in ${span(r.end - now)}` : `Starts in ${span(r.start - now)}`;
-  return `<article class="cal-card" style="--ev:var(--ev-${esc(ev.family)}, var(--ev-default))">
+  return `<article class="cal-card" style="--event-color:var(--event-${esc(ev.family)}, var(--event-default))">
     <img src="${eventIcon(ev)}" alt="">
     <div class="cal-name">${esc(ev.name || ev.id)}</div>
     <div class="time-highlight">${status}</div>
@@ -386,7 +386,7 @@ function eventCard(r, now) {
     ${live || tickets != null || ev.rewards ? `<div class="cal-badges">
       ${live ? '<span class="cal-badge" title="Your game lists this event as running">Running in your game</span>' : ''}
       ${tickets != null ? `<span class="cal-badge tickets" title="As last saved by the game">${fmt(tickets)} tickets</span>` : ''}
-      ${ev.rewards ? `<button class="cal-badge tree-btn" data-calendar-tree="${esc(ev.id)}"
+      ${ev.rewards ? `<button class="cal-badge tree-button" data-calendar-tree="${esc(ev.id)}"
         aria-pressed="${view.tree === ev.id}">Rewards</button>` : ''}
     </div>` : ''}
   </article>`;
@@ -405,15 +405,15 @@ function renderCalendarTimeline(now) {
   const off = view.offset || 0;
   return `<section class="panel cal-timeline">
     <div class="section-head">
-      <h2 id="calRange">${esc(timelineRange(now))}</h2>
+      <h2 id="calendarRange">${esc(timelineRange(now))}</h2>
       <button class="chip" data-calendar-nav="0" title="Back to today in the middle" ${off ? '' : 'disabled'}>Today</button>
       <span class="muted small">Wednesdays are highlighted because most events start and end on one.</span>
     </div>
     <div class="cal-slide-row">
       <span class="muted small">Earlier · later</span>
       <input type="range" class="cal-slider keep" data-calendar-slider min="${-TIMELINE_RANGE}" max="${TIMELINE_RANGE}"
-        step="1" value="${off}" list="calTicks" aria-label="Move the timeline (days from today)">
-      <datalist id="calTicks"><option value="0"></option></datalist>
+        step="1" value="${off}" list="calendarTicks" aria-label="Move the timeline (days from today)">
+      <datalist id="calendarTicks"><option value="0"></option></datalist>
     </div>
     <div class="cal-body">${renderTimelineBody(now)}</div>
   </section>`;
@@ -486,10 +486,10 @@ function rotationRow(w, rot, now, nowLine) {
   for (let seg = rotationAt(rot, w.from); seg.start < w.to; seg = rotationAt(rot, seg.end)) segments.push(seg);
   const bars = segments.map((seg) => {
     const left = w.pct(seg.start), width = w.pct(seg.end) - left;
-    const ico = rotIcon(rot, seg.item);
-    const cls = ['cal-bar', 'rotation-bar', ico ? 'has-ico' : '', ...barEdges(w, seg.start, seg.end, now)].filter(Boolean).join(' ');
-    return `<span class="${cls}" style="left:${left}%;width:${width}%;--ev:${rotColor(rot, seg.item)}"
-      title="${esc(rotationName(seg.item))}: ${esc(when(seg.start))} – ${esc(when(seg.end))}">${ico}<span
+    const iconImage = rotationIcon(rot, seg.item);
+    const cls = ['cal-bar', 'rotation-bar', iconImage ? 'has-icon' : '', ...barEdges(w, seg.start, seg.end, now)].filter(Boolean).join(' ');
+    return `<span class="${cls}" style="left:${left}%;width:${width}%;--event-color:${rotationColor(rot, seg.item)}"
+      title="${esc(rotationName(seg.item))}: ${esc(when(seg.start))} – ${esc(when(seg.end))}">${iconImage}<span
       class="bar-label bar-label-name">${esc(rotationName(seg.item))}</span></span>`;
   }).join('');
   return `<div class="cal-row-label rotation-row"><span>${esc(rot.label)}</span></div><div class="cal-track">${bars}${nowLine}</div>`;
@@ -500,12 +500,12 @@ function renderTimelineBody(now) {
   const rows = eventRows(runsBetween(w.from, w.to));
   if (!rows.length) return '<p class="muted">No events in the game files for these days.</p>';
   const nowLine = now >= w.from && now < w.to ? `<span class="cal-now" style="left:${w.pct(now)}%"></span>` : '';
-  return `<div class="cal-grid" style="--n:${w.n}">
+  return `<div class="cal-grid" style="--days:${w.n}">
       <span></span><div class="cal-months">${monthHeader(w)}</div>
       <span></span><div class="cal-days">${dayHeader(w)}</div>
       ${rows.map((row) => `
         <div class="cal-row-label"><img src="${eventIcon(row.ev)}" alt=""><span>${esc(row.ev.name || row.ev.id)}</span></div>
-        <div class="cal-track" style="--ev:var(--ev-${esc(row.ev.family)}, var(--ev-default))">
+        <div class="cal-track" style="--event-color:var(--event-${esc(row.ev.family)}, var(--event-default))">
           ${row.runs.map((r) => eventBar(w, r, now)).join('')}${nowLine}</div>`).join('')}
       ${(EVENTS.rotations || []).map((rot) => rotationRow(w, rot, now, nowLine)).join('')}
     </div>`;
@@ -599,7 +599,9 @@ export function bindCalendar() {
   };
   page.addEventListener('keydown', (e) => {
     const el = e.target.closest?.('.tree-node[data-tree-pick]');
-    if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(el, e.ctrlKey || e.metaKey); }
+    if (!el || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    pick(el, e.ctrlKey || e.metaKey);
   });
   page.addEventListener('click', async (e) => {
     const goalEl = e.target.closest('[data-tree-goal]');
@@ -623,7 +625,7 @@ export function bindCalendar() {
       view.tree = id && view.tree !== id ? id : null;
       view.picks = [];
       await renderCalendar();
-      if (view.tree) $('#calTree')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (view.tree) $('#calendarTree')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     const nav = e.target.closest('[data-calendar-nav]');
@@ -637,7 +639,7 @@ export function bindCalendar() {
     view.offset = Number(e.target.value);
     const now = Date.now();
     $('.cal-timeline .cal-body').innerHTML = renderTimelineBody(now);
-    $('#calRange').textContent = timelineRange(now);
+    $('#calendarRange').textContent = timelineRange(now);
     $('.cal-timeline [data-calendar-nav="0"]').disabled = !view.offset;
   });
   // Remember whether the challenge list is open across redraws.

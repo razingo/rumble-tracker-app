@@ -13,7 +13,11 @@ $last = $null
 while ($true) {
   try { [void][System.Diagnostics.Process]::GetProcessById($parent) } catch { exit 0 }
   $now = if ([System.Diagnostics.Process]::GetProcessesByName($env:RT_GAME).Length) { '1' } else { '0' }
-  if ($now -ne $last) { [Console]::Out.WriteLine($now); [Console]::Out.Flush(); $last = $now }
+  if ($now -ne $last) {
+    [Console]::Out.WriteLine($now)
+    [Console]::Out.Flush()
+    $last = $now
+  }
   Start-Sleep -Seconds 2
 }
 `;

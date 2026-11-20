@@ -4,14 +4,14 @@ import { miniOptions } from './collection.js';
 import { $, post, RULES, BY_SLUG, TAG_ICONS, state } from './core.js';
 import { alertDialog } from './dialogs.js';
 import { esc, fmt, plural } from './lib/format.js';
-import { rarityName, rarityColor, miniOf, unitName, balance, curName, coreName, nextUpgrade, talentSlots,
+import { rarityName, rarityColor, miniOf, unitName, balance, currencyName, coreName, nextUpgrade, talentSlots,
   allTalentsOwned, effectivePicks, xpToMax, isLeader, fixedSlot, slotLocked, bottomSlotOptions, armyOf,
   leaderSlotBonus, totalLevel, armyTotals } from './units.js';
 
 // The item shown in the side panel ({ kind: 'unit', id } or { kind: 'mini', slug }) and the level its stats preview.
 export const panel = { open: null, previewLevel: null };
-export const ico = (path, title = '') => (path ? `<img class="ico" src="/static/${path}" alt="" title="${esc(title)}">` : '');
-const tag = (name) => `<span class="tag-pill">${ico(TAG_ICONS[name], name)}${esc(name)}</span>`;
+export const iconImage = (path, title = '') => (path ? `<img class="icon" src="/static/${path}" alt="" title="${esc(title)}">` : '');
+const tag = (name) => `<span class="tag-pill">${iconImage(TAG_ICONS[name], name)}${esc(name)}</span>`;
 function statRows(m, level) {
   return Object.entries(m.stats).map(([k, v]) => {
     const val = Array.isArray(v) ? v[Math.min(v.length, level) - 1] : v;
@@ -33,22 +33,22 @@ function armyEditor(u, m) {
       : i === 3 ? ['Wildcard', ...bottom]
         : bottom.filter((o) => !takenElsewhere.has(o) || o === s.type);
     const typeCtl = isLeaderSlot
-      ? `<div class="slot-type">${ico(TAG_ICONS.Leader, 'Leader')}Leader</div>`
+      ? `<div class="slot-type">${iconImage(TAG_ICONS.Leader, 'Leader')}Leader</div>`
       : slotLocked(u, i)
-        ? `<div class="slot-type" title="Set by this leader">${ico(TAG_ICONS[s.type], s.type)}${esc(s.type)} <span
+        ? `<div class="slot-type" title="Set by this leader">${iconImage(TAG_ICONS[s.type], s.type)}${esc(s.type)} <span
           class="lock" aria-label="Set by this leader">🔒</span></div>`
-        : `<label class="slot-type">${s.type ? ico(TAG_ICONS[s.type], s.type) : ''}
+        : `<label class="slot-type">${s.type ? iconImage(TAG_ICONS[s.type], s.type) : ''}
           <select data-army-type="${i}" aria-label="Slot ${i} type">${fixed3
             ? '' : '<option value="">Type…</option>'}${opts.map((o) =>
             `<option ${o === s.type ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
-    const tierBtns = A.tiers.map((tt, k) => `<button class="tier-btn" style="--tc:${tt.color}"
+    const tierBtns = A.tiers.map((tt, k) => `<button class="tier-button" style="--type-color:${tt.color}"
       aria-pressed="${k === s.tier}" data-army-tier-slot="${i}" data-army-tier="${k}"
       title="${tt.name}${tt.bonus ? ` +${tt.bonus}` : ''}">${tt.name[0]}</button>`).join('');
     const boostCtl = i === A.boostSlot
-      ? `<button class="boost-btn" aria-pressed="${s.boost}" data-army-boost="${i}"
+      ? `<button class="boost-button" aria-pressed="${s.boost}" data-army-boost="${i}"
         title="The mini here plays at XP level 20">${s.boost ? '⚡ Boost' : '+ Boost'}</button>`
       : '';
-    return `<div class="slot${isLeaderSlot ? ' leader-slot' : ''}${s.boost ? ' boosted' : ''}" style="--tc:${t.color}">
+    return `<div class="slot${isLeaderSlot ? ' leader-slot' : ''}${s.boost ? ' boosted' : ''}" style="--type-color:${t.color}">
       ${typeCtl}
       <div class="slot-tier">${t.name}${t.bonus ? ` · +${plural(t.bonus, 'level')}` : ''}${s.boost
         ? ' · XP level 20' : ''}</div>
@@ -61,11 +61,11 @@ function armyEditor(u, m) {
     <div class="army-grid">${cells}</div>
     <div class="small">${m.fixedArmySlots ? 'Top row fixed for this leader (the third can become Wildcard). '
       : 'This leader\'s top row isn\'t known yet, so every slot is editable. '}Copy the tiers from the game's Army
-      screen. Bronze to Gold come from Dungeons, Sieges and Raids; Gold to Diamond costs ${a.cost} ${curName('valor')}.</div>
+      screen. Bronze to Gold come from Dungeons, Sieges and Raids; Gold to Diamond costs ${a.cost} ${currencyName('valor')}.</div>
     <div class="note">${a.notDiamond === 0
       ? `All ${a.slots} slots are Diamond.`
       : `${a.diamonds}/${a.slots} Diamond · ${plural(a.goldReady, 'Gold slot')} ready ·
-        ${fmt(a.notDiamond * a.cost)} ${curName('valor')} to make this army all Diamond`}</div>`;
+        ${fmt(a.notDiamond * a.cost)} ${currencyName('valor')} to make this army all Diamond`}</div>`;
 }
 
 async function saveArmy(u, slots) {
@@ -81,7 +81,7 @@ async function saveArmy(u, slots) {
 
 function drawerHead(u, m) {
   return `<button class="close" data-close aria-label="Close">×</button>
-  <div class="drawer-head" style="--rc:${u ? rarityColor(u.rarity) : 'var(--line)'}">
+  <div class="drawer-head" style="--rarity-color:${u ? rarityColor(u.rarity) : 'var(--line)'}">
     ${m ? `<img src="/static/${m.art}" alt="">` : '<div class="art unknown">?</div>'}
     <div><h2 id="drawerTitle">${esc(m ? m.name : unitName(u))}</h2>
     <div class="muted">${m ? `${m.category} · ${m.cost} gold` : 'Not identified yet'}</div>
@@ -96,8 +96,8 @@ function progressSection(u) {
   const leaderSlot = isLeader(u) ? ` + ${leaderSlotBonus(u)} Leader slot
     (${RULES.armySlots.tiers[armyOf(u)[RULES.armySlots.leaderSlot].tier].name})` : '';
   const nextTalent = u.talents < slots
-    ? ` · next costs ${RULES.talentCostCoins} ${curName('coins')} (have ${fmt(balance('coins'))})` : '';
-  return `<h3>Progress</h3><dl class="kv">
+    ? ` · next costs ${RULES.talentCostCoins} ${currencyName('coins')} (have ${fmt(balance('coins'))})` : '';
+  return `<h3>Progress</h3><dl class="key-values">
     <dt>Level</dt><dd>${totalLevel(u)} = XP level ${u.xpLevel} + ${u.rarity} rarity + ${plural(u.talents, 'talent')}${leaderSlot}</dd>
     <dt>XP</dt><dd>${u.xpLevel >= RULES.maxXpLevel ? 'Max XP level'
       : `${fmt(u.xp)} / ${fmt(u.xpNeeded)} · ${fmt(xpToMax(u))} XP to level 20`}</dd>
@@ -108,12 +108,12 @@ function progressSection(u) {
 
 /** What the next rarity costs and whether the account has it. */
 function upgradeSection(u, up) {
-  const have = (ok, text) => `<span class="${ok ? 'cost-ok' : 'cost-no'}">${text}</span>`;
+  const have = (ok, text) => `<span class="${ok ? 'text-good' : 'text-warn'}">${text}</span>`;
   const slotsNow = RULES.talentSlotsByRarity[u.rarity] ?? 0;
   const slotsNext = RULES.talentSlotsByRarity[up.to] ?? 0;
   return `<h3>Next upgrade: ${rarityName(up.to)}</h3><div class="note">
     ${have(up.starsOk, `${up.stars} stars (have ${u.stars})`)} ·
-    ${have(up.arcOk, `${fmt(up.arcEnergy)} ${curName('arcEnergy')} (have ${fmt(balance('arcEnergy'))})`)}
+    ${have(up.arcOk, `${fmt(up.arcEnergy)} ${currencyName('arcEnergy')} (have ${fmt(balance('arcEnergy'))})`)}
     ${up.core ? ` · ${have(up.coreOk, `1 ${coreName(up.core)} (have ${fmt(balance(up.core))})`)}` : ''}
     <br><b>${up.ready ? 'Ready to upgrade' : 'Not ready yet'}</b> · +1
     level${slotsNext > slotsNow ? ` and talent slot ${slotsNext}` : ' (no new talent slot)'}</div>`;
@@ -140,16 +140,16 @@ function talentsSection(u, m) {
     return `<label class="talent ${checked ? 'picked' : ''}">
       <input type="checkbox" data-drawer-talent="${i}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
       <img src="/static/${t.icon}" alt="">
-      <div><b>${esc(t.name)}</b><div class="desc small">${esc(t.description)}</div></div></label>`;
+      <div><b>${esc(t.name)}</b><div class="description small">${esc(t.description)}</div></div></label>`;
   }).join('');
 }
 
 /** A name and description, as used for traits (small text, with an icon) and the leader ability. */
 const traitRow = (name, description, icon = '') => `<div class="trait">${icon}<div><b>${esc(name)}</b>
-  <span class="desc${icon ? ' small' : ''}">${esc(description)}</span></div></div>`;
+  <span class="description${icon ? ' small' : ''}">${esc(description)}</span></div></div>`;
 
 function statsSection(m, level) {
-  return `<h3>Stats at level <span id="lvlOut">${level}</span></h3>
+  return `<h3>Stats at level <span id="levelOutput">${level}</span></h3>
     <input type="range" min="1" max="${RULES.maxLevel}" value="${level}" data-preview-level style="width:100%">
     <table class="stats-table">${statRows(m, level)}</table>
     ${m.weakAgainst ? `<div class="small">Weak against: ${esc(m.weakAgainst)}.</div>` : ''}`;
@@ -160,9 +160,9 @@ function drawerSections(u, m, level) {
   const parts = [drawerHead(u, m)];
   if (u && !m) {
     parts.push(`<h3>Which mini is this?</h3><div class="row"><select data-unit-name="${u.id}">${miniOptions(null)}</select>
-      <button class="btn" data-unit-save="${u.id}">Save</button></div>`);
+      <button class="button" data-unit-save="${u.id}">Save</button></div>`);
   }
-  if (m) parts.push(`<p class="desc">${esc(m.description)}</p>`);
+  if (m) parts.push(`<p class="description">${esc(m.description)}</p>`);
   if (u?.synthetic) {
     parts.push('<div class="note">Every player has this mini. It isn\'t stored in your save and has no levels, stars or '
       + 'talents to track.</div>');
@@ -178,7 +178,8 @@ function drawerSections(u, m, level) {
   else if (m?.armySlotUpgrades?.length) {
     parts.push(`<h3>Army slot types</h3><div class="tags">${m.armySlotUpgrades.map(tag).join('')}</div>`);
   }
-  if (m?.traits.length) parts.push('<h3>Traits</h3>' + m.traits.map((t) => traitRow(t.name, t.description, ico(t.icon, t.name))).join(''));
+  if (m?.traits.length) parts.push('<h3>Traits</h3>' + m.traits.map((t) =>
+    traitRow(t.name, t.description, iconImage(t.icon, t.name))).join(''));
   if (m) parts.push(statsSection(m, level));
   return parts.join('');
 }
@@ -196,7 +197,7 @@ export function renderDrawer() {
   body.innerHTML = drawerSections(u, m, level);
   body.dataset.key = key;
   body.scrollTop = keepScroll;
-  body.style.setProperty('--rc', u ? rarityColor(u.rarity) : 'var(--line)');
+  body.style.setProperty('--rarity-color', u ? rarityColor(u.rarity) : 'var(--line)');
   drawer.hidden = false;
 }
 
@@ -239,7 +240,7 @@ export function bindDrawer() {
   body.addEventListener('input', (e) => {
     if (!e.target.matches('[data-preview-level]')) return;
     panel.previewLevel = Number(e.target.value);
-    $('#lvlOut').textContent = panel.previewLevel;
+    $('#levelOutput').textContent = panel.previewLevel;
     const m = panel.open.kind === 'unit' ? miniOf(unit()) : BY_SLUG.get(panel.open.slug);
     $('.stats-table').innerHTML = statRows(m, panel.previewLevel);
   });

@@ -1,4 +1,4 @@
-// Entry point of RumbleTracker.exe (Node.js single executable application), built by tools/build_release.mjs.
+// Entry point of RumbleTracker.exe (Node.js single executable application), built by tools/build-release.mjs.
 //
 // The app's files are embedded as one asset and unpacked per version to %LOCALAPPDATA%\RumbleTracker\app; a CommonJS
 // helper imports the server from there (a single executable cannot import ES modules from disk). User data is in

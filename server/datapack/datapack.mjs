@@ -1,11 +1,11 @@
 // Data packs are signed game-data updates, installed into <data>/gamedata/ and used before gamedata/. A pack is
 // manifest.json { format, gameBuild, dataVersion, files: { path: { sha256, size } } }, manifest.sig (Ed25519 over
-// manifest.json, with the keys in pack_keys.mjs) and the listed files. Packs with an invalid signature or an older
+// manifest.json, with the keys in pack-keys.mjs) and the listed files. Packs with an invalid signature or an older
 // dataVersion are rejected.
 import { mkdir, readFile, writeFile, rm, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, createPublicKey, verify } from 'node:crypto';
-import { PACK_PUBLIC_KEYS } from './pack_keys.mjs';
+import { PACK_PUBLIC_KEYS } from './pack-keys.mjs';
 import { SECOND, MB } from '../../web/scripts/lib/constants.js';
 
 const MAX_FILE = 8 * MB; // per file

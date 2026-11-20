@@ -1,7 +1,7 @@
 // Report a problem. Script errors on the page go to the server's error log, and the dialog builds a report the player
 // can open as a GitHub issue or copy. Nothing is sent until the player submits it. The page loads this module first,
 // so it also catches start-up errors.
-import { $, getJson, post, copyText, openExternal, state, ui } from './core.js';
+import { $, getJson, post, showMessage, copyText, openExternal, state, ui } from './core.js';
 import { esc, plural } from './lib/format.js';
 
 (() => {
@@ -23,7 +23,7 @@ const REPORT = { data: null, title: '', what: '', steps: '', include: true };
 const MAX_URL = 7500; // GitHub rejects longer URLs
 
 export function renderReportBadge() {
-  const b = document.getElementById('reportBtn');
+  const b = document.getElementById('reportButton');
   if (!b) return;
   const n = state?.problems || 0;
   b.classList.toggle('has-problems', n > 0);
@@ -87,11 +87,11 @@ function renderReportDialog(msg = '') {
       'paste it into the issue on GitHub with <b>Ctrl+V</b>.'
     : 'For a screenshot, press <b>Win+Shift+S</b>, select an area, then paste it into the issue on GitHub with <b>Ctrl+V</b>.'}</p>
     <div class="report-actions">
-      <button type="button" class="btn" data-report-open ${d ? '' : 'disabled'}>Open on GitHub</button>
+      <button type="button" class="button" data-report-open ${d ? '' : 'disabled'}>Open on GitHub</button>
       <button type="button" class="chip" data-report-copy ${d ? '' : 'disabled'}>Copy report</button>
       ${d?.errors ? '<button type="button" class="chip" data-report-clear title="Forget the errors noted so ' +
         'far">Clear errors</button>' : ''}
-      <span class="dialog-msg small">${esc(msg)}</span>
+      <span class="dialog-message small">${esc(msg)}</span>
     </div>
   </form>`;
 }
@@ -111,7 +111,7 @@ async function openReportDialog() {
 
 export function bindReport() {
   const dlg = $('#reportDialog');
-  $('#reportBtn').addEventListener('click', openReportDialog);
+  $('#reportButton').addEventListener('click', openReportDialog);
   dlg.addEventListener('input', (e) => {
     const k = e.target.dataset.reportField;
     if (k) REPORT[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -121,11 +121,7 @@ export function bindReport() {
       dlg.close();
       return;
     }
-    const msg = (t, ok) => {
-      const m = dlg.querySelector('.dialog-msg');
-      m.textContent = t;
-      m.className = `dialog-msg small ${ok ? 'cost-ok' : 'cost-no'}`;
-    };
+    const msg = (text, ok) => showMessage(dlg.querySelector('.dialog-message'), text, ok ? 'good' : 'warn');
     if (e.target.closest('[data-report-open]')) {
       if (!REPORT.what.trim()) {
         msg('Please describe what happened first.', false);
