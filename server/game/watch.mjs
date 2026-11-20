@@ -1,11 +1,9 @@
 // Whether Warcraft Rumble is running, without starting a process per check: one PowerShell process looks every
 // 2 seconds and writes "1" or "0" when it changes. It exits with the tracker.
 import { spawn, execFile } from 'node:child_process';
-import path from 'node:path';
 
-const SYSTEM32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
-export const POWERSHELL = path.join(SYSTEM32, 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-export const TASKLIST = path.join(SYSTEM32, 'tasklist.exe');
+import { POWERSHELL, TASKLIST } from '../system.mjs';
+import { host } from '../host.mjs';
 const GAME = 'WarcraftRumble';
 
 const SCRIPT = `
@@ -73,19 +71,17 @@ export function watchGame(onChange, onFail = () => {}) {
 }
 
 /**
- * In the exe the tray icon's PowerShell process reports whether the game runs (desktop/launcher.cjs emits
- * 'rumble:game' with true/false), so no second process is needed. If the tray can't report ('rumble:game-failed'),
- * the tracker starts its own watcher. Same interface as watchGame.
+ * In the exe the tray icon's process reports whether the game runs (host.mjs), so no second process is needed. If
+ * those reports stop, the tracker starts its own watcher. Same interface as watchGame.
  */
 export function watchGameFromTray(onChange, onFail = () => {}) {
   let state = null;
   let own = null;
-  process.on('rumble:game', (running) => {
-    if (own || typeof running !== 'boolean' || running === state) return;
+  host.onGame((running) => {
+    if (own) return;
     state = running;
     onChange(running);
-  });
-  process.on('rumble:game-failed', () => {
+  }, () => {
     if (own) return;
     state = null;
     own = watchGame(onChange, onFail);

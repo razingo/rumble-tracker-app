@@ -1,14 +1,14 @@
-// Mini and army calculations on the game rules (rules.json, minis.json) and the selected account's state: rarity
-// upgrades, XP, talents and leader army slots. No DOM, so the tests can run them (test/page.test.mjs).
+// Mini and army rules for the selected account: rarity upgrades, XP, talents and leader army slots, from rules.json and
+// minis.json. Without the DOM, so the tests can run them.
 import { RULES, BY_SLUG, state } from './core.js';
 
 export const rarityName = (r) => RULES.rarities[r]?.name ?? `Rarity ${r}`;
 export const rarityColor = (r) => `var(--r${r})`;
 export const miniOf = (u) => (u && u.slug ? BY_SLUG.get(u.slug) : null);
-// a mini not yet in the game data (typically added by a patch)
+// a mini the game data doesn't have yet, usually one added by a patch
 export const unitName = (u) => miniOf(u)?.name ?? `New mini ${u.id.slice(0, 8)}`;
-// Known currencies are identified by ID (the same for every player); names are for display only.
-export const currencyOf = (role) => state.currencies.find((c) => c.id === RULES.currencyIds[role]);
+// Currencies are found by their ID, which is the same for every player; names are only shown.
+const currencyOf = (role) => state.currencies.find((c) => c.id === RULES.currencyIds[role]);
 export const balance = (role) => currencyOf(role)?.balance ?? 0;
 export const curName = (role) => currencyOf(role)?.name || state.currencyNames?.[RULES.currencyIds[role]] || role;
 export const coreName = (role) => curName(role).replace(/s$/, '');
@@ -22,7 +22,7 @@ export function nextUpgrade(u) {
   return { ...step, starsOk, arcOk, coreOk, ready: starsOk && arcOk && coreOk };
 }
 export const talentSlots = (u) => (u.synthetic ? 0 : RULES.talentSlotsByRarity[u.rarity] ?? 0);
-export const talentTotal = (u) => miniOf(u)?.talents.length ?? 3;
+const talentTotal = (u) => miniOf(u)?.talents.length ?? 3;
 // A mini with every talent unlocked has all of them ticked.
 export const allTalentsOwned = (u) => talentTotal(u) > 0 && u.talents >= talentTotal(u);
 export const effectivePicks = (u) => (allTalentsOwned(u) ? [...Array(talentTotal(u)).keys()] : u.talentPicks);
@@ -32,18 +32,17 @@ export function xpToMax(u) {
   for (let l = u.xpLevel + 1; l < RULES.maxXpLevel; l++) total += RULES.xpToNext[l] || 0;
   return total;
 }
-// ---- army slots (leaders only, entered by the user) ----------------------------------------
 export const isLeader = (u) => !u.synthetic && miniOf(u)?.category === 'Leader';
-// Slots 1-3 form the top row. With known fixed slots, 1-2 are locked and 3 is the fixed type or Wildcard.
-// Slots 4-6 are free.
+// Slots 1-3 are the top row. When a leader's fixed slots are known, slots 1 and 2 are locked and slot 3 is the fixed
+// type or Wildcard. Slots 4-6 are free.
 export function fixedSlot(u, i) {
   const f = miniOf(u)?.fixedArmySlots;
   return f && i >= 1 && i <= 3 ? f[i - 1] || null : null;
 }
 export const slotLocked = (u, i) => i >= 1 && i <= 2 && !!fixedSlot(u, i);
 // legacy names for the Siege slot type
-export const SLOT_ALIASES = { 'Siege Damage': 'Siege', 'Siege Specialist': 'Siege' };
-/** Slot types allowed in a leader's bottom slots (4-6), from its army board; never Wildcard. */
+const SLOT_ALIASES = { 'Siege Damage': 'Siege', 'Siege Specialist': 'Siege' };
+/** The slot types a leader's bottom slots (4-6) allow, from its army board. Never Wildcard. */
 export const bottomSlotOptions = (u) => miniOf(u)?.armySlotUpgrades || [];
 export function armyOf(u) {
   const A = RULES.armySlots;
@@ -54,7 +53,7 @@ export function armyOf(u) {
     if (slotLocked(u, i)) type = fixedSlot(u, i);
     else if (i === 3 && fixedSlot(u, 3) && type !== 'Wildcard') type = fixedSlot(u, 3);
     else if (i >= 4) {
-      // bottom row: a board type, no Wildcard, no repeats; invalid types read as empty
+      // the bottom row takes the board's types, no Wildcard and no repeats; anything else reads as empty
       const opts = bottomSlotOptions(u);
       if (type === 'Wildcard' || (opts.length && !opts.includes(type)) || used.has(type)) type = '';
       if (type) used.add(type);

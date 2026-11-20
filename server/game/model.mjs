@@ -13,7 +13,8 @@ export function parseUnits(buf) {
     .filter((f) => f.fn === 1 && f.wt === 2)
     .map((f) => {
       const p = sub(buf, f);
-      const u = { id: readId(buf, first(p, 1)), level: 0, xp: 0, xpNeeded: 0, xpLevel: 0, bonus: 0, talents: 0, rarity: 0, stars: 0, xpWeight: 0 };
+      const u = { id: readId(buf, first(p, 1)), level: 0, xp: 0, xpNeeded: 0, xpLevel: 0, bonus: 0, talents: 0,
+        rarity: 0, stars: 0, xpWeight: 0 };
       for (const x of p) {
         switch (x.fn) {
           case 2: u.level = num(x); break;
@@ -139,11 +140,16 @@ export function storeFieldsForLog(buf) {
   if (!buf || !buf.length) return {};
   const decode = (s, e, depth) => {
     let f; try { f = parseMessage(buf, s, e); } catch { return '<bytes>'; }
-    if (f.length === 2 && f.every((x) => x.wt === 1)) return f[0].u64.toString(16).padStart(16, '0') + f[1].u64.toString(16).padStart(16, '0');
-    if (f.length === 1 && f[0].fn === 1 && f[0].wt === 1) { const ms = Number(f[0].u64); if (ms > 1.3e12 && ms < 2.2e12) return new Date(ms).toISOString(); }
+    if (f.length === 2 && f.every((x) => x.wt === 1)) return f[0].u64.toString(16).padStart(16, '0')
+      + f[1].u64.toString(16).padStart(16, '0');
+    if (f.length === 1 && f[0].fn === 1 && f[0].wt === 1) {
+      const ms = Number(f[0].u64);
+      if (ms > 1.3e12 && ms < 2.2e12) return new Date(ms).toISOString();
+    }
     const o = {};
     for (const x of f) {
-      const v = x.wt === 0 ? Number(BigInt.asIntN(64, x.value)) : x.wt === 1 ? Number(x.u64) : x.wt === 5 ? x.u32 : depth < 6 ? decode(x.start, x.end, depth + 1) : '…';
+      const v = x.wt === 0 ? Number(BigInt.asIntN(64, x.value)) : x.wt === 1 ? Number(x.u64) : x.wt === 5
+        ? x.u32 : depth < 6 ? decode(x.start, x.end, depth + 1) : '…';
       const k = `f${x.fn}`;
       o[k] = k in o ? [].concat(o[k], v) : v;
     }
@@ -189,7 +195,7 @@ export function parseOwnedAvatars(buf) {
   return [...ids];
 }
 
-export function xpTotal(rules, xpLevel, xp) {
+function xpTotal(rules, xpLevel, xp) {
   let total = 0;
   for (let l = 1; l < xpLevel; l++) total += rules.xpToNext[l] || 0;
   return total + xp;

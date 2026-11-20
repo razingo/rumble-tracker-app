@@ -1,8 +1,7 @@
-// Requests are accepted only from the tracker's own page. Other sites in the same browser can reach localhost, so
-// (using headers the browser sets and pages cannot forge):
-//  - Host must be this server's address (blocks DNS rebinding);
-//  - Origin, when present, must be ours; Sec-Fetch-Site on API calls must be same-origin or none;
-//  - API writes must be JSON, which a cross-site form cannot send.
+// Only the tracker's own page may use the server. Other websites open in the same browser can reach localhost too, so
+// requests are checked with headers that browsers set and pages can't forge. The Host must be this server's address,
+// which stops DNS rebinding. An Origin, when sent, must be ours, and API calls must come from the same site. API
+// writes must be JSON, which a form on another site can't send.
 
 /** Returns refusal(req, pathname): the reason a request is refused, or null if it is allowed. */
 export function createGuard(port) {

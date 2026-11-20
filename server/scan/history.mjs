@@ -1,14 +1,15 @@
 // History the tracker keeps from scans: daily progress samples, G.R.I.D.s seen, PvP readings and (from source) a
 // research log of shop record changes. Pure functions over the user-data objects; each returns whether it changed.
+import { localDay } from '../../web/scripts/lib/format.js';
 import { pvpReading } from '../game/pvp.mjs';
 
-export const PROGRESS_DAYS = 400;
-export const GRID_HISTORY_MAX = 400;
-export const MAX_PVP_LOG = 2000; // PvP readings per account (about a season of play)
-export const STORE_CHANGES_MAX = 300;
+const PROGRESS_DAYS = 400;
+const GRID_HISTORY_MAX = 400;
+const MAX_PVP_LOG = 2000; // PvP readings per account (about a season of play)
+const STORE_CHANGES_MAX = 300;
 
 /**
- * Progress: the first sample and the latest sample of each local day,
+ * Progress keeps the first sample and the latest sample of each local day,
  * { [account]: { first, days: [{ day, t, cur: { id: [balance, lifetime] }, lv, xp, stars, rar, n }] } }.
  * Income is derived from lifetime totals, so gaps in tracking don't affect it.
  */
@@ -16,7 +17,7 @@ export function recordProgress(progress, account, snap, now, rules) {
   const starsBefore = (r) => (rules.rarityUpgrade || []).slice(0, r).reduce((s, x) => s + x.stars, 0);
   const u = snap.units;
   const point = {
-    day: new Date(now).toLocaleDateString('sv-SE'), // local YYYY-MM-DD
+    day: localDay(now),
     t: now,
     cur: Object.fromEntries(snap.currencies.map((c) => [c.id, [c.balance, c.lifetime]])),
     lv: u.reduce((s, x) => s + x.level, 0),
@@ -37,7 +38,8 @@ export function recordProgress(progress, account, snap, now, rules) {
 
 /** Records a grid when it is new: a different refresh time or a new item (a reset). */
 export function logGrid(gridHistory, account, grid, now) {
-  const items = grid.rows.flat().filter((s) => !s.bought).map((s) => (s.mini ? { mini: s.mini, rarity: s.rarity } : { xpBoost: s.xpBoost }));
+  const items = grid.rows.flat().filter((s) => !s.bought).map((s) =>
+    (s.mini ? { mini: s.mini, rarity: s.rarity } : { xpBoost: s.xpBoost }));
   const list = (gridHistory[account] ??= []);
   const last = list[list.length - 1];
   const idOf = (x) => x.mini || x.xpBoost;
@@ -59,8 +61,8 @@ export function recordPvp(pvpHistory, account, acc, cur, now, vpRules) {
 }
 
 /**
- * Research log of shop record changes (G.R.I.D. excluded): log(account, fields, now, offerName) appends what changed
- * since the account's previous fields. Returns whether it added anything.
+ * A research log of shop record changes, without the G.R.I.D. log(account, fields, now, offerName) adds what changed
+ * since the account's previous fields and returns whether it added anything.
  */
 export function createStoreLog(list) {
   const lastFields = new Map(); // account -> fields

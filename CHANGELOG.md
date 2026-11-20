@@ -3,6 +3,14 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.7.0
+
+- Dates, times and numbers use one format everywhere (US English), whatever the Windows language.
+- Clearer messages when something can't be saved, telling you what went wrong and what to do.
+- *Send a test notification* no longer says "Sent" when sending failed.
+- Simpler wording throughout the page, the guide and the README; the guide has a new Settings screenshot.
+- For developers: `npm run check-style` checks line length and whitespace against `.editorconfig`, also on GitHub.
+
 ## 0.6.1
 
 - The Backup menu's text wraps inside the menu instead of running past its edge.

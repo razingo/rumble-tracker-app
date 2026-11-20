@@ -1,11 +1,10 @@
 // Reads Warcraft Rumble's PlayerPrefs from the registry via reg.exe. Only the entries below are decoded;
 // everything else in the key, including login tokens, is ignored and never stored.
 import { execFile } from 'node:child_process';
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import net from 'node:net';
+import { REG } from '../system.mjs';
 
-const REG = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe');
 const KEY = 'HKCU\\Software\\Blizzard Entertainment, Inc.\\Warcraft Rumble';
 const WANTED = {
   units: /^MiniProgressionManagerState_v\d+_h\d+$/,

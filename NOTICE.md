@@ -12,7 +12,7 @@ The MIT license in `LICENSE` covers the tracker's own code only: the local serve
 and styles (`web/`), the Windows launcher (`desktop/`) and the build tools (`tools/`).
 
 It does **not** cover the material below, which belongs to its owners and is included only so the tracker can show
-your collection in a recognisable way.
+your collection in a recognizable way.
 
 ## Game art and data © Blizzard Entertainment
 

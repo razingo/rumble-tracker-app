@@ -1,9 +1,8 @@
-// "Start with Windows": a value in the current user's Run key that starts the exe in the background (tray only, no
-// window). Exe only: from source there is no program to start.
+// Start with Windows adds a value to the current user's Run key, which starts the exe in the tray without a window.
+// Running from source has no exe, so the option isn't offered there.
 import { execFile } from 'node:child_process';
-import path from 'node:path';
+import { REG } from './system.mjs';
 
-const REG = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe');
 const KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
 const NAME = 'RumbleCollectionTracker';
 

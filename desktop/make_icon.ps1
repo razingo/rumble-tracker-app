@@ -11,7 +11,8 @@ $src = Join-Path $root 'gamedata\art\kobold-miner.webp'
 $out = Join-Path $PSScriptRoot 'icon.ico'
 
 $dec = [System.Windows.Media.Imaging.BitmapDecoder]::Create([Uri]$src, 'PreservePixelFormat', 'OnLoad')
-$img = New-Object System.Windows.Media.Imaging.FormatConvertedBitmap $dec.Frames[0], ([System.Windows.Media.PixelFormats]::Pbgra32), $null, 0
+$pbgra = [System.Windows.Media.PixelFormats]::Pbgra32
+$img = New-Object System.Windows.Media.Imaging.FormatConvertedBitmap $dec.Frames[0], $pbgra, $null, 0
 $full = New-Object System.Windows.Int32Rect 0, 0, $img.PixelWidth, $img.PixelHeight
 $face = New-Object System.Windows.Int32Rect 20, 50, 200, 200   # in the 256 px portrait
 
@@ -38,7 +39,8 @@ function Render([int]$size, [System.Windows.Int32Rect]$crop) {
   $dc.PushClip((New-Object System.Windows.Media.RectangleGeometry $inner, $ri, $ri))
   $cropped = New-Object System.Windows.Media.Imaging.CroppedBitmap $img, $crop
   $pad = $size * 0.02
-  $dc.DrawImage($cropped, (New-Object System.Windows.Rect ($inner.X - $pad), ($inner.Y - $pad), ($inner.Width + 2 * $pad), ($inner.Height + 2 * $pad)))
+  $art = New-Object System.Windows.Rect ($inner.X - $pad), ($inner.Y - $pad), ($inner.Width + 2 * $pad), ($inner.Height + 2 * $pad)
+  $dc.DrawImage($cropped, $art)
   $dc.Pop()
   # thin dark line between the frame and the picture
   $line = New-Object System.Windows.Media.Pen (& $brush (& $rgb 74 42 6)), ([Math]::Max(0.75, $size / 128))

@@ -1,6 +1,6 @@
-// PvP calculations on gamedata/pvp.json and the server's PvP log (server/game/pvp.mjs): seasons, ranks, the modifier
-// rotation, records and win rates. Shared by the page (PvP tab) and the server (notifications). No DOM.
-import { DAY } from './schedule.js';
+// PvP seasons, ranks, modifier rotations, records and win rates, from gamedata/pvp.json and the server's PvP log.
+// The page's PvP tab and the server's notifications both use them.
+import { DAY } from './format.js';
 
 /** The season running at time t, or null. */
 export const seasonAt = (pvp, t) => pvp.seasons.find((s) => Date.parse(s.start) <= t && t < Date.parse(s.end)) || null;

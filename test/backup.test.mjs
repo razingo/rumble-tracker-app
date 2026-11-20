@@ -1,4 +1,3 @@
-// Backups: what is saved and how a restore replaces the data in place.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildBackup, restoreBackup, BACKUP_FORMAT } from '../server/backup.mjs';

@@ -16,11 +16,13 @@ $g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::Fr
 $g.DrawEllipse((New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 110, 60, 10)), 2), 2, 2, 28, 28)
 $font = New-Object System.Drawing.Font('Segoe UI', 17, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
 $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'; $sf.LineAlignment = 'Center'
-$g.DrawString('R', $font, (New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 70, 35, 5))), (New-Object System.Drawing.RectangleF 0, 1, 32, 32), $sf)
+$ink = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 70, 35, 5))
+$g.DrawString('R', $font, $ink, (New-Object System.Drawing.RectangleF 0, 1, 32, 32), $sf)
 $g.Dispose()
 $tray = New-Object System.Windows.Forms.NotifyIcon
 # the exe's icon; the fallback if it can't be read
-try { $tray.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($env:RT_EXE) } catch { $tray.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon()) }
+try { $tray.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($env:RT_EXE) }
+catch { $tray.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon()) }
 $tray.Text = $env:RT_TITLE
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $open = $menu.Items.Add('Open tracker')
@@ -60,7 +62,8 @@ $global:lastGame = ''
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 2000
 $timer.add_Tick({
-  try { [void][System.Diagnostics.Process]::GetProcessById($parent) } catch { $tray.Visible = $false; [System.Windows.Forms.Application]::Exit(); return }
+  try { [void][System.Diagnostics.Process]::GetProcessById($parent) }
+  catch { $tray.Visible = $false; [System.Windows.Forms.Application]::Exit(); return }
   $game = if ([System.Diagnostics.Process]::GetProcessesByName($env:RT_GAME).Length) { 'game 1' } else { 'game 0' }
   if ($game -ne $global:lastGame) { $global:lastGame = $game; Say $game }
 })

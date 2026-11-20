@@ -1,68 +1,61 @@
-// API handlers that change the user's data. Each takes the parsed JSON body and returns [status, body].
+// API handlers that change the user's data. Each takes the parsed JSON body and returns [status, body]; error
+// messages are shown to the player as they are.
 import { restoreBackup } from '../backup.mjs';
-import { BACKUP_KEYS } from '../userdata.mjs';
+import { BACKUP_KEYS, unitSlug } from '../userdata.mjs';
 import { manualResult } from '../game/pvp.mjs';
-import { unitSlug } from '../state.mjs';
+import { LIMITS, cleanTags } from '../../web/scripts/lib/limits.js';
 
-export const isId = (s) => typeof s === 'string' && /^[0-9a-f]{32}$/.test(s);
+const isId = (s) => typeof s === 'string' && /^[0-9a-f]{32}$/.test(s);
 
-/** Normalises tags: trimmed, at most 30 characters and 20 per army, case-insensitively unique. */
-export function cleanTags(tags) {
-  if (!Array.isArray(tags)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const t of tags) {
-    const v = String(t ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
-    if (!v || seen.has(v.toLowerCase())) continue;
-    seen.add(v.toLowerCase());
-    out.push(v);
-    if (out.length >= 20) break;
-  }
-  return out;
-}
+// The page only sends these for accounts and units it shows, so they mean the page is out of date.
+const STALE = [400, { error: 'The tracker could not save this. Reload the page and try again.' }];
 
 /** A saved army with only known minis, valid talents and bounded text. */
 export function cleanArmy(a, slugs, { keepEmptyId = false } = {}) {
   const okSlug = (s) => typeof s === 'string' && slugs.has(s);
   return {
     id: String(a?.id || '').slice(0, 40) || (keepEmptyId ? null : `a${Date.now().toString(36)}`),
-    name: String(a?.name || 'Army').trim().slice(0, 40) || 'Army',
+    name: String(a?.name || 'Army').trim().slice(0, LIMITS.armyName) || 'Army',
     leader: okSlug(a?.leader) ? a.leader : null,
     minis: Array.from({ length: 6 }, (_, i) => (okSlug(a?.minis?.[i]) ? a.minis[i] : null)),
     talents: Object.fromEntries(Object.entries(a?.talents || {}).filter(([k, v]) => okSlug(k) && Number.isInteger(v) && v >= 0 && v < 3)),
-    description: String(a?.description || '').slice(0, 1000),
+    description: String(a?.description || '').slice(0, LIMITS.description),
     tags: cleanTags(a?.tags),
   };
 }
 
 export function createHandlers(ctx) {
   const u = () => ctx.user;
-  const ok = async (key, body = { ok: true }, bump = true) => { await u().save(key); if (bump) ctx.bump(); return [200, body]; };
+  const ok = async (key, body = { ok: true }, bump = true) => {
+    await u().save(key);
+    if (bump) ctx.bump();
+    return [200, body];
+  };
 
   return {
     /** Names an account or assigns a mini to a unit ID: { kind: 'account'|'unit', id, value }. */
     async name({ kind, id, value }) {
       const v = typeof value === 'string' ? value.trim() : '';
       const names = u().names;
-      if (!isId(id)) return [400, { error: 'bad id' }];
+      if (!isId(id) || (kind !== 'unit' && kind !== 'account')) return STALE;
       if (kind === 'unit') {
-        if (v && !ctx.tables.slugs.has(v)) return [400, { error: 'unknown mini' }];
-        const allIds = new Set([...Object.keys(ctx.tables.builtinUnits), ...Object.keys(names.units)]);
-        const takenBy = [...allIds].find((other) => other !== id && unitSlug(ctx, other) === v);
+        if (v && !ctx.tables.slugs.has(v)) return [400, { error: 'That mini is not in the game data.' }];
+        const ids = new Set([...Object.keys(ctx.tables.builtinUnits), ...Object.keys(names.units)]);
+        const takenBy = [...ids].find((other) => other !== id && unitSlug(ctx, other) === v);
         if (v && takenBy) return [409, { error: 'That mini is already assigned to another unit.', takenBy }];
-        if (v) names.units[id] = v; else delete names.units[id];
-      } else if (kind === 'account') {
-        if (v.length > 40) return [400, { error: 'name too long' }];
-        if (v) names.accounts[id] = v; else delete names.accounts[id];
+        if (v) names.units[id] = v;
+        else delete names.units[id];
       } else {
-        return [400, { error: 'bad kind' }];
+        if (v.length > LIMITS.accountName) return [400, { error: `An account name can be at most ${LIMITS.accountName} characters long.` }];
+        if (v) names.accounts[id] = v;
+        else delete names.accounts[id];
       }
       return ok('names');
     },
 
     /** Talents the user picked for a unit: { account, unitId, picks: [0..2] }. */
     async talents({ account, unitId, picks }) {
-      if (!isId(account) || !isId(unitId) || !Array.isArray(picks)) return [400, { error: 'bad request' }];
+      if (!isId(account) || !isId(unitId) || !Array.isArray(picks)) return STALE;
       const clean = [...new Set(picks.filter((p) => Number.isInteger(p) && p >= 0 && p < 3))].sort();
       (u().talents[account] ??= {})[unitId] = clean;
       return ok('talents', { ok: true, picks: clean });
@@ -72,7 +65,7 @@ export function createHandlers(ctx) {
     async army({ account, unitId, slots }) {
       const A = ctx.tables.rules.armySlots;
       const maxTier = A.tiers.length - 1;
-      if (!isId(account) || !isId(unitId) || !Array.isArray(slots) || slots.length !== A.count) return [400, { error: 'bad request' }];
+      if (!isId(account) || !isId(unitId) || !Array.isArray(slots) || slots.length !== A.count) return STALE;
       const clean = slots.map((s, i) => ({
         type: i === A.leaderSlot ? 'Leader' : String(s?.type || '').slice(0, 40),
         tier: Math.max(0, Math.min(maxTier, Number.isInteger(s?.tier) ? s.tier : 0)),
@@ -85,23 +78,27 @@ export function createHandlers(ctx) {
 
     /** Sets or clears a reward goal: { account, eventId, plan: { cost, label } | null }. */
     async plan({ account, eventId, plan }) {
-      if (!isId(account) || typeof eventId !== 'string' || eventId.length > 80) return [400, { error: 'bad request' }];
+      if (!isId(account) || typeof eventId !== 'string' || eventId.length > 80) return STALE;
       const mine = (u().plans[account] ??= {});
-      if (plan && Number.isInteger(plan.cost) && plan.cost > 0) mine[eventId] = { cost: plan.cost, label: String(plan.label || 'your picks').slice(0, 120), set: new Date().toISOString() };
-      else delete mine[eventId];
+      if (plan && Number.isInteger(plan.cost) && plan.cost > 0) {
+        mine[eventId] = { cost: plan.cost, label: String(plan.label || 'your picks').slice(0, LIMITS.goalLabel),
+          set: new Date().toISOString() };
+      } else delete mine[eventId];
       return ok('plans');
     },
 
-    /** The army being edited: { account, draft }. No new revision: the sending page already shows it. */
+    /** The army being edited: { account, draft }. No new revision, as the sending page already shows it. */
     async draft({ account, draft }) {
-      if (!isId(account) || !draft || typeof draft !== 'object') return [400, { error: 'bad request' }];
+      if (!isId(account) || !draft || typeof draft !== 'object') return STALE;
       u().drafts[account] = { ...cleanArmy(draft, ctx.tables.slugs, { keepEmptyId: true }), updated: new Date().toISOString() };
       return ok('drafts', { ok: true }, false);
     },
 
-    /** All saved armies of an account: { account, armies } (at most 50). */
+    /** All saved armies of an account: { account, armies }. */
     async armies({ account, armies }) {
-      if (!isId(account) || !Array.isArray(armies) || armies.length > 50) return [400, { error: 'bad request' }];
+      if (!isId(account) || !Array.isArray(armies)) return STALE;
+      if (armies.length > LIMITS.savedArmies) return [400, {
+        error: `You can keep at most ${LIMITS.savedArmies} saved armies. Delete one first.` }];
       const clean = armies.map((a) => cleanArmy(a, ctx.tables.slugs));
       u().armies[account] = clean;
       return ok('armies', { ok: true, armies: clean });
@@ -109,16 +106,16 @@ export function createHandlers(ctx) {
 
     /** The player's own result for an unexplained PvP change: { account, t, result: 'win' | 'loss' | null }. */
     async pvpResult({ account, t, result }) {
-      if (!isId(account) || typeof t !== 'string') return [400, { error: 'bad request' }];
+      if (!isId(account) || typeof t !== 'string') return STALE;
       const entry = (u().pvpHistory[account] || []).find((e) => e.t === t);
-      if (!manualResult(entry, result ?? null)) return [400, { error: 'This change can\'t be set by hand.' }];
+      if (!manualResult(entry, result ?? null)) return [400, { error: 'Only changes marked as unexplained can be set by hand.' }];
       return ok('pvpHistory');
     },
 
     /** Restores a backup file: { backup }. */
     async restore({ backup }) {
       const restored = restoreBackup(u().backupFiles(), backup);
-      if (!restored) return [400, { error: 'This is not a Rumble Tracker backup file.' }];
+      if (!restored) return [400, { error: 'This file is not a Rumble Collection Tracker backup.' }];
       u().repair();
       for (const key of restored) await u().save(BACKUP_KEYS[key]);
       ctx.bump();

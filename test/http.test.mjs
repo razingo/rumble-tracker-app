@@ -5,7 +5,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { createHttpServer } from '../server/http/server.mjs';
-import { cleanArmy, cleanTags } from '../server/http/handlers.mjs';
+import { cleanArmy } from '../server/http/handlers.mjs';
 import { flushWrites } from '../server/store.mjs';
 import { testContext, hexId } from './helpers.mjs';
 
@@ -13,9 +13,15 @@ const ACC = hexId(1, 1), UNIT = hexId(0xa, 0xb), OTHER = hexId(0xc, 0xd);
 let ctx, cleanup, server, base;
 const calls = { scan: 0, quit: [], update: 0, autostart: false };
 
-const freePort = () => new Promise((resolve) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
+const freePort = () => new Promise((resolve) => {
+  const s = net.createServer().listen(0, '127.0.0.1', () => {
+    const { port } = s.address();
+    s.close(() => resolve(port));
+  });
+});
 const api = async (method, p, body, headers = {}) => {
-  const r = await fetch(`${base}${p}`, { method, headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(`${base}${p}`, { method, headers: { ...(body ? { 'content-type': 'application/json' } : {}),
+    ...headers }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, body: await r.json().catch(() => null) };
 };
 
@@ -75,7 +81,8 @@ test('names: accounts and unit assignments', async () => {
 
 test('talents, army slots, plans, drafts and saved armies are cleaned', async () => {
   assert.deepEqual((await api('POST', '/api/talents', { account: ACC, unitId: UNIT, picks: [2, 2, 7, 0] })).body.picks, [0, 2]);
-  const slots = (await api('POST', '/api/army', { account: ACC, unitId: UNIT, slots: Array.from({ length: 7 }, (_, i) => ({ type: 'Melee', tier: 9, boost: true })) })).body.slots;
+  const slots = (await api('POST', '/api/army', { account: ACC, unitId: UNIT,
+    slots: Array.from({ length: 7 }, (_, i) => ({ type: 'Melee', tier: 9, boost: true })) })).body.slots;
   assert.equal(slots[0].type, 'Leader');
   assert.equal(slots[1].tier, 2);
   assert.deepEqual(slots.map((s) => !!s.boost), [false, false, false, false, false, false, true]);
@@ -85,7 +92,8 @@ test('talents, army slots, plans, drafts and saved armies are cleaned', async ()
   await api('POST', '/api/plans', { account: ACC, eventId: 'ev', plan: null });
   assert.equal(ctx.user.plans[ACC].ev, undefined);
   const rev = ctx.rev;
-  assert.equal((await api('POST', '/api/draft', { account: ACC, draft: { name: 'D', leader: 'kobold-miner', minis: ['footmen', 'bogus'] } })).status, 200);
+  assert.equal((await api('POST', '/api/draft', { account: ACC,
+    draft: { name: 'D', leader: 'kobold-miner', minis: ['footmen', 'bogus'] } })).status, 200);
   assert.equal(ctx.rev, rev); // drafts don't bump the revision
   assert.deepEqual(ctx.user.drafts[ACC].minis.slice(0, 2), ['footmen', null]);
   const armies = (await api('POST', '/api/armies', { account: ACC, armies: [{ name: '', tags: ['a', 'A', ' b '] }] })).body.armies;
@@ -132,12 +140,10 @@ test('exe-only actions: quit, update, Later', async () => {
   assert.deepEqual(calls.quit, ['Quit from the page']);
 });
 
-test('army and tag cleaning', () => {
+test('army cleaning', () => {
   const slugs = new Set(['a']);
   assert.deepEqual(cleanArmy({ id: '', leader: 'x', minis: ['a'], talents: { a: 1, b: 2, c: 9 } }, slugs, { keepEmptyId: true }),
     { id: null, name: 'Army', leader: null, minis: ['a', null, null, null, null, null], talents: { a: 1 }, description: '', tags: [] });
-  assert.equal(cleanTags(Array.from({ length: 30 }, (_, i) => `t${i}`)).length, 20);
-  assert.equal(cleanTags(['x'.repeat(50)])[0].length, 30);
 });
 
 test('automatic backups: listed and restored by day', async () => {

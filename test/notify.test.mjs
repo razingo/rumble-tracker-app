@@ -1,10 +1,10 @@
-// Notifications and problem-report cleaning.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dueNotifications, defaultSettings, cleanSettings, inQuietHours } from '../server/notifications/notify.mjs';
 import { clean, createErrorLog } from '../server/report.mjs';
 
-const ctx = (extra = {}) => ({ now: Date.UTC(2026, 4, 6, 12), accounts: [], events: null, store: null, rules: null, plans: {}, settings: defaultSettings(), multi: false, ...extra });
+const ctx = (extra = {}) => ({ now: Date.UTC(2026, 4, 6, 12), accounts: [], events: null, store: null, rules: null,
+  plans: {}, settings: defaultSettings(), multi: false, ...extra });
 const keys = (c) => dueNotifications(c).map((n) => n.key);
 
 test('new tracker version: one notification per version', () => {
@@ -60,7 +60,8 @@ test('error log: repeats counted, cleaned', () => {
 
 test('PvP: season ending soon (with ranks) and new modifiers', () => {
   const pvp = {
-    seasons: [{ id: 's1', saveId: 'x', name: 'Season 1', start: '2026-04-01T00:00:00Z', end: '2026-05-07T12:00:00Z', rotation: { start: '2026-04-01T00:00:00Z', periodDays: 3, sets: [['m1'], ['m2']] } }],
+    seasons: [{ id: 's1', saveId: 'x', name: 'Season 1', start: '2026-04-01T00:00:00Z', end: '2026-05-07T12:00:00Z',
+      rotation: { start: '2026-04-01T00:00:00Z', periodDays: 3, sets: [['m1'], ['m2']] } }],
     ranks: [{ id: 'r0', name: 'Bronze', from: 0 }, { id: 'r1', name: 'Silver', from: 1000 }],
     modifiers: { m1: { name: 'One' }, m2: { name: 'Two' } },
   };
@@ -75,6 +76,7 @@ test('PvP: season ending soon (with ranks) and new modifiers', () => {
   s.types.pvpModifiers.on = true;
   const mods = dueNotifications(ctx({ pvp, accounts, settings: s, now: Date.UTC(2026, 3, 4, 1) })).find((n) => n.type === 'pvpModifiers');
   assert.match(mods.body, /^Two, until /);
-  assert.equal(dueNotifications(ctx({ pvp, accounts, settings: s, now: Date.UTC(2026, 3, 5, 1) })).filter((n) => n.type === 'pvpModifiers').length, 0);
+  assert.equal(dueNotifications(ctx({ pvp, accounts, settings: s, now: Date.UTC(2026, 3, 5, 1) })).filter((n) =>
+    n.type === 'pvpModifiers').length, 0);
   assert.equal(dueNotifications(ctx({ pvp, accounts })).filter((n) => n.type === 'pvpModifiers').length, 0);
 });

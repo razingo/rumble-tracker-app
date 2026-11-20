@@ -1,0 +1,66 @@
+// Display formatting shared by the page and the server. Numbers and dates are always shown in en-US.
+const LOCALE = 'en-US';
+
+export const MINUTE = 60 * 1000;
+export const HOUR = 60 * MINUTE;
+export const DAY = 24 * HOUR;
+
+export const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+export const fmt = (n) => (typeof n === 'number' ? n.toLocaleString(LOCALE) : n);
+
+const dateFormat = (options) => (t) => new Date(t).toLocaleString(LOCALE, options);
+/** "Thu, Nov 19, 7:00 PM" */
+export const when = dateFormat({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+/** "Nov 19, 7:00 PM" */
+export const dateTime = dateFormat({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+/** "Nov 19" */
+export const dayOnly = dateFormat({ month: 'short', day: 'numeric' });
+/** "Nov 19, 2026" */
+export const dayWithYear = dateFormat({ month: 'short', day: 'numeric', year: 'numeric' });
+/** "Thursday, November 19" */
+export const longDay = dateFormat({ weekday: 'long', month: 'long', day: 'numeric' });
+/** "Thu, Nov 19" */
+export const shortDay = dateFormat({ weekday: 'short', month: 'short', day: 'numeric' });
+/** "Thu 7:00 PM" */
+export const weekdayTime = dateFormat({ weekday: 'short', hour: 'numeric', minute: '2-digit' });
+/** "7:00 PM" */
+export const timeOnly = dateFormat({ hour: 'numeric', minute: '2-digit' });
+
+/** The local calendar day of a time as YYYY-MM-DD. A key for daily records, not for display. */
+export function localDay(t = Date.now()) {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** A duration in short form: "2d 3h", "4h 12m", "35m". */
+export function span(ms) {
+  const m = Math.max(0, Math.round(ms / MINUTE));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), min = m % 60;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${min}m`;
+  return `${min}m`;
+}
+
+/** A duration for a sentence: "2 days", "5 h", "20 min". */
+export function spanWords(ms) {
+  const h = Math.round(ms / HOUR);
+  if (h >= 48) return `${Math.round(h / 24)} days`;
+  if (h >= 1) return `${h} h`;
+  return `${Math.max(1, Math.round(ms / MINUTE))} min`;
+}
+
+/** How long ago a time was: "12s ago", "5 min ago", "3 h ago", then the date. */
+export function ago(t) {
+  if (!t) return 'never';
+  const s = Math.max(0, Math.round((Date.now() - new Date(t)) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return dateTime(t);
+}
+
+/** Game text in capitals ("MAJOR TOME") in title case ("Major Tome"); other text unchanged. */
+export const titleCase = (s) => (s && s === s.toUpperCase()
+  ? s.toLowerCase().replace(/(^|[\s.'-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/'S\b/g, "'s")
+  : s);

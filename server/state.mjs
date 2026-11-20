@@ -1,14 +1,9 @@
-// What the page shows: the state of one account, built from the context.
+// The state the page shows for one account, built from the context.
 import { currencyInfo as gameCurrencyInfo } from './game/currencies.mjs';
 import { compareBuilds } from './game/model.mjs';
+import { accountLabel, unitSlug } from './userdata.mjs';
 
-/** The name the user gave an account, else a short form of its ID. */
-export const accountLabel = (ctx, id) => ctx.user.names.accounts[id] || `Account …${id.slice(16, 24)}`;
-
-/** Mini slug of a unit ID: the user's assignment (names.json), else the game data's, else null. */
-export const unitSlug = (ctx, id) => ctx.user.names.units[id] || ctx.tables.builtinUnits[id] || null;
-
-/** The requested account if the tracker knows it, else the first one (null: none yet). */
+/** The requested account if the tracker knows it, else the first one, or null when there is none yet. */
 export function resolveAccount(ctx, requested) {
   const ids = [...ctx.accounts.keys()];
   return ids.includes(requested) ? requested : ids[0] || null;
@@ -21,7 +16,7 @@ export const dataStale = (ctx) => {
 };
 
 /** App update for the page: { version, auto, state, error, later, done, total }, or null when this is the latest. */
-export function updateState(ctx) {
+function updateState(ctx) {
   const { dataPack, appUpdate } = ctx;
   if (!dataPack.newVersion) return null;
   return {
@@ -42,7 +37,7 @@ export function liveState(ctx) {
 }
 
 /** Tags used in the given armies, most frequent first: [{ tag, count }]. */
-export function tagList(armies) {
+function tagList(armies) {
   const m = new Map();
   for (const a of armies) for (const t of a.tags || []) {
     const e = m.get(t.toLowerCase()) || { tag: t, count: 0 };
@@ -71,7 +66,8 @@ export function buildState(ctx, account) {
     ...liveState(ctx),
     account,
     accounts: ids.map((id) => ({ id, label: accountLabel(ctx, id), units: ctx.accounts.get(id).snapshot?.units.length || 0 })),
-    units: acc ? acc.snapshot.units.map((x) => ({ ...x, slug: slug(x.id), talentPicks: picks[x.id] || [], army: slots[x.id] || null })) : [],
+    units: acc ? acc.snapshot.units.map((x) => ({ ...x, slug: slug(x.id), talentPicks: picks[x.id] || [],
+      army: slots[x.id] || null })) : [],
     currencies: acc ? acc.snapshot.currencies.map((c) => ({ ...c, ...currencyInfo(c.id) })) : [],
     currencyNames: Object.fromEntries(Object.values(t.rules.currencyIds || {}).map((id) => [id, currencyInfo(id).name])),
     events: acc ? acc.events.slice(-200) : [],
@@ -89,11 +85,13 @@ export function buildState(ctx, account) {
       dataVersion: t.gameData?.dataVersion || null,
       gameBuild: ctx.scan.gameBuild,
       stale: dataStale(ctx),
-      pack: { configured: !!dataPack.url, lastCheck: dataPack.lastCheck, result: dataPack.result, error: dataPack.error, needsAppUpdate: dataPack.needsAppUpdate, newVersion: dataPack.newVersion },
+      pack: { configured: !!dataPack.url, lastCheck: dataPack.lastCheck, result: dataPack.result,
+        error: dataPack.error, needsAppUpdate: dataPack.needsAppUpdate, newVersion: dataPack.newVersion },
     },
     // shop with unit IDs resolved to slugs (null if unknown), plus G.R.I.D. history
     shop: acc?.shop ? withSlugs(acc.shop) : null,
-    gridHistory: ((account && u.gridHistory[account]) || []).slice(-120).map((g) => ({ ...g, items: g.items.map((x) => ({ ...x, slug: x.mini ? slug(x.mini) : null })) })),
+    gridHistory: ((account && u.gridHistory[account]) || []).slice(-120).map((g) =>
+      ({ ...g, items: g.items.map((x) => ({ ...x, slug: x.mini ? slug(x.mini) : null })) })),
     savedArmies: (account && u.armies[account]) || [],
     armyTags: tagList((account && u.armies[account]) || []),
     draft: (account && u.drafts[account]) || null,

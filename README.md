@@ -14,24 +14,30 @@ You need Windows 10 or 11 (64-bit) and Warcraft Rumble for PC, played at least o
 Node.js, no installer. The first start needs an internet connection: the tracker downloads its game data (about
 4.5 MB) before it opens.
 
-1. Open [Releases](https://github.com/razingo/rumble-tracker-app/releases/latest) and download `RumbleTracker-<version>-win-x64.zip`.
+1. Open [Releases](https://github.com/razingo/rumble-tracker-app/releases/latest) and download
+   `RumbleTracker-<version>-win-x64.zip`.
 2. Extract the zip anywhere (for example to `Documents\RumbleTracker`) and double-click **RumbleTracker.exe**.
 3. The tracker opens in its own window. The first time, it shows the game data download (a minute or less), then the
    tracker.
 
-The tracker reads the game's save every few seconds, so the window updates on its own while you play. What every tab
-does is explained in the **[player guide](https://github.com/razingo/rumble-tracker-app/blob/main/docs/INSTRUCTIONS.md)**.
+The tracker reads the game's save every few seconds, so the window updates on its own while you play. The
+**[player guide](https://github.com/razingo/rumble-tracker-app/blob/main/docs/INSTRUCTIONS.md)** walks through every
+tab.
 
-**Its own window:** the tracker uses your browser's app mode: a plain window with no tabs or address bar, with its
-own browser profile (your normal browser's bookmarks, extensions and logins aren't touched). That works with Microsoft
-Edge (every Windows PC has it), Chrome, Brave and Vivaldi; your default browser is used if it's one of them. Without
-any of them (e.g. Firefox only) the tracker opens as a normal browser tab.
+### Its own window
 
-**The tray icon:** closing the window doesn't stop the tracker. It keeps running as an icon in the taskbar's
-notification area (click **^** if it's hidden), so notifications still arrive. Click the icon to open the window again;
-right-click it for *Open data folder* and *Quit tracker*. The **⏻ Quit** button at the top of the tracker also stops
-it. Starting the exe again while it's running just brings the window back. To start it whenever you sign in to
-Windows, tick *Start with Windows* in **⚙ Settings**.
+The tracker opens in your browser's app mode, a plain window without tabs or an address bar. It has its own browser
+profile, so your bookmarks, extensions and logins aren't touched. This works with Microsoft Edge (every Windows PC has
+it), Chrome, Brave and Vivaldi, and your default browser is used if it's one of them. With none of them, for example
+Firefox only, the tracker opens as a normal browser tab.
+
+### The tray icon
+
+Closing the window doesn't stop the tracker. It keeps running as an icon in the taskbar's notification area (click
+**^** if it's hidden), so notifications still arrive. Click the icon to bring the window back, or right-click it for
+*Open data folder* and *Quit tracker*. **⏻ Quit** at the top of the page stops it too, and starting the exe again
+while it runs just shows the window. To start it whenever you sign in to Windows, tick *Start with Windows* in
+**⚙ Settings**.
 
 ### "Windows protected your PC"
 
@@ -50,19 +56,22 @@ Releases are built by GitHub Actions from this repository's source; with the Git
 | The tracker's log (`tracker.log`, attach it to a bug report if asked) | `%APPDATA%\RumbleTracker` |
 | The program's files, unpacked from the exe on first start, and the window's browser profile | `%LOCALAPPDATA%\RumbleTracker` |
 
-Paste either path into the Explorer address bar to open it. **Back up** with *Backup → Export backup* in the tracker (one JSON file
-that *Import backup…* restores, also on another PC).
+Paste either path into the Explorer address bar to open it. *Backup → Export backup* in the tracker saves everything
+to one JSON file, which *Import backup…* restores, also on another PC.
 
-**Updating:** when a new version is out, the tracker offers to install it (*Download now*): it downloads the release
-from GitHub, checks it against the checksums in the signed data pack, replaces `RumbleTracker.exe` and restarts. You
-can also download the new release yourself and replace `RumbleTracker.exe`. Your data stays where it is. If a new
-version fails to start, the previous one is put back. What changed: [CHANGELOG.md](CHANGELOG.md).
+### Updating
 
-What the tracker does in the background and every place it stores something: [How the tracker works](docs/HOW-IT-WORKS.md).
+When a new version is out, the tracker offers to install it. *Download now* fetches the release from GitHub, checks it
+against the checksums in the signed data pack, replaces `RumbleTracker.exe` and restarts; if the new version fails to
+start, the previous one is put back. You can also download the release yourself and replace the exe. Either way your
+data stays where it is. The [changelog](CHANGELOG.md) lists what changed.
 
-**Uninstalling:** untick *Start with Windows* in **⚙ Settings** if you ticked it, quit the tracker, then delete
-`RumbleTracker.exe`, the two `RumbleTracker` folders above and the Start menu shortcut *Rumble Collection Tracker*
-(details in [How the tracker works](docs/HOW-IT-WORKS.md#uninstalling)).
+### Uninstalling
+
+Untick *Start with Windows* in **⚙ Settings** if you ticked it and quit the tracker. Then delete `RumbleTracker.exe`,
+the two `RumbleTracker` folders above and the Start menu shortcut *Rumble Collection Tracker*.
+[How the tracker works](docs/HOW-IT-WORKS.md#uninstalling) has the details, along with everything the tracker does in
+the background and every place it stores something.
 
 ## Game data updates
 
@@ -86,8 +95,8 @@ release (your data is kept). When a new version of the tracker is released, a po
 
 Click **Report a problem** in the tracker. It shows a short report with technical details (versions and recent
 errors, with user names, account IDs and other personal details removed) and opens it as a pre-filled
-[issue](https://github.com/razingo/rumble-tracker-app/issues) here, which you can edit before you press Submit. A free GitHub account is needed. You can also
-open an issue yourself with the *Bug report* template.
+[issue](https://github.com/razingo/rumble-tracker-app/issues), which you can edit before you press Submit. This needs a
+free GitHub account. You can also open an issue yourself with the *Bug report* template.
 
 ## Options
 
@@ -118,25 +127,28 @@ npm start
 `fetch-gamedata` downloads the game data and art into `gamedata/` (once, and again for newer game data). They aren't
 in this repository: they're published, signed, in
 [rumble-tracker-data](https://github.com/razingo/rumble-tracker-data), and the download gets the same signature and
-checksum checks as players' trackers. Then open http://localhost:8765. Your data goes to `data/` in the project folder (or the folder in
-`RUMBLE_DATA_DIR`). `npm test` runs the tests (no game data or save needed).
+checksum checks as players' trackers. Then open http://localhost:8765. Your data goes to `data/` in the project
+folder, or to the folder in `RUMBLE_DATA_DIR`.
+
+`npm test` runs the tests, which need neither game data nor a save. `npm run check-style` checks the files against
+`.editorconfig` (140-character lines, LF, no trailing spaces); CI runs both.
 
 | Folder | What |
 |---|---|
-| `server/` | the local server: `main.mjs` starts the parts and runs the timers; `context.mjs` (shared state), `tables.mjs` (game data), `userdata.mjs` and `store.mjs` (the user's files), `state.mjs` (what the page gets), `backup.mjs`, `guard.mjs` (which requests are allowed), `autostart.mjs` (Start with Windows) |
-| `server/scan/` | reading the save on a timer (`scanner.mjs`) and the history kept from it (`history.mjs`) |
-| `server/http/` | the HTTP server and routes (`server.mjs`) and the API handlers (`handlers.mjs`) |
-| `server/update/` | in-app updates: download and checks (`appupdate.mjs`), the *Download now* flow (`updater.mjs`) |
-| `server/game/` | reading the save from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), event schedules (`schedule.mjs`, from the page's `lib/schedule.js`), currency names (`currencies.mjs`), PvP and match results (`pvp.mjs`), whether the game runs (`watch.mjs`) |
-| `server/notifications/` | what's due (`notify.mjs`), sending it (`runner.mjs`) and Windows notifications (`toast.mjs`) |
-| `server/datapack/` | signed game-data updates (`datapack.mjs`), the checks (`checker.mjs`), the first start's download (`firstrun.mjs`) and the public key packs must be signed with |
-| `web/` | the page: `index.html`, `styles/` and `scripts/`, ES modules: `app.js` (start, polling, tabs), `core.js` (shared state and helpers), one module per tab, `units.js` (mini and army rules), `dialogs.js`, and `lib/` (`schedule.js`, `pvp.js`: calculations shared with the server) |
-| `gamedata/` | the game data and art (© Blizzard, see NOTICE), filled by `npm run fetch-gamedata`, served as `/static/…`; not in the repository |
-| `desktop/` | the Windows exe's launcher (`launcher.cjs`: app window, updates), the tray icon (`tray.ps1`), Windows integration (`integration.ps1`: Start menu shortcut, notification clicks) and the icon |
-| `tools/` | `fetch_gamedata.mjs` (`npm run fetch-gamedata`) and `build_release.mjs` (`npm run build-release`, Node.js 25.5+: the single-file exe and the zip; no game data inside, the exe downloads it on first start) |
-| `test/` | tests for save decoding, scans, the HTTP API and request filtering, backups, data packs, app updates, notifications, currency names, PvP, the page's calculations and (on Windows) the tray and integration scripts (`npm test`, Node's built-in test runner; `helpers.mjs` builds save values and a tracker in a temporary folder) |
-| `.github/workflows/` | `test.yml`: the tests on every push and pull request; `release.yml`: tests, builds and attests releases when a `v<version>` tag is pushed |
-| `docs/` | the player guide and its screenshots, and how the tracker works in the background |
+| `server/` | The local server. `main.mjs` starts the parts and runs the timers. `host.mjs` connects it to the exe's launcher when there is one. Also the shared state (`context.mjs`), game tables (`tables.mjs`), the user's files (`userdata.mjs`, `store.mjs`), the page's state (`state.mjs`), backups, request filtering (`guard.mjs`), Start with Windows (`autostart.mjs`) and the Windows programs it runs (`system.mjs`) |
+| `server/scan/` | Reading the save on a timer (`scanner.mjs`) and the history kept from it (`history.mjs`) |
+| `server/http/` | The HTTP server and routes (`server.mjs`) and the API handlers (`handlers.mjs`) |
+| `server/update/` | In-app updates: the download and its checks (`appupdate.mjs`), and *Download now* (`updater.mjs`) |
+| `server/game/` | The save: reading it from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), currency names, PvP match results and whether the game runs (`watch.mjs`) |
+| `server/notifications/` | What's due (`notify.mjs`), sending it (`runner.mjs`) and the Windows notification itself (`toast.mjs`) |
+| `server/datapack/` | Signed game-data updates (`datapack.mjs`), when to check (`checker.mjs`), the first start's download (`firstrun.mjs`) and the accepted public keys |
+| `web/` | The page. `scripts/app.js` starts it and switches tabs, `core.js` holds what the modules share, and each tab, dialog and menu has its own module. `scripts/lib/` has the code the server uses too: formatting, schedules, PvP seasons, input limits and the reward-tree planner |
+| `gamedata/` | Game data and art (© Blizzard, see NOTICE), served as `/static/…`. Not in the repository; `npm run fetch-gamedata` fills it |
+| `desktop/` | The exe's launcher (`launcher.cjs`), the tray icon (`tray.ps1`), Windows integration (`integration.ps1`) and the icon |
+| `tools/` | Downloading game data (`fetch_gamedata.mjs`), building the release (`build_release.mjs`, Node.js 25.5+) and the style check (`check_style.mjs`) |
+| `test/` | Node's built-in test runner. `helpers.mjs` builds save values and a tracker in a temporary folder; the tray and integration tests run on Windows only |
+| `.github/workflows/` | `test.yml` runs the tests and the style check on every push; `release.yml` tests, builds and attests a release when a `v<version>` tag is pushed |
+| `docs/` | The player guide with its screenshots, and how the tracker works in the background |
 
 **Security.** The server listens on 127.0.0.1 only and answers only the tracker's own page: requests for another host
 name, from another website, or API writes that aren't JSON are refused. The page runs under a strict content security

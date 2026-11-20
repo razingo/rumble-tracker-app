@@ -8,10 +8,11 @@
 // Only the folders listed in APP_FILES are bundled.
 import { readFile, writeFile, mkdir, rm, readdir, stat, copyFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { deflateRawSync, crc32 } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sha256 } from '../server/datapack/datapack.mjs';
+import { POWERSHELL } from '../server/system.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DESKTOP = path.join(ROOT, 'desktop');
@@ -22,10 +23,9 @@ const EXE = 'RumbleTracker.exe';
 
 const pkg = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
 const version = pkg.version;
-const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 const fail = (msg) => { console.error(`build-release: ${msg}`); process.exit(1); };
 
-// ---- checks before building -----------------------------------------------------------------------------------
+// Checks before building
 if (process.platform !== 'win32') fail('build on Windows (the exe is made from this Node.js binary).');
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major < 25 || (major === 25 && minor < 5)) fail(`needs Node.js 25.5 or newer for --build-sea (this is ${process.versions.node}).`);
@@ -36,7 +36,7 @@ if (!report.includes(`'${ISSUES_REPO}'`)) fail(`ISSUES_REPO in server/report.mjs
 const nodeLicense = path.join(DESKTOP, 'node-LICENSE.txt');
 try { await stat(nodeLicense); } catch { fail('desktop/node-LICENSE.txt is missing (Node.js license, must ship with the exe).'); }
 
-// ---- the app's files ---------------------------------------------------------------------------------------------
+// The app's files
 // [folder, allowed extensions]. Game data is not bundled: the exe downloads it on first start.
 const APP_FILES = [
   ['server', ['.mjs']],
@@ -62,7 +62,8 @@ for (const [rel, exts] of APP_FILES) for (const r of await walk(rel, exts)) file
 files.sort((a, b) => a[0].localeCompare(b[0]));
 // minimal package.json (version) and the launcher's import helper
 files.push(['package.json', Buffer.from(JSON.stringify({ name: pkg.name, version, private: true, type: 'module' }, null, 2) + '\n')]);
-files.push(['import.cjs', Buffer.from("// Loaded by the exe's launcher: a single executable can only import ES modules through a file on disk.\nmodule.exports = (url) => import(url);\n")]);
+files.push(['import.cjs', Buffer.from("// Loaded by the exe's launcher: a single executable can only import ES " +
+  "modules through a file on disk.\nmodule.exports = (url) => import(url);\n")]);
 
 // one blob: [u32 index length][index JSON][file bytes]
 let offset = 0;
@@ -74,13 +75,14 @@ const indexBuf = Buffer.from(JSON.stringify(index));
 const head = Buffer.alloc(4); head.writeUInt32LE(indexBuf.length);
 
 try { await rm(OUT, { recursive: true, force: true }); } catch (e) {
-  fail(e.code === 'EBUSY' || e.code === 'EPERM' ? 'dist/release is in use: quit RumbleTracker.exe (tray icon → Quit tracker) and build again.' : e.message);
+  fail(e.code === 'EBUSY' || e.code === 'EPERM' ? 'dist/release is in use: quit RumbleTracker.exe (tray icon → ' +
+    'Quit tracker) and build again.' : e.message);
 }
 await mkdir(BUILD, { recursive: true });
 await writeFile(path.join(BUILD, 'app.bin'), Buffer.concat([head, indexBuf, data]));
 console.log(`App files: ${files.length} (${(data.length / 1048576).toFixed(1)} MB), version ${version}`);
 
-// ---- the exe -----------------------------------------------------------------------------------------------------
+// The exe
 /**
  * The exe's version information (Properties > Details): a VS_VERSIONINFO resource. Each block is
  * [wLength, wValueLength, wType, key (UTF-16, NUL), padding, value, padding, children], 32-bit aligned.
@@ -91,14 +93,16 @@ function versionInfo(version, strings) {
   const pad4 = (b) => (b.length % 4 ? Buffer.concat([b, Buffer.alloc(4 - (b.length % 4))]) : b);
   const block = (key, type, value = Buffer.alloc(0), valueLength = 0, children = []) => {
     const head = pad4(Buffer.concat([Buffer.alloc(6), utf16(key)]));
-    const parts = children.length ? [pad4(Buffer.concat([head, value])), ...children.map((c, i) => (i < children.length - 1 ? pad4(c) : c))] : [head, value];
+    const parts = children.length ? [pad4(Buffer.concat([head, value])),
+      ...children.map((c, i) => (i < children.length - 1 ? pad4(c) : c))] : [head, value];
     const b = Buffer.concat(parts);
     b.writeUInt16LE(b.length, 0); b.writeUInt16LE(valueLength, 2); b.writeUInt16LE(type, 4);
     return b;
   };
   const fixed = Buffer.alloc(52);
   [0xFEEF04BD, 0x00010000, (major << 16) | minor, patch << 16, (major << 16) | minor, patch << 16, 0x3F, 0, 0x40004, 1, 0, 0, 0]
-    .forEach((v, i) => fixed.writeUInt32LE(v >>> 0, i * 4)); // signature, struct version, file/product version, flags, VOS_NT_WINDOWS32, VFT_APP
+    // signature, struct version, file/product version, flags, VOS_NT_WINDOWS32, VFT_APP
+    .forEach((v, i) => fixed.writeUInt32LE(v >>> 0, i * 4));
   const string = (k, v) => block(k, 1, utf16(v), v.length + 1);
   const translation = Buffer.alloc(4); translation.writeUInt16LE(0x0409, 0); translation.writeUInt16LE(0x04B0, 2); // en-US, Unicode
   return block('VS_VERSION_INFO', 0, fixed, fixed.length, [
@@ -121,7 +125,8 @@ public static class ExeResources {
   [DllImport("kernel32")] static extern bool EnumResourceNames(IntPtr m, IntPtr type, EnumName cb, IntPtr p);
   [DllImport("kernel32")] static extern bool EnumResourceLanguages(IntPtr m, IntPtr type, IntPtr name, EnumLang cb, IntPtr p);
   [DllImport("kernel32", SetLastError=true, CharSet=CharSet.Unicode)] static extern IntPtr BeginUpdateResource(string f, bool del);
-  [DllImport("kernel32", SetLastError=true)] static extern bool UpdateResource(IntPtr h, IntPtr type, IntPtr name, ushort lang, byte[] data, uint size);
+  [DllImport("kernel32", SetLastError=true)]
+  static extern bool UpdateResource(IntPtr h, IntPtr type, IntPtr name, ushort lang, byte[] data, uint size);
   [DllImport("kernel32", SetLastError=true)] static extern bool EndUpdateResource(IntPtr h, bool discard);
   static bool IsId(IntPtr p) { return ((long)p >> 16) == 0; }
   public static void Set(string exe, string ico, string ver) {
@@ -131,7 +136,8 @@ public static class ExeResources {
     if (m == IntPtr.Zero) throw new Exception("cannot read " + exe);
     foreach (int type in new[] { 14, 3, 16 }) {
       EnumResourceNames(m, (IntPtr)type, (mm, t, n, p) => {
-        if (IsId(n)) EnumResourceLanguages(mm, t, n, (m2, t2, n2, lang, p2) => { old.Add(Tuple.Create(type, (int)n2, lang)); return true; }, IntPtr.Zero);
+        if (IsId(n)) EnumResourceLanguages(mm, t, n, (m2, t2, n2, lang, p2) => {
+          old.Add(Tuple.Create(type, (int)n2, lang)); return true; }, IntPtr.Zero);
         return true; }, IntPtr.Zero);
     }
     FreeLibrary(m);
@@ -142,24 +148,27 @@ public static class ExeResources {
     foreach (var o in old) UpdateResource(h, (IntPtr)o.Item1, (IntPtr)o.Item2, o.Item3, null, 0);
     var group = new MemoryStream(); var w = new BinaryWriter(group);
     w.Write((ushort)0); w.Write((ushort)1); w.Write((ushort)count);
+    Action<IntPtr, IntPtr, byte[], string> put = (type, name, data, what) => {
+      if (!UpdateResource(h, type, name, 1033, data, (uint)data.Length)) throw new Exception(what + ": " + Marshal.GetLastWin32Error());
+    };
     for (int i = 0; i < count; i++) {
       int e = 6 + 16 * i; int len = BitConverter.ToInt32(f, e + 8); int off = BitConverter.ToInt32(f, e + 12);
       byte[] img = new byte[len]; Array.Copy(f, off, img, 0, len);
-      if (!UpdateResource(h, (IntPtr)3, (IntPtr)(i + 1), 1033, img, (uint)len)) throw new Exception("icon " + i + ": " + Marshal.GetLastWin32Error());
+      put((IntPtr)3, (IntPtr)(i + 1), img, "icon " + i);
       w.Write(f, e, 12); w.Write((ushort)(i + 1)); // GRPICONDIRENTRY: first 12 bytes of ICONDIRENTRY + resource id
     }
     byte[] g = group.ToArray();
-    if (!UpdateResource(h, (IntPtr)14, (IntPtr)1, 1033, g, (uint)g.Length)) throw new Exception("icon group: " + Marshal.GetLastWin32Error());
+    put((IntPtr)14, (IntPtr)1, g, "icon group");
     byte[] v = File.ReadAllBytes(ver);
-    if (!UpdateResource(h, (IntPtr)16, (IntPtr)1, 1033, v, (uint)v.Length)) throw new Exception("version info: " + Marshal.GetLastWin32Error());
+    put((IntPtr)16, (IntPtr)1, v, "version info");
     if (!EndUpdateResource(h, false)) throw new Exception("EndUpdateResource failed: " + Marshal.GetLastWin32Error());
   }
 }
 '@
 [ExeResources]::Set($env:RT_EXE, $env:RT_ICO, $env:RT_VER)
 `;
-  const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  execFileSync(ps, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+  execFileSync(POWERSHELL, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand',
+    Buffer.from(script, 'utf16le').toString('base64')],
     // no inherited stdin: a nested PowerShell can block on it
     { env: { ...process.env, RT_EXE: exePath, RT_ICO: icoPath, RT_VER: versionPath }, stdio: ['ignore', 'pipe', 'pipe'] });
 }
@@ -194,7 +203,7 @@ exe.writeUInt16LE(2, pe + 24 + 68); // IMAGE_SUBSYSTEM_WINDOWS_GUI
 await writeFile(path.join(OUT, EXE), exe);
 console.log(`Built ${EXE} (${(exe.length / 1048576).toFixed(1)} MB, Node.js ${process.versions.node})`);
 
-// ---- the zip players download ----------------------------------------------------------------------------------
+// The zip players download
 /** Minimal zip writer (deflate, no zip64). */
 function zip(entries) {
   const local = [], central = [];

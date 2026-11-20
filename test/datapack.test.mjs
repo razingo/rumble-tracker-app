@@ -50,7 +50,8 @@ test('first start: installs every file into an empty folder, with progress', asy
   reset();
   const dir = await fresh('first');
   const progress = [];
-  const r = await updateDataPack({ base, current: null, dir, staticDir: path.join(tmp, 'none'), publicKeys, onProgress: (d, t) => progress.push([d, t]) });
+  const r = await updateDataPack({ base, current: null, dir, staticDir: path.join(tmp, 'none'), publicKeys,
+    onProgress: (d, t) => progress.push([d, t]) });
   assert.equal(r.updated, true);
   assert.equal(r.downloaded, 3);
   assert.equal(await readFile(path.join(dir, 'img', 'unit one.webp'), 'utf8'), 'webp-bytes');
@@ -61,7 +62,8 @@ test('first start: installs every file into an empty folder, with progress', asy
 
 test('up to date: nothing downloaded', async () => {
   reset();
-  const r = await updateDataPack({ base, current: { dataVersion: '2026-01-01T00:00:00.000Z' }, dir: await fresh('same'), staticDir: tmp, publicKeys });
+  const r = await updateDataPack({ base, current: { dataVersion: '2026-01-01T00:00:00.000Z' },
+    dir: await fresh('same'), staticDir: tmp, publicKeys });
   assert.equal(r.updated, false);
   assert.equal(r.reason, 'up to date');
   assert.deepEqual(requests, ['manifest.json', 'manifest.sig']);
@@ -69,7 +71,8 @@ test('up to date: nothing downloaded', async () => {
 
 test('older data is refused', async () => {
   reset();
-  const r = await updateDataPack({ base, current: { dataVersion: '2027-01-01T00:00:00.000Z' }, dir: await fresh('older'), staticDir: tmp, publicKeys });
+  const r = await updateDataPack({ base, current: { dataVersion: '2027-01-01T00:00:00.000Z' },
+    dir: await fresh('older'), staticDir: tmp, publicKeys });
   assert.equal(r.updated, false);
 });
 
@@ -85,7 +88,8 @@ test('unchanged files are reused from the installed data', async () => {
 
 test('a pack signed with another key is rejected', async () => {
   reset({ key: other });
-  await assert.rejects(updateDataPack({ base, current: null, dir: await fresh('badsig'), staticDir: tmp, publicKeys }), { code: 'BAD_SIGNATURE' });
+  await assert.rejects(updateDataPack({ base, current: null, dir: await fresh('badsig'), staticDir: tmp,
+    publicKeys }), { code: 'BAD_SIGNATURE' });
 });
 
 test('a corrupted file is rejected and the installed data is kept', async () => {
@@ -93,15 +97,17 @@ test('a corrupted file is rejected and the installed data is kept', async () => 
   const dir = await fresh('corrupt');
   await updateDataPack({ base, current: null, dir, staticDir: path.join(tmp, 'none'), publicKeys });
   // the signed manifest lists a new file, but the server sends different bytes
-  reset({ manifest: { dataVersion: '2026-06-01T00:00:00.000Z', files: listing({ ...files, 'new.json': '{"ok":1}' }) }, files: { 'new.json': '{"tampered":1}' } });
-  await assert.rejects(updateDataPack({ base, current: { dataVersion: '2026-01-01T00:00:00.000Z' }, dir, staticDir: path.join(tmp, 'none'), publicKeys }), /checksum mismatch/);
+  reset({ manifest: { dataVersion: '2026-06-01T00:00:00.000Z', files: listing({ ...files, 'new.json': '{"ok":1}' }) },
+    files: { 'new.json': '{"tampered":1}' } });
+  await assert.rejects(updateDataPack({ base, current: { dataVersion: '2026-01-01T00:00:00.000Z' }, dir,
+    staticDir: path.join(tmp, 'none'), publicKeys }), /does not match its checksum/);
   assert.equal(await readFile(path.join(dir, 'events.json'), 'utf8'), files['events.json']);
   await assert.rejects(readFile(path.join(dir, 'new.json')));
 });
 
 test('unsafe file paths in the manifest are rejected', async () => {
   reset({ manifest: { files: { '../evil.json': { sha256: sha('x'), size: 1 } } } });
-  await assert.rejects(updateDataPack({ base, current: null, dir: await fresh('unsafe'), staticDir: tmp, publicKeys }), /bad entry/);
+  await assert.rejects(updateDataPack({ base, current: null, dir: await fresh('unsafe'), staticDir: tmp, publicKeys }), /invalid entry/);
 });
 
 test('offline: the download fails without touching the folder', async () => {
@@ -110,7 +116,8 @@ test('offline: the download fails without touching the folder', async () => {
   await new Promise((r) => closed.listen(0, '127.0.0.1', r));
   const port = closed.address().port;
   closed.close();
-  await assert.rejects(updateDataPack({ base: `http://localhost:${port}/`, current: null, dir: await fresh('offline'), staticDir: tmp, publicKeys }));
+  await assert.rejects(updateDataPack({ base: `http://localhost:${port}/`, current: null, dir: await fresh('offline'),
+    staticDir: tmp, publicKeys }));
 });
 
 test('addresses: https, or http on localhost only', async () => {

@@ -110,7 +110,9 @@ jobs:
             fi
             echo "Already running 0.4.0 or later? The tracker offers the update itself. Otherwise:"
             echo
-            echo "Download **RumbleTracker-${version}-win-x64.zip**, extract it anywhere and run **RumbleTracker.exe** (Windows 10/11, 64-bit). Windows may show \"Windows protected your PC\" the first time: click **More info**, then **Run anyway**. The first start downloads the game data (about 4.5 MB)."
+            echo "Download **RumbleTracker-${version}-win-x64.zip**, extract it anywhere and run **RumbleTracker.exe**"
+            echo "(Windows 10/11, 64-bit). Windows may show \"Windows protected your PC\" the first time: click **More info**,"
+            echo "then **Run anyway**. The first start downloads the game data (about 4.5 MB)."
             echo
             echo "See the [player guide](https://github.com/razingo/rumble-tracker-app/blob/main/docs/INSTRUCTIONS.md)."
             echo

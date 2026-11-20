@@ -1,9 +1,9 @@
-// Event schedules and dungeon/raid rotations from gamedata/events.json. Shared by the page (Calendar) and the server
-// (notifications, currency names), so both use the same rules.
-export const DAY = 86400000;
+// Event schedules and dungeon and raid rotations from gamedata/events.json. The Calendar and the server's
+// notifications and currency names all use these, so they follow the same rules.
+import { DAY } from './format.js';
 
 /** UTC time of the n-th weekday of a month at the given hour. */
-export function nthWeekdayUtc(y, m0, nth, weekday, hour) {
+function nthWeekdayUtc(y, m0, nth, weekday, hour) {
   const first = new Date(Date.UTC(y, m0, 1)).getUTCDay();
   return Date.UTC(y, m0, 1 + ((weekday - first + 7) % 7) + (nth - 1) * 7, hour);
 }

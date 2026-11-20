@@ -2,7 +2,7 @@
 // quiet hours hold them, and types the user doesn't want while playing wait until the game is closed.
 import { NOTIFY_TYPES, dueNotifications, inQuietHours } from './notify.mjs';
 import { showToast } from './toast.mjs';
-import { accountLabel, unitSlug } from '../state.mjs';
+import { accountLabel, unitSlug } from '../userdata.mjs';
 
 /** gameRunning(): Promise<boolean>. Returns { tick, save, test }. */
 export function createNotifier(ctx, { gameRunning, toast = showToast }) {
@@ -28,7 +28,8 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
         units: acc.snapshot.units.map((x) => ({ ...x, slug: unitSlug(ctx, x.id), name: nameOf.get(unitSlug(ctx, x.id)) })),
       }));
     const due = dueNotifications({
-      now, accounts: list, events: ctx.tables.events, store: ctx.tables.store, rules: ctx.tables.rules, pvp: ctx.tables.pvp, plans: u().plans, settings,
+      now, accounts: list, events: ctx.tables.events, store: ctx.tables.store, rules: ctx.tables.rules,
+        pvp: ctx.tables.pvp, plans: u().plans, settings,
       multi: list.length > 1, appUpdateNeeded: ctx.dataPack.needsAppUpdate, newVersion: ctx.dataPack.newVersion,
     }).filter((n) => !log.sent[n.key]);
     if (!due.length && !(log.pending.length && !inQuietHours(settings.quiet))) return;
@@ -50,7 +51,8 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
     for (const n of batch) (byType.get(n.type) || byType.set(n.type, []).get(n.type)).push(n);
     for (const [type, items] of byType) {
       const toSend = items.length > 2
-        ? [{ type, title: `${items.length}× ${NOTIFY_TYPES.find((t) => t.id === type)?.label || type}`, body: items.map((n) => n.body.replace(/\.$/, '')).join(' · ') }]
+        ? [{ type, title: `${items.length}× ${NOTIFY_TYPES.find((t) => t.id === type)?.label || type}`,
+          body: items.map((n) => n.body.replace(/\.$/, '')).join(' · ') }]
         : items;
       for (const n of toSend) {
         const ok = await toast(n.title, n.body);

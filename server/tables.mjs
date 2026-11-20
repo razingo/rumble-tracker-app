@@ -1,4 +1,4 @@
-// Game tables: rules, minis, events, shop and PvP data. An installed data pack (<data>/gamedata) takes precedence over
+// The game tables: rules, minis, events, shop and PvP data. An installed data pack (<data>/gamedata) is used before
 // the bundled gamedata/ files.
 import { stat, rename } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,7 +14,7 @@ export function createTables({ GAMEDATA, STATIC }) {
       try { await stat(p); return p; } catch { return path.join(STATIC, rel); }
     },
 
-    /** Whether any game data is there (from source: npm run fetch-gamedata; the exe: the first start's download). */
+    /** Whether any game data is installed, from npm run fetch-gamedata or the exe's first start. */
     async hasGameData() {
       for (const dir of [GAMEDATA, STATIC]) { try { await stat(path.join(dir, 'rules.json')); return true; } catch { /* next */ } }
       return false;
@@ -32,7 +32,7 @@ export function createTables({ GAMEDATA, STATIC }) {
         pvp: await read('pvp.json', null),
         rules: await read('rules.json'),
         minis: (await read('minis.json')).minis,
-        // unit ID -> mini slug; names.json overrides
+        // unit ID to mini; the player's assignments in names.json come first
         builtinUnits: (await read('unit_ids.json', { units: {} })).units,
         gameData: await read('gamedata.json', null), // game build and data version of the tables
       };

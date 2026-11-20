@@ -1,4 +1,3 @@
-// JSON files: queued writes to one file, damaged files moved aside.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
@@ -29,7 +28,7 @@ test('missing files give the fallback; damaged files are moved aside when allowe
   const p = path.join(dir, 'names.json');
   assert.deepEqual(await readJson(p, { a: 1 }), { a: 1 });
   await assert.rejects(readJson(p), { code: 'ENOENT' });
-  await writeFile(p, '﻿{"ok":true}');
+  await writeFile(p, '\uFEFF{"ok":true}');
   assert.deepEqual(await readJson(p, {}), { ok: true }); // byte-order mark
   await writeFile(p, '{"broken":');
   await assert.rejects(readJson(p, {}), { code: 'BAD_JSON' });

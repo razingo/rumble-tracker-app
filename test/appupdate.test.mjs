@@ -1,14 +1,12 @@
-// App updates: release info from the signed manifest, and the verified download.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
 import { deflateRawSync, crc32 } from 'node:zlib';
 import { latestAppOf, zipUrl, zipEntry, downloadUpdate } from '../server/update/appupdate.mjs';
+import { sha256 as sha } from '../server/datapack/datapack.mjs';
 
-const sha = (b) => createHash('sha256').update(b).digest('hex');
 
 /** A zip like tools/build_release.mjs writes (deflate; `stored` names are kept uncompressed). */
 function zip(entries, stored = []) {
@@ -36,7 +34,8 @@ function zip(entries, stored = []) {
 }
 
 const exe = Buffer.from('MZ fake program '.repeat(500));
-const zipBuf = zip([['RumbleTracker-0.4.0-win-x64/README.md', Buffer.from('readme')], ['RumbleTracker-0.4.0-win-x64/RumbleTracker.exe', exe]]);
+const zipBuf = zip([['RumbleTracker-0.4.0-win-x64/README.md', Buffer.from('readme')],
+  ['RumbleTracker-0.4.0-win-x64/RumbleTracker.exe', exe]]);
 const app = { version: '0.4.0', zip: 'RumbleTracker-0.4.0-win-x64.zip', zipSha256: sha(zipBuf), exeSha256: sha(exe) };
 const serve = (buf, status = 200) => async () => ({ ok: status === 200, status, arrayBuffer: async () => buf });
 
@@ -53,7 +52,7 @@ test('release info must be complete and consistent', () => {
 test('zip entries: deflated and stored', () => {
   assert.deepEqual(zipEntry(zipBuf, 'RumbleTracker.exe'), exe);
   assert.deepEqual(zipEntry(zip([['a/RumbleTracker.exe', exe]], ['a/RumbleTracker.exe']), 'RumbleTracker.exe'), exe);
-  assert.throws(() => zipEntry(zipBuf, 'other.exe'), /not in the zip/);
+  assert.throws(() => zipEntry(zipBuf, 'other.exe'), /not in the downloaded zip/);
   assert.throws(() => zipEntry(Buffer.from('not a zip at all, just some text here'), 'x'), /not a zip/);
 });
 
@@ -63,9 +62,11 @@ test('download: written only when both checksums match', async () => {
   const file = await downloadUpdate(app, target, { fetchImpl: serve(zipBuf) });
   assert.equal(path.basename(file), 'RumbleTracker-0.4.0.exe');
   assert.deepEqual(await readFile(file), exe);
-  await assert.rejects(downloadUpdate({ ...app, zipSha256: sha(Buffer.from('x')) }, target, { fetchImpl: serve(zipBuf) }), /does not match its checksum/);
-  await assert.rejects(downloadUpdate({ ...app, exeSha256: sha(Buffer.from('x')) }, target, { fetchImpl: serve(zipBuf) }), /program in the download/);
-  await assert.rejects(downloadUpdate(app, target, { fetchImpl: serve(zipBuf, 404) }), /download failed \(404\)/);
+  await assert.rejects(downloadUpdate({ ...app, zipSha256: sha(Buffer.from('x')) }, target,
+    { fetchImpl: serve(zipBuf) }), /does not match its checksum/);
+  await assert.rejects(downloadUpdate({ ...app, exeSha256: sha(Buffer.from('x')) }, target,
+    { fetchImpl: serve(zipBuf) }), /program in the download/);
+  await assert.rejects(downloadUpdate(app, target, { fetchImpl: serve(zipBuf, 404) }), /download failed \(HTTP 404\)/);
   // a failed download leaves the earlier one alone
   assert.deepEqual(await readdir(target), ['RumbleTracker-0.4.0.exe']);
   await rm(dir, { recursive: true });

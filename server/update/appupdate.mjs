@@ -1,15 +1,14 @@
-// App updates: the signed data-pack manifest names the latest release and the SHA-256 of its zip and exe
-// (latestApp). The zip is downloaded from the release on GitHub, both checksums are verified, and the exe is written to
-// <data>/update/; the launcher then swaps it in and restarts.
+// App updates. The signed data-pack manifest names the latest release and the SHA-256 of its zip and exe
+// (latestApp). The zip is downloaded from the GitHub release, both checksums are checked, and the exe is written to
+// <data>/update/ for the launcher to swap in.
 import { mkdir, writeFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
+import { sha256 } from '../datapack/datapack.mjs';
 
-export const RELEASE_REPO = 'razingo/rumble-tracker-app';
-export const EXE = 'RumbleTracker.exe';
+const RELEASE_REPO = 'razingo/rumble-tracker-app';
+const EXE = 'RumbleTracker.exe';
 const MAX_ZIP = 300 * 1024 * 1024;
-const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
 /** The latestApp entry of a manifest if it is well-formed: { version, zip, zipSha256, exeSha256 }, else null. */
 export function latestAppOf(manifest) {
@@ -24,14 +23,14 @@ export const zipUrl = (app) => `https://github.com/${RELEASE_REPO}/releases/down
 
 /** Returns the bytes of the zip entry whose name ends with `/${name}` (or equals it). Deflate and stored only. */
 export function zipEntry(zip, name) {
-  // end of central directory: the last 22+ bytes
+  // the end-of-central-directory record: the last 22 bytes, or a little earlier when the zip has a comment
   let end = -1;
   for (let i = zip.length - 22; i >= Math.max(0, zip.length - 22 - 65535); i--) if (zip.readUInt32LE(i) === 0x06054b50) { end = i; break; }
-  if (end < 0) throw new Error('not a zip file');
+  if (end < 0) throw new Error('The download is not a zip file.');
   const count = zip.readUInt16LE(end + 10);
   let p = zip.readUInt32LE(end + 16);
   for (let k = 0; k < count; k++) {
-    if (zip.readUInt32LE(p) !== 0x02014b50) throw new Error('damaged zip directory');
+    if (zip.readUInt32LE(p) !== 0x02014b50) throw new Error('The downloaded zip is damaged.');
     const method = zip.readUInt16LE(p + 10);
     const compSize = zip.readUInt32LE(p + 20);
     const nameLen = zip.readUInt16LE(p + 28), extraLen = zip.readUInt16LE(p + 30), commentLen = zip.readUInt16LE(p + 32);
@@ -39,14 +38,14 @@ export function zipEntry(zip, name) {
     const entry = zip.subarray(p + 46, p + 46 + nameLen).toString('utf8');
     p += 46 + nameLen + extraLen + commentLen;
     if (entry !== name && !entry.endsWith(`/${name}`)) continue;
-    if (zip.readUInt32LE(local) !== 0x04034b50) throw new Error('damaged zip entry');
+    if (zip.readUInt32LE(local) !== 0x04034b50) throw new Error('The downloaded zip is damaged.');
     const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
     const data = zip.subarray(start, start + compSize);
     if (method === 0) return Buffer.from(data);
     if (method === 8) return inflateRawSync(data);
-    throw new Error(`unsupported zip compression (${method})`);
+    throw new Error(`The downloaded zip uses an unsupported compression (${method}).`);
   }
-  throw new Error(`${name} is not in the zip`);
+  throw new Error(`${name} is not in the downloaded zip.`);
 }
 
 /**
@@ -55,10 +54,10 @@ export function zipEntry(zip, name) {
  */
 export async function downloadUpdate(app, dir, { fetchImpl = fetch, url = zipUrl(app), onProgress } = {}) {
   const r = await fetchImpl(url, { redirect: 'follow', signal: AbortSignal.timeout(10 * 60 * 1000) });
-  if (!r.ok) throw new Error(`download failed (${r.status})`);
+  if (!r.ok) throw new Error(`The download failed (HTTP ${r.status}).`);
   const total = Number(r.headers?.get?.('content-length')) || 0;
-  if (total > MAX_ZIP) throw new Error('download too large');
-  // read in chunks to report progress: onProgress(bytes so far, total or 0)
+  if (total > MAX_ZIP) throw new Error('The download is larger than a tracker release can be, so it was stopped.');
+  // read in chunks to report progress, with onProgress(bytes so far, total or 0)
   const chunks = [];
   let done = 0;
   if (r.body?.getReader) {
@@ -68,7 +67,10 @@ export async function downloadUpdate(app, dir, { fetchImpl = fetch, url = zipUrl
       if (end) break;
       chunks.push(Buffer.from(value));
       done += value.length;
-      if (done > MAX_ZIP) { reader.cancel().catch(() => {}); throw new Error('download too large'); }
+      if (done > MAX_ZIP) {
+        reader.cancel().catch(() => {});
+        throw new Error('The download is larger than a tracker release can be, so it was stopped.');
+      }
       onProgress?.(done, total);
     }
   } else {
@@ -76,10 +78,10 @@ export async function downloadUpdate(app, dir, { fetchImpl = fetch, url = zipUrl
     onProgress?.(chunks[0].length, total);
   }
   const zip = Buffer.concat(chunks);
-  if (zip.length > MAX_ZIP) throw new Error('download too large');
-  if (sha256(zip) !== app.zipSha256) throw new Error('the downloaded file does not match its checksum');
+  if (zip.length > MAX_ZIP) throw new Error('The download is larger than a tracker release can be, so it was stopped.');
+  if (sha256(zip) !== app.zipSha256) throw new Error('The download does not match its checksum, so it was not installed.');
   const exe = zipEntry(zip, EXE);
-  if (sha256(exe) !== app.exeSha256) throw new Error('the program in the download does not match its checksum');
+  if (sha256(exe) !== app.exeSha256) throw new Error('The program in the download does not match its checksum, so it was not installed.');
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, `RumbleTracker-${app.version}.exe`);

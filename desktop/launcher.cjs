@@ -26,7 +26,6 @@ const PORTS = process.env.PORT ? [Number(process.env.PORT)] : Array.from({ lengt
 let PORT = PORTS[0];
 let PAGE = `http://localhost:${PORT}/`;
 const usePort = (p) => { PORT = p; PAGE = `http://localhost:${p}/`; };
-const DATA_PACK_URL = 'https://razingo.github.io/rumble-tracker-data/';
 const args = new Set(process.argv.slice(2));
 // --background (Start with Windows): tray icon only, no window; --no-browser: the same, for testing
 const NO_WINDOW = args.has('--background') || args.has('--no-browser');
@@ -40,10 +39,11 @@ const ROAMING = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roami
 const DATA = path.resolve(process.env.RUMBLE_DATA_DIR || path.join(ROAMING, 'RumbleTracker'));
 const HOME = path.join(LOCAL, 'RumbleTracker'); // unpacked app and browser profile
 let APP_DIR = null; // this version's unpacked files (set by main)
+let host = null; // server/host.mjs, loaded by main before the server starts
 
 process.title = TITLE;
 
-// ---- logging ----------------------------------------------------------------------------------------------------
+// Logging
 fs.mkdirSync(DATA, { recursive: true });
 const LOG = path.join(DATA, 'tracker.log');
 // called only by the instance that runs (not when handing over to a running one)
@@ -67,10 +67,11 @@ for (const level of ['log', 'info', 'warn', 'error']) {
   };
 }
 
-// ---- PowerShell helpers (message box, tray) -------------------------------------------------------------------
+// PowerShell helpers
 const POWERSHELL = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 const SYSTEM32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
-const psArgs = (script) => ['-NoProfile', '-NonInteractive', '-Sta', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
+const psArgs = (script) => ['-NoProfile', '-NonInteractive', '-Sta', '-ExecutionPolicy', 'Bypass', '-EncodedCommand',
+  Buffer.from(script, 'utf16le').toString('base64')];
 
 /**
  * Shows a start-up error in a message box, then exits. rollback: right after an app update, the new version failed to
@@ -92,14 +93,17 @@ ${message}`;
       console.log(`App update: could not restore the previous version: ${e.message}`);
     }
   }
-  const script = "Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.MessageBox]::Show($env:RT_MSG, $env:RT_TITLE, 'OK', 'Warning')";
-  execFile(POWERSHELL, psArgs(script), { windowsHide: true, env: { ...process.env, RT_MSG: message, RT_TITLE: TITLE } }, () => process.exit(1));
+  const script = 'Add-Type -AssemblyName System.Windows.Forms; '
+    + "[void][System.Windows.Forms.MessageBox]::Show($env:RT_MSG, $env:RT_TITLE, 'OK', 'Warning')";
+  execFile(POWERSHELL, psArgs(script), { windowsHide: true, env: { ...process.env, RT_MSG: message,
+    RT_TITLE: TITLE } }, () => process.exit(1));
 }
 
-// ---- app window --------------------------------------------------------------------------------------------------
+// App window
 function regValue(key, name) {
   return new Promise((resolve) => {
-    execFile(path.join(SYSTEM32, 'reg.exe'), ['query', key, ...(name ? ['/v', name] : ['/ve'])], { windowsHide: true, timeout: 5000 }, (err, out) => {
+    execFile(path.join(SYSTEM32, 'reg.exe'), ['query', key, ...(name ? ['/v', name] : ['/ve'])],
+      { windowsHide: true, timeout: 5000 }, (err, out) => {
       const m = !err && /REG_(?:EXPAND_)?SZ\s+(.*)$/m.exec(out || '');
       resolve(m ? m[1].trim().replace(/^"(.*)"$/, '$1').replace(/%([^%]+)%/g, (s, v) => process.env[v] ?? s) : null);
     });
@@ -110,15 +114,19 @@ function regValue(key, name) {
 const PF = process.env.ProgramFiles || 'C:\\Program Files';
 const PF86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
 const BROWSERS = [
-  { id: 'edge', exe: 'msedge.exe', progId: /^MSEdgeHTM/i, dirs: [`${PF86}\\Microsoft\\Edge\\Application`, `${PF}\\Microsoft\\Edge\\Application`, `${LOCAL}\\Microsoft\\Edge\\Application`] },
-  { id: 'chrome', exe: 'chrome.exe', progId: /^ChromeHTML/i, dirs: [`${PF}\\Google\\Chrome\\Application`, `${PF86}\\Google\\Chrome\\Application`, `${LOCAL}\\Google\\Chrome\\Application`] },
-  { id: 'brave', exe: 'brave.exe', progId: /^BraveHTML/i, dirs: [`${PF}\\BraveSoftware\\Brave-Browser\\Application`, `${LOCAL}\\BraveSoftware\\Brave-Browser\\Application`] },
+  { id: 'edge', exe: 'msedge.exe', progId: /^MSEdgeHTM/i, dirs: [`${PF86}\\Microsoft\\Edge\\Application`,
+    `${PF}\\Microsoft\\Edge\\Application`, `${LOCAL}\\Microsoft\\Edge\\Application`] },
+  { id: 'chrome', exe: 'chrome.exe', progId: /^ChromeHTML/i,
+    dirs: [`${PF}\\Google\\Chrome\\Application`, `${PF86}\\Google\\Chrome\\Application`, `${LOCAL}\\Google\\Chrome\\Application`] },
+  { id: 'brave', exe: 'brave.exe', progId: /^BraveHTML/i, dirs: [`${PF}\\BraveSoftware\\Brave-Browser\\Application`,
+    `${LOCAL}\\BraveSoftware\\Brave-Browser\\Application`] },
   { id: 'vivaldi', exe: 'vivaldi.exe', progId: /^VivaldiHTM/i, dirs: [`${LOCAL}\\Vivaldi\\Application`, `${PF}\\Vivaldi\\Application`] },
 ];
 
 async function defaultProgId() {
   const base = 'HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations';
-  for (const key of [`${base}\\https\\UserChoiceLatest\\ProgId`, `${base}\\https\\UserChoice`, `${base}\\http\\UserChoiceLatest\\ProgId`, `${base}\\http\\UserChoice`]) {
+  for (const key of [`${base}\\https\\UserChoiceLatest\\ProgId`, `${base}\\https\\UserChoice`,
+    `${base}\\http\\UserChoiceLatest\\ProgId`, `${base}\\http\\UserChoice`]) {
     const v = await regValue(key, 'ProgId');
     if (v) return v;
   }
@@ -141,7 +149,8 @@ function chooseBrowser() {
     const order = [...BROWSERS].sort((a, b) => (b.progId.test(prog || '') ? 1 : 0) - (a.progId.test(prog || '') ? 1 : 0));
     let choice = null;
     for (const b of order) { const exe = await browserPath(b); if (exe) { choice = { id: b.id, exe }; break; } }
-    console.log(`Window: ${choice ? `${choice.id} app mode (${choice.exe})` : 'no app-mode browser found, using a browser tab'}; default browser ${prog || 'unknown'}`);
+    console.log(`Window: ${choice ? `${choice.id} app mode (${choice.exe})`
+      : 'no app-mode browser found, using a browser tab'}; default browser ${prog || 'unknown'}`);
     return choice;
   })();
   return browserChoice;
@@ -164,14 +173,16 @@ async function openWindow() {
   child.unref();
 }
 
-// ---- tray icon -----------------------------------------------------------------------------------------------------
+// Tray icon
 
 function startTray(onQuit) {
   const hintFile = path.join(DATA, '.tray-hint-shown');
-  const hint = fs.existsSync(hintFile) ? '' : 'The tracker keeps running here when you close its window, so notifications still arrive. Right-click this icon to quit.';
+  const hint = fs.existsSync(hintFile) ? '' : 'The tracker keeps running here when you close its window, so ' +
+    'notifications still arrive. Right-click this icon to quit.';
   const tray = spawn(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'tray.ps1'), 'utf8')), {
     windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, RT_TITLE: TITLE, RT_DATA: DATA, RT_EXE: process.execPath, RT_PARENT: String(process.pid), RT_HINT: hint, RT_GAME: 'WarcraftRumble' },
+    env: { ...process.env, RT_TITLE: TITLE, RT_DATA: DATA, RT_EXE: process.execPath, RT_PARENT: String(process.pid),
+      RT_HINT: hint, RT_GAME: 'WarcraftRumble' },
   });
   let buf = '';
   let err = '';
@@ -186,23 +197,23 @@ function startTray(onQuit) {
       else if (cmd === 'quit') onQuit('Quit from the tray');
       else if (cmd === 'shutdown') onQuit('Windows is signing out or shutting down');
       // whether the game runs, for the server (server/game/watch.mjs)
-      else if (cmd === 'game 1' || cmd === 'game 0') process.emit('rumble:game', cmd === 'game 1');
+      else if (cmd === 'game 1' || cmd === 'game 0') host.reportGame(cmd === 'game 1');
       else if (cmd === 'ready' && hint) { try { fs.writeFileSync(hintFile, ''); } catch { /* shown again next time */ } }
     }
   });
   tray.stderr.setEncoding('utf8');
   tray.stderr.on('data', (c) => { if (err.length < 4000) err += c; });
   // without the tray the server watches the game itself
-  tray.on('error', (e) => { console.log(`Tray icon could not start: ${e.message}`); process.emit('rumble:game-failed'); });
+  tray.on('error', (e) => { console.log(`Tray icon could not start: ${e.message}`); host.gameWatchFailed(); });
   tray.on('exit', (code) => {
     // PowerShell starts redirected error output with an empty "#< CLIXML" header
     const msg = err.replace(/^#< CLIXML\s*/, '').trim();
     if (code || msg) console.log(`Tray icon stopped (${code}): ${msg.slice(0, 1000)}`);
-    if (!quitting) process.emit('rumble:game-failed');
+    if (!quitting) host.gameWatchFailed();
   });
 }
 
-// ---- starting up ---------------------------------------------------------------------------------------------------
+// Starting up
 /** Port state: 'tracker' (already running), 'free' or 'other'. */
 function probe(port = PORT) {
   return new Promise((resolve) => {
@@ -264,7 +275,9 @@ function unpack() {
   fs.rmSync(tmp, { recursive: true, force: true });
   for (const [rel, offset, size, sha] of index.files) {
     const buf = data.subarray(offset, offset + size);
-    if (crypto.createHash('sha256').update(buf).digest('hex') !== sha) throw new Error(`The program file is damaged (${rel}). Please download it again.`);
+    if (crypto.createHash('sha256').update(buf).digest('hex') !== sha) {
+      throw new Error(`The program file is damaged (${rel}). Please download it again.`);
+    }
     const target = path.join(tmp, ...rel.split('/'));
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, buf);
@@ -287,13 +300,13 @@ async function waitForExit(pid) {
   }
 }
 
-// ---- app updates ----------------------------------------------------------------------------------------------------
+// App updates
 // The server downloads and verifies the new exe (server/update/appupdate.mjs). It is swapped in here: a running exe
 // can be renamed but not overwritten, so this one becomes RumbleTracker.exe.old (removed at the next start), the new
 // one is copied to its place and started; it waits for this instance to stop.
 const OLD_EXE = `${process.execPath}.old`;
 const FAILED_EXE = `${process.execPath}.failed`; // a new version that failed to start, rolled back (see fatal)
-function applyUpdate({ exe, version, done }) {
+function applyUpdate({ exe, version }) {
   const target = process.execPath;
   try {
     fs.rmSync(OLD_EXE, { force: true });
@@ -301,24 +314,25 @@ function applyUpdate({ exe, version, done }) {
     try { fs.copyFileSync(exe, target); } catch (e) { fs.renameSync(OLD_EXE, target); throw e; }
   } catch (e) {
     console.log(`App update: could not replace ${target}: ${e.message}`);
-    return done(`Could not replace the program file (${e.code || e.message}). Download version ${version} from GitHub Releases instead.`);
+    return Promise.reject(new Error(`The program file could not be replaced (${e.code
+      || e.message}). Download version ${version} from GitHub Releases instead.`));
   }
-  const child = spawn(target, [`--after-update=${process.pid}:${PORT}`], { detached: true, stdio: 'ignore' });
-  child.once('spawn', () => { child.unref(); console.log(`App update: started ${version}`); done(null); });
-  child.once('error', (e) => {
-    console.log(`App update: could not start the new version: ${e.message}`);
-    try { fs.rmSync(target, { force: true }); fs.renameSync(OLD_EXE, target); } catch { /* keep what is there */ }
-    done(`The new version could not be started (${e.message}). Download it from GitHub Releases instead.`);
+  return new Promise((resolve, reject) => {
+    const child = spawn(target, [`--after-update=${process.pid}:${PORT}`], { detached: true, stdio: 'ignore' });
+    child.once('spawn', () => { child.unref(); console.log(`App update: started ${version}`); resolve(); });
+    child.once('error', (e) => {
+      console.log(`App update: could not start the new version: ${e.message}`);
+      try { fs.rmSync(target, { force: true }); fs.renameSync(OLD_EXE, target); } catch { /* keep what is there */ }
+      reject(new Error(`The new version could not be started (${e.message}). Download it from GitHub Releases instead.`));
+    });
   });
 }
-process.on('rumble:apply-update', applyUpdate);
 
 /** Tray Quit or Windows shutting down: the server stops once its scan, backup and writes are done (as Quit on the page). */
 let quitting = false;
 function quitFromTray(reason) {
   quitting = true;
-  if (!process.listenerCount('rumble:quit')) { console.log(reason); process.exit(0); }
-  process.emit('rumble:quit', reason);
+  if (!host?.quit(reason)) { console.log(reason); process.exit(0); }
   setTimeout(() => process.exit(0), 20000).unref(); // in case the server can't finish
 }
 
@@ -333,16 +347,11 @@ async function main() {
       : `Ports ${PORTS[0]}-${PORTS[PORTS.length - 1]} are all in use by other programs, so the tracker can't start.`);
   }
   usePort(found.port);
-  process.env.PORT = String(PORT);
 
   rotateLog();
   let app;
   try { app = unpack(); } catch (e) { return fatal(`Could not unpack the tracker's files: ${e.message}`, { rollback: true }); }
   APP_DIR = app.dir;
-
-  process.env.RUMBLE_DATA_DIR = DATA;
-  process.env.RUMBLE_DEFAULT_DATA_PACK_URL ||= DATA_PACK_URL;
-  process.env.RUMBLE_STANDALONE = '1'; // enables the Quit button and external-link handling
 
   console.log(`${TITLE} ${app.index.version}, unpacked in ${app.dir}`);
 
@@ -360,6 +369,17 @@ async function main() {
   if (!NO_WINDOW && !args.has('--tab')) chooseBrowser().catch(() => {});
 
   const load = createRequire(path.join(app.dir, 'launcher-helper.cjs'))(path.join(app.dir, 'import.cjs'));
+  try {
+    host = (await load(pathToFileURL(path.join(app.dir, 'server', 'host.mjs')).href)).host;
+  } catch (e) {
+    return fatal(`The tracker could not start: ${e && e.message || e}`, { rollback: true });
+  }
+  host.attach({
+    options: { port: PORT, dataDir: DATA },
+    applyUpdate,
+    openLink: openInDefaultBrowser,
+    takeScreenshot: () => openInDefaultBrowser('ms-screenclip:'),
+  });
   // not awaited: on first start the server downloads the game data before it finishes loading, serving a progress
   // page meanwhile, so the window opens as soon as the port answers
   let failed = false;
@@ -378,25 +398,20 @@ async function main() {
   await openWindow();
 }
 
-// ---- Windows integration (desktop/integration.ps1) -------------------------------------------------------------
+// Windows integration
 // The Start menu shortcut gives notifications the tracker's name and icon (app ID AUMID); clicking one opens a
 // rumble-tracker: link, which starts this exe (--open): a running tracker then shows its window.
 const AUMID = 'razingo.RumbleCollectionTracker';
 function integrate() {
   const env = { ...process.env, RT_EXE: process.execPath, RT_AUMID: AUMID, RT_TITLE: TITLE, RT_REFRESH: afterUpdate ? '1' : '' };
-  execFile(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'integration.ps1'), 'utf8')), { windowsHide: true, timeout: 60000, env }, (err, out, stderr) => {
+  execFile(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'integration.ps1'), 'utf8')),
+    { windowsHide: true, timeout: 60000, env }, (err, out, stderr) => {
     const done = new Set(String(out || '').split(/\r?\n/).map((l) => l.trim()));
-    // read by server/notifications/toast.mjs
-    if (done.has('shortcut')) process.env.RUMBLE_TOAST_APP = AUMID;
-    if (done.has('protocol')) process.env.RUMBLE_TOAST_LAUNCH = 'rumble-tracker:open';
+    if (done.has('shortcut')) host.setNotificationIdentity({ appId: AUMID });
+    if (done.has('protocol')) host.setNotificationIdentity({ launch: 'rumble-tracker:open' });
     const problems = String(stderr || '').replace(/^#< CLIXML\s*/, '').trim();
     if (err || problems) console.log(`Windows integration: ${problems || err.message}`.slice(0, 1000));
   });
 }
-
-// emitted by the server for allowed external links (see server/main.mjs)
-process.on('rumble:open-external', openInDefaultBrowser);
-// "Take a screenshot" in Report a problem: Windows' snipping overlay
-process.on('rumble:screenshot', () => openInDefaultBrowser('ms-screenclip:'));
 
 main().catch((e) => fatal(`The tracker could not start: ${e && e.stack || e}`));

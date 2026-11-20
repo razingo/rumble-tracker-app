@@ -1,5 +1,5 @@
-// JSON files on disk: writes are queued per file and go through a unique temporary file, so overlapping saves of the
-// same file can't collide; a damaged file is moved aside instead of stopping the tracker.
+// The player's JSON files. Writes to one file are queued and go through a unique temporary file, so saves can't
+// collide. A damaged file is moved aside instead of stopping the tracker.
 import { readFile, writeFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -7,8 +7,9 @@ const queues = new Map(); // path -> promise of the last queued write
 let tmpCounter = 0;
 
 /**
- * Reads a JSON file. Missing: returns `fallback` (throws if none is given). Not valid JSON: with `onCorrupt`, the file
- * is renamed to <name>.corrupt-<time>, onCorrupt(file, movedTo) is called and `fallback` is returned; otherwise throws.
+ * Reads a JSON file. A missing file gives `fallback`, or throws without one. A file that isn't valid JSON throws,
+ * unless `onCorrupt` is given: then it is renamed to <name>.corrupt-<time>, onCorrupt(file, movedTo) is called and
+ * `fallback` is returned.
  */
 export async function readJson(p, fallback, { onCorrupt } = {}) {
   let text;
@@ -19,10 +20,11 @@ export async function readJson(p, fallback, { onCorrupt } = {}) {
     throw e;
   }
   try {
-    // strip a byte-order mark: JSON.parse rejects it
-    return JSON.parse(text.replace(/^﻿/, ''));
+    // JSON.parse rejects a byte-order mark
+    return JSON.parse(text.replace(/^\uFEFF/, ''));
   } catch (e) {
-    if (!onCorrupt || fallback === undefined) throw Object.assign(new Error(`${path.basename(p)} is not valid JSON: ${e.message}`), { code: 'BAD_JSON' });
+    if (!onCorrupt || fallback === undefined) throw Object.assign(new Error(`${path.basename(p)} is not valid JSON: ${e.message}`),
+      { code: 'BAD_JSON' });
     const moved = `${p}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     await rename(p, moved);
     onCorrupt(p, moved);

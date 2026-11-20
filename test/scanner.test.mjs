@@ -10,7 +10,8 @@ import { testContext, unitsValue, currenciesValue, pvpValue, hexId, RULES } from
 
 const ACC = hexId(0x0100000000, 0xff00);
 const save = ({ xp = 0, gold = 100, pvp } = {}) => ({
-  [ACC]: { units: unitsValue([{ a: 0xa, b: 0xb, level: 3, xp, xpNeeded: 10, xpLevel: 1 }]), currencies: currenciesValue([{ a: 1, b: 2, balance: gold }]), ...(pvp ? { pvp: pvpValue(pvp) } : {}) },
+  [ACC]: { units: unitsValue([{ a: 0xa, b: 0xb, level: 3, xp, xpNeeded: 10, xpLevel: 1 }]),
+    currencies: currenciesValue([{ a: 1, b: 2, balance: gold }]), ...(pvp ? { pvp: pvpValue(pvp) } : {}) },
 });
 const readJsonFile = async (p) => JSON.parse(await readFile(p, 'utf8'));
 

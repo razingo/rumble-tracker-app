@@ -7,9 +7,7 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/styles/style.css">
   <link rel="stylesheet" href="/fonts/fonts.css">
-  <!-- Warcraft Rumble-style look; remove this line to go back to the plain theme -->
   <link rel="stylesheet" href="/styles/theme-rumble.css">
-  <!-- textures and frames from the game files; remove this line to drop them -->
   <link rel="stylesheet" href="/styles/theme-art.css">
 </head>
 <body>
@@ -28,11 +26,12 @@
       <div class="account">
         <label for="account">Account</label>
         <select id="account"></select>
-        <input id="accountLabel" class="keep" placeholder="Name this account" maxlength="40">
+        <input id="accountLabel" class="keep" placeholder="Name this account">
       </div>
     </div>
     <div class="topbar-row topbar-actions">
-      <a class="coffee-btn" href="https://buymeacoffee.com/razingo" target="_blank" rel="noopener noreferrer" title="Support the tracker">☕ Buy me a coffee</a>
+      <a class="coffee-btn" href="https://buymeacoffee.com/razingo" target="_blank" rel="noopener noreferrer"
+        title="Support the tracker">☕ Buy me a coffee</a>
       <div id="status" class="status">Connecting…</div>
       <span class="topbar-spacer"></span>
       <button class="chip report-btn" id="reportBtn" aria-haspopup="dialog">🐞 Report a problem</button>
@@ -48,7 +47,8 @@
         </div>
         <input type="file" id="backupFile" accept="application/json,.json" hidden>
       </div>
-      <button class="chip quit-btn" id="quitBtn" title="Stop the tracker. Closing the window keeps it running in the tray." hidden>⏻ Quit</button>
+      <button class="chip quit-btn" id="quitBtn" title="Stop the tracker. Closing the window keeps it running in the tray."
+        hidden>⏻ Quit</button>
     </div>
   </header>
 
@@ -100,10 +100,10 @@
     <article class="drawer-body" role="dialog" aria-modal="true" aria-labelledby="drawerTitle"></article>
   </div>
 
-  <dialog id="settingsDialog" class="alerts-dialog" aria-label="Settings"></dialog>
-  <dialog id="messageDialog" class="alerts-dialog message-dialog" aria-label="Message"></dialog>
-  <dialog id="updateDialog" class="alerts-dialog update-dialog" aria-label="Tracker update"></dialog>
-  <dialog id="reportDialog" class="alerts-dialog report-dialog" aria-label="Report a problem"></dialog>
+  <dialog id="settingsDialog" class="dialog" aria-label="Settings"></dialog>
+  <dialog id="messageDialog" class="dialog message-dialog" aria-label="Message"></dialog>
+  <dialog id="updateDialog" class="dialog update-dialog" aria-label="Tracker update"></dialog>
+  <dialog id="reportDialog" class="dialog report-dialog" aria-label="Report a problem"></dialog>
 
   <footer class="site-foot">
     Unofficial fan tool, not affiliated with or endorsed by Blizzard Entertainment. Warcraft Rumble and its game art

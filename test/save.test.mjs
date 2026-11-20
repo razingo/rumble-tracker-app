@@ -1,24 +1,8 @@
-// Save decoding: protobuf reader and the record parsers, on hand-built messages.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readVarint, parseMessage } from '../server/game/protobuf.mjs';
-import { parseUnits, parseCurrencies, parseGameBuild, parseOwnedAvatars, compareBuilds } from '../server/game/model.mjs';
-
-// minimal protobuf writer
-const varint = (n) => {
-  let v = BigInt(n);
-  const out = [];
-  do { let b = Number(v & 0x7fn); v >>= 7n; if (v) b |= 0x80; out.push(b); } while (v);
-  return Buffer.from(out);
-};
-const tag = (fn, wt) => varint((fn << 3) | wt);
-const int = (fn, n) => Buffer.concat([tag(fn, 0), varint(n)]);
-const msg = (fn, ...parts) => { const body = Buffer.concat(parts); return Buffer.concat([tag(fn, 2), varint(body.length), body]); };
-const str = (fn, s) => msg(fn, Buffer.from(s, 'utf8'));
-const fixed64 = (fn, n) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(n)); return Buffer.concat([tag(fn, 1), b]); };
-const double = (fn, n) => { const b = Buffer.alloc(8); b.writeDoubleLE(n); return Buffer.concat([tag(fn, 1), b]); };
-const id = (fn, a, b) => msg(fn, fixed64(1, a), fixed64(2, b));
-const hexId = (a, b) => a.toString(16).padStart(16, '0') + b.toString(16).padStart(16, '0');
+import { parseUnits, parseCurrencies, parseGameBuild, parseOwnedAvatars, compareBuilds, diffSnapshots } from '../server/game/model.mjs';
+import { varint, int, msg, str, fixed64, double, id, hexId } from './helpers.mjs';
 
 test('varints', () => {
   assert.deepEqual(readVarint(Buffer.from([0x96, 0x01]), 0), [150n, 2]);
@@ -40,7 +24,8 @@ test('messages: wire types and malformed input', () => {
 
 test('units', () => {
   const buf = Buffer.concat([
-    msg(1, id(1, 0xabc, 0xdef), int(2, 12), int(3, 450), double(5, 0.12345), int(6, 900), int(7, 3), int(8, 5), msg(9, int(1, 2), int(2, 3)), int(10, 40)),
+    msg(1, id(1, 0xabc, 0xdef), int(2, 12), int(3, 450), double(5, 0.12345), int(6, 900), int(7, 3), int(8, 5),
+      msg(9, int(1, 2), int(2, 3)), int(10, 40)),
     msg(1, int(2, 1)), // no id: dropped
   ]);
   assert.deepEqual(parseUnits(buf), [{
@@ -75,8 +60,7 @@ test('game build', () => {
   assert.equal(compareBuilds('16.1.2', '16.1.2.0'), 0);
 });
 
-test('changes between two scans', async () => {
-  const { diffSnapshots } = await import('../server/game/model.mjs');
+test('changes between two scans', () => {
   const rules = { xpToNext: { 1: 10, 2: 20 } };
   const u = (id, o = {}) => ({ id, xpLevel: 1, xp: 0, xpNeeded: 10, rarity: 0, talents: 0, stars: 0, ...o });
   const prev = { units: [u('a'), u('b')], currencies: [{ id: 'gold', balance: 100 }] };

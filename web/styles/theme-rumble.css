@@ -1,31 +1,7 @@
-/* Game-inspired theme over style.css (optional: remove its <link> for the plain look).
-   Fonts: Lilita One (headings, numbers) and Nunito (text), bundled in web/fonts/. */
+/* The game look over style.css: fonts (Lilita One for headings and numbers, Nunito for text, in web/fonts/),
+   panels, buttons and frames. */
 
-:root, :root:not([data-theme]) {
-  --bg: #161a2e;
-  --panel: #232842;
-  --panel-2: #1b2036;
-  --ink: #f3ead6;
-  --muted: #a9a6b8;
-  --line: #3d4363;
-  --accent: #f2b33d;
-  --good: #6fdc8c;
-  --warn: #ff9a62;
-  --chip: #2c3252;
-  --gold-1: #ffe08a;
-  --gold-2: #f2b33d;
-  --gold-3: #b9721a;
-  --gold-edge: #5a3410;
-  --gem-1: #4aa3ff;
-  --gem-2: #1f63c9;
-  --gem-edge: #0d2c66;
-  --trim: #c99a44;
-  --shadow: 0 2px 0 rgb(0 0 0 / 35%), 0 8px 22px rgb(0 0 0 / 35%);
-  --display: "Lilita One", "Trebuchet MS", system-ui, sans-serif;
-  color-scheme: dark;
-}
-
-/* ---- backdrop ----------------------------------------------------------------------------------- */
+/* Backdrop */
 body {
   font-family: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-weight: 600;
@@ -38,7 +14,7 @@ body {
   background-attachment: fixed;
 }
 
-/* ---- top bar ------------------------------------------------------------------------------------ */
+/* Top bar */
 .topbar {
   background: linear-gradient(180deg, #2d3358 0%, #1d2140 100%);
   border-bottom: 3px solid var(--trim);
@@ -75,7 +51,7 @@ body {
   text-shadow: 0 1px 0 rgb(255 240 200 / 70%);
 }
 
-/* ---- panels: stone with gold trim ---------------------------------------------------------------- */
+/* Panels: stone with gold trim */
 .panel, .stat-card, .drawer-body {
   background: linear-gradient(180deg, #2a3050 0%, #20253f 100%);
   border: 2px solid #4b4466;
@@ -86,7 +62,7 @@ body {
 .panel { border-color: color-mix(in srgb, var(--trim) 55%, #3a3355); }
 .drawer-body { border-radius: 0; border-left: 3px solid var(--trim); }
 
-h2, .pool-head h2, .army-title, .drawer-head h2, .picker-body h2 {
+h2, .pool-head h2, .army-title, .drawer-head h2 {
   font-family: var(--display);
   font-weight: 400;
   text-transform: none;
@@ -99,7 +75,7 @@ h2, .pool-head h2, .army-title, .drawer-head h2, .picker-body h2 {
 .army-title { font-size: 22px; }
 h3 { font-family: var(--display); font-weight: 400; color: #ffe9b8; letter-spacing: .2px; }
 
-/* ---- buttons -------------------------------------------------------------------------------------- */
+/* Buttons */
 .btn {
   font-family: var(--display);
   font-weight: 400;
@@ -131,7 +107,7 @@ h3 { font-family: var(--display); font-weight: 400; color: #ffe9b8; letter-spaci
 .chip.danger { color: #ffb38a; }
 .link { color: var(--gold-1); }
 
-/* ---- inputs --------------------------------------------------------------------------------------- */
+/* Inputs */
 select, input, textarea, .tag-editor, .army-meta textarea, .am-desc {
   background: #141831;
   border: 2px solid #3a4066;
@@ -141,16 +117,17 @@ select, input, textarea, .tag-editor, .army-meta textarea, .am-desc {
 }
 .tag-editor input { box-shadow: none; border: 0; background: transparent; }
 select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); outline-offset: 1px; }
-.am-name { background: transparent; box-shadow: none; border-color: transparent; font-family: var(--display); font-weight: 400; font-size: 19px; color: var(--gold-1); }
+.am-name { background: transparent; box-shadow: none; border-color: transparent; font-family: var(--display);
+  font-weight: 400; font-size: 19px; color: var(--gold-1); }
 
-/* ---- currencies & summary -------------------------------------------------------------------------- */
+/* Currencies & summary */
 .cur {
   background: linear-gradient(180deg, #2b3152, #1e2340);
   border: 2px solid #4a4266;
   border-radius: 999px;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 8%), 0 2px 0 rgb(0 0 0 / 35%);
 }
-.cur b, .stat-card .v, .army-stat, .card .lvl, .plvl, .pick-lvl, .aslot-foot b, .am-mini b, .togo {
+.cur b, .stat-card .v, .army-stat, .card .lvl, .plvl, .aslot-foot b, .am-mini b, .togo {
   font-family: var(--display);
   font-weight: 400;
   letter-spacing: .3px;
@@ -160,7 +137,7 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
 .stat-card .v { color: var(--gold-1); font-size: 26px; text-shadow: 0 2px 0 var(--gold-edge); }
 .army-stat { background: #151933; border: 2px solid #4a4266; box-shadow: inset 0 2px 4px rgb(0 0 0 / 45%); }
 
-/* ---- mini cards (collection) ---------------------------------------------------------------------- */
+/* Mini cards (collection) */
 .card {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--rc, #555) 28%, #262b49) 0%, #1f2440 55%);
@@ -169,7 +146,8 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
   border-radius: 14px;
   box-shadow: inset 0 0 0 2px rgb(0 0 0 / 25%), inset 0 2px 0 rgb(255 255 255 / 12%), var(--shadow);
 }
-.card:hover { outline: none; transform: translateY(-2px); box-shadow: inset 0 0 0 2px rgb(0 0 0 / 25%), 0 0 0 2px var(--gold-2), var(--shadow); }
+.card:hover { outline: none; transform: translateY(-2px); box-shadow: inset 0 0 0 2px rgb(0 0 0 / 25%),
+  0 0 0 2px var(--gold-2), var(--shadow); }
 .card .art { border-width: 3px; box-shadow: 0 3px 0 rgb(0 0 0 / 40%); }
 .card .lvl { font-size: 26px; color: #fff; text-shadow: 0 2px 0 rgb(0 0 0 / 55%); }
 .card .name { font-family: var(--display); font-weight: 400; font-size: 15px; letter-spacing: .2px; }
@@ -211,7 +189,7 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
 }
 .flag.wild .ico { width: 16px; height: 16px; padding: 1px; background: rgb(0 0 0 / 30%); }
 
-/* ---- army board ----------------------------------------------------------------------------------- */
+/* Army board */
 .aslot {
   border-width: 3px;
   border-radius: 14px;
@@ -224,7 +202,8 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
 .aslot-body .portrait { box-shadow: 0 4px 0 rgb(0 0 0 / 40%); }
 .aslot-foot { background: #151933; border-top: 2px solid rgb(0 0 0 / 35%); }
 .aslot-foot b { font-size: 22px; }
-.aslot-body .cost, .pcost { background: radial-gradient(circle at 35% 30%, var(--gold-1), var(--gold-2) 60%, var(--gold-3)); border: 1px solid var(--gold-edge); box-shadow: 0 2px 0 rgb(0 0 0 / 45%); }
+.aslot-body .cost, .pcost { background: radial-gradient(circle at 35% 30%, var(--gold-1), var(--gold-2) 60%,
+  var(--gold-3)); border: 1px solid var(--gold-edge); box-shadow: 0 2px 0 rgb(0 0 0 / 45%); }
 .aname { font-family: var(--display); font-weight: 400; letter-spacing: .2px; }
 
 .pcard {
@@ -237,16 +216,17 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
 
 .talent-pop { background: linear-gradient(180deg, #2a3050, #1f2440); border: 2px solid var(--trim); }
 
-/* ---- army slots, game style ------------------------------------------------------------------------
+/* Army slots, game style
    Frame = tier metal (diamond: cyan top fading to magenta), round medallion with the slot type icon,
-   faction pennant top-left, gold cost coin bottom-centre, purple footer with level / MAX / talent. */
+   faction pennant top-left, gold cost coin bottom center, purple footer with level / MAX / talent. */
 .aslot {
   --frame-top: #4c5272; --frame-bot: #353a57; --frame-edge: #24283f;
   border: 0;
   padding: 5px;
   border-radius: 14px;
   background: linear-gradient(180deg, var(--frame-top) 0%, var(--frame-top) 22%, var(--frame-bot) 100%);
-  box-shadow: inset 0 0 0 2px var(--frame-edge), inset 0 3px 0 rgb(255 255 255 / 35%), 0 3px 0 rgb(0 0 0 / 45%), 0 10px 22px rgb(0 0 0 / 35%);
+  box-shadow: inset 0 0 0 2px var(--frame-edge), inset 0 3px 0 rgb(255 255 255 / 35%), 0 3px 0 rgb(0 0 0 / 45%),
+    0 10px 22px rgb(0 0 0 / 35%);
 }
 .aslot.tier-1 { --frame-top: #f0b27a; --frame-bot: #a35c2c; --frame-edge: #5e3216; }   /* bronze */
 .aslot.tier-2 { --frame-top: #f2f6fb; --frame-bot: #8f9bab; --frame-edge: #4c5563; }   /* silver */
@@ -270,14 +250,14 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
   box-shadow: 0 2px 0 rgb(0 0 0 / 35%), inset 0 2px 4px rgb(255 255 255 / 40%);
 }
 .aslot-head .medal .ico { width: 30px; height: 30px; padding: 0; background: none; border-radius: 0; }
-/* mini doesn't match the slot type: grey medallion */
+/* mini doesn't match the slot type: gray medallion */
 .aslot.no-synergy .aslot-head .medal { filter: grayscale(1) brightness(.7); border-color: #9aa0ad; box-shadow: 0 2px 0 rgb(0 0 0 / 35%); }
 .aslot-head.has-icon .aslot-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* icon only */
 .aslot-head .aslot-label { font-size: 13px; color: #1d2140; text-shadow: none; }
 .aslot.tier-0 .aslot-head .aslot-label { color: var(--ink); }
 .aslot-head .boost-mark { position: absolute; right: 8px; top: 6px; font-size: 18px; filter: drop-shadow(0 1px 0 #000); }
 
-/* inner card, coloured by rarity */
+/* inner card, colored by rarity */
 .aslot-body {
   border-radius: 10px 10px 0 0;
   border: 2px solid rgb(0 0 0 / 35%);
@@ -299,7 +279,8 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
   background: var(--fam, #3b6fd1);
   box-shadow: inset 0 -2px 0 rgb(0 0 0 / 30%);
 }
-.fam-flag .ico { width: 20px; height: 20px; padding: 0; background: none; border-radius: 0; border: 0; box-shadow: none; filter: drop-shadow(0 1px 0 rgb(0 0 0 / 45%)); }
+.fam-flag .ico { width: 20px; height: 20px; padding: 0; background: none; border-radius: 0; border: 0;
+  box-shadow: none; filter: drop-shadow(0 1px 0 rgb(0 0 0 / 45%)); }
 :root {
   --fam-alliance: #3b72d6; --fam-horde: #c23a2f; --fam-undead: #7a4fc4;
   --fam-beast: #b48650; --fam-blackrock: #5d6576; --fam-cenarion: #2f9568;
@@ -310,7 +291,7 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
 .fam-beast     { --fam: var(--fam-beast); }
 .fam-blackrock { --fam: var(--fam-blackrock); }
 .fam-cenarion  { --fam: var(--fam-cenarion); }
-/* shading on top of the family colour */
+/* shading on top of the family color */
 .fam-flag { background: linear-gradient(180deg, rgb(255 255 255 / 22%), rgb(0 0 0 / 22%)), var(--fam, #3b6fd1); }
 /* two-family leaders: diagonal split with the combined icon */
 .fam-flag.fam-split {
@@ -342,14 +323,15 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
   box-shadow: inset 0 2px 0 rgb(255 255 255 / 25%);
 }
 .aslot-foot b { color: #fff; font-size: 22px; text-shadow: 0 2px 0 #2a1150; }
-.aslot-foot .max { background: transparent; color: #fff; font-family: var(--display); font-weight: 400; font-size: 15px; text-shadow: 0 2px 0 #2a1150; padding: 0; }
+.aslot-foot .max { background: transparent; color: #fff; font-family: var(--display); font-weight: 400;
+  font-size: 15px; text-shadow: 0 2px 0 #2a1150; padding: 0; }
 .aslot.empty .aslot-foot { background: #1c2140; }
 .atalent .talent-ico { border: 2px solid #1d1036 !important; border-radius: 4px !important; }
 
-/* ---- armory --------------------------------------------------------------------------------------- */
+/* Armory */
 .am-card { border-top: 4px solid var(--trim); }
 
-/* ---- misc ----------------------------------------------------------------------------------------- */
+/* Misc */
 .note { background: #171b34; border: 1px solid #353b60; }
 .events li { border-top-color: #333957; }
 .tag-chip { background: linear-gradient(180deg, #3b6fd1, #24489a); color: #eef5ff; }
@@ -366,4 +348,5 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--gold-2); ou
 * { scrollbar-color: var(--trim) #151933; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: #151933; }
-::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--gold-2), var(--gold-3)); border-radius: 6px; border: 2px solid #151933; }
+::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--gold-2), var(--gold-3)); border-radius: 6px;
+  border: 2px solid #151933; }

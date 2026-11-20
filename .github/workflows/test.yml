@@ -1,5 +1,6 @@
-# Runs the tests on every push and pull request (Windows, as the tracker runs there: this includes the tray icon and
-# Windows integration scripts). Read-only: no permissions beyond reading the repository, no stored git credentials.
+# Runs the tests and the style check on every push and pull request. Windows, as the tracker runs there, so the tray
+# icon and Windows integration scripts are tested too. Read-only: no permissions beyond reading the repository and no
+# stored git credentials.
 name: Test
 
 on:
@@ -26,3 +27,6 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Check style
+        run: npm run check-style

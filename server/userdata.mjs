@@ -5,7 +5,6 @@ import { cleanSettings } from './notifications/notify.mjs';
 
 // property -> file name
 const FILES = {
-  config: 'config.json',            // { dataPackUrl } (optional, hand-edited)
   names: 'names.json',              // { accounts: { id: name }, units: { unitId: slug } }
   talents: 'talents.json',          // { [account]: { [unitId]: [talent index] } }
   army: 'army.json',                // army slots: { [account]: { [unitId]: [{ type, tier, boost? } x7] } }
@@ -17,16 +16,22 @@ const FILES = {
   progress: 'progress.json',        // daily samples: { [account]: { first, days: [...] } }
   notifySettings: 'notifications.json',
   plans: 'plans.json',              // reward goals: { [account]: { [eventId]: { cost, label, set } } }
-  sentLog: 'notified.json',         // { sent: { key: time }, log, pending } (pending: held by quiet hours)
+  sentLog: 'notified.json',         // { sent: { key: time }, log, pending }; pending ones wait for quiet hours to end
   storeChanges: 'store_changes.json', // research log of shop record changes (from source only)
 };
 
-// backup key -> property: everything the user entered, plus history that can't be rebuilt from the save. Scan
-// snapshots (state/) are left out: the next scan rebuilds them.
+// Backup key to property. Backups hold everything the player entered and the history the save can't give back; the
+// scan snapshots in state/ are left out, as the next scan rebuilds them.
 export const BACKUP_KEYS = {
   names: 'names', talents: 'talents', army: 'army', armies: 'armies', drafts: 'drafts', learned: 'learned',
   grid_history: 'gridHistory', pvp_history: 'pvpHistory', notifications: 'notifySettings', plans: 'plans', progress: 'progress',
 };
+
+/** The name the user gave an account, else a short form of its ID. */
+export const accountLabel = (ctx, id) => ctx.user.names.accounts[id] || `Account …${id.slice(16, 24)}`;
+
+/** The mini a unit ID stands for: the user's assignment, else the game data's, else null. */
+export const unitSlug = (ctx, id) => ctx.user.names.units[id] || ctx.tables.builtinUnits[id] || null;
 
 /** Loads every file (missing ones start empty). storeLog: whether the research log is kept. */
 export async function loadUserData(ctx, { storeLog = true } = {}) {
@@ -34,7 +39,6 @@ export async function loadUserData(ctx, { storeLog = true } = {}) {
   const read = (key, fallback) => ctx.readUserJson(path.join(dir, FILES[key]), fallback);
   const notified = await read('sentLog', null);
   const u = {
-    config: await read('config', {}),
     names: await read('names', { accounts: {}, units: {} }),
     talents: await read('talents', {}),
     army: await read('army', {}),
@@ -49,11 +53,11 @@ export async function loadUserData(ctx, { storeLog = true } = {}) {
     sentLog: notified || { sent: {}, log: [], pending: [] },
     notifyBaseline: !notified, // first run: record what is already due without notifying
     storeChanges: storeLog ? await read('storeChanges', []) : null,
-    /** Saves one file (writes to the same file are queued, store.mjs). */
+    /** Saves one file. Writes to the same file are queued. */
     save: (key) => writeJson(path.join(dir, FILES[key]), u[key]),
-    /** { backupKey: object } for backups. */
+    /** The files a backup holds, by backup key. */
     backupFiles: () => Object.fromEntries(Object.entries(BACKUP_KEYS).map(([k, prop]) => [k, u[prop]])),
-    /** After a restore: fills keys that older or partial backups may lack. */
+    /** After a restore, fills in keys that older or partial backups may lack. */
     repair() {
       u.names.accounts ??= {}; u.names.units ??= {};
       u.learned.xpToNext ??= {}; u.learned.xpConflicts ??= []; u.learned.spending ??= [];

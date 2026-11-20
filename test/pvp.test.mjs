@@ -1,20 +1,16 @@
-// PvP: reading PvpPlayerRankState and telling wins from losses by Victory Point and honor changes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePvp, inferMatches, vpValues, pvpReading, manualResult } from '../server/game/pvp.mjs';
+import { int, msg, fixed64 } from './helpers.mjs';
 
-const varint = (n) => { let v = BigInt(n); const out = []; do { let b = Number(v & 0x7fn); v >>= 7n; if (v) b |= 0x80; out.push(b); } while (v); return Buffer.from(out); };
-const tag = (fn, wt) => varint((fn << 3) | wt);
-const int = (fn, n) => Buffer.concat([tag(fn, 0), varint(n)]);
-const msg = (fn, ...parts) => { const body = Buffer.concat(parts); return Buffer.concat([tag(fn, 2), varint(body.length), body]); };
-const fixed64 = (fn, n) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(n)); return Buffer.concat([tag(fn, 1), b]); };
 
 const RULES = { base: 80, win: 2, loss: 1, streak: [{ upTo: 3, x: 1 }, { upTo: 5, x: 1.25 }] };
 const at = (honor, vp, season = 's27') => ({ season, honor, vp });
 const match = (from, to) => inferMatches(from, to, RULES);
 
 test('reads season, honor and Victory Points', () => {
-  const buf = Buffer.concat([msg(2, fixed64(1, 0x33b4f294d8d12b57n), fixed64(2, 0xccdf8287c654e6c9n)), msg(3, int(1, 9002), int(2, 9002)), msg(4, int(1, 160))]);
+  const buf = Buffer.concat([msg(2, fixed64(1, 0x33b4f294d8d12b57n), fixed64(2, 0xccdf8287c654e6c9n)),
+    msg(3, int(1, 9002), int(2, 9002)), msg(4, int(1, 160))]);
   assert.deepEqual(parsePvp(buf), { season: '33b4f294d8d12b57ccdf8287c654e6c9', honor: 9002, honor2: 9002, vp: 160 });
   assert.equal(parsePvp(Buffer.alloc(0)), null);
 });

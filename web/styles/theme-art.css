@@ -1,6 +1,6 @@
-/* Game-art layer over theme-rumble.css: textures and frames from static/ui/ (optional: remove its <link>). */
+/* Textures and frames from the game files (static/ui/), over theme-rumble.css. */
 
-/* ---- backdrop: the loading-screen key art, dimmed --------------------------------------------- */
+/* Backdrop: the loading-screen key art, dimmed */
 body {
   background:
     linear-gradient(90deg, rgb(13 15 32 / 92%) 0%, rgb(13 15 32 / 80%) 50%, rgb(13 15 32 / 92%) 100%),
@@ -9,7 +9,7 @@ body {
     #0f1226;
 }
 
-/* ---- top bar: the game's wooden taskbar --------------------------------------------------------- */
+/* Top bar: the game's wooden taskbar */
 .topbar {
   background:
     linear-gradient(180deg, rgb(255 220 160 / 10%), rgb(0 0 0 / 30%)),
@@ -21,7 +21,7 @@ body {
 .topbar .tag { background: rgb(30 18 8 / 55%); border-color: rgb(0 0 0 / 40%); color: #e9d6b4; }
 .topbar .status, .topbar label { color: #f3e3c4; text-shadow: 0 1px 0 rgb(0 0 0 / 60%); }
 
-/* ---- panels: wooden board inside a steel frame, like the game's info panels ------------------- */
+/* Panels: wooden board inside a steel frame, like the game's info panels */
 .panel, .stat-card {
   background:
     linear-gradient(180deg, rgb(24 18 14 / 62%), rgb(18 14 12 / 74%)),
@@ -42,7 +42,8 @@ body {
 :root {
   --section-line:
     linear-gradient(90deg, transparent, rgb(0 0 0 / 60%) 3%, rgb(0 0 0 / 60%) 97%, transparent) left calc(100% - 1px) / 100% 1px no-repeat,
-    linear-gradient(90deg, transparent, rgb(255 214 150 / 30%) 3%, rgb(255 214 150 / 30%) 97%, transparent) left bottom / 100% 1px no-repeat;
+    linear-gradient(90deg, transparent, rgb(255 214 150 / 30%) 3%, rgb(255 214 150 / 30%) 97%,
+      transparent) left bottom / 100% 1px no-repeat;
 }
 .panel > h2:not(:only-child), .cal-head, .planner-head { padding-bottom: 9px; background: var(--section-line); }
 .panel.grid-head > h2, .panel.armory-toolbar > h2 { padding-bottom: 0; background: none; }
@@ -54,7 +55,7 @@ body {
 /* currency pills: dark glass on wood */
 .cur { background: linear-gradient(180deg, rgb(30 34 60 / 92%), rgb(16 18 36 / 92%)); border-color: #56608a; }
 
-/* ---- collection cards: the game's faction card frames ------------------------------------------ */
+/* Collection cards: the game's faction card frames */
 .card {
   --frame: url("/static/ui/frame-neutral.webp");
   border: 0;
@@ -103,7 +104,8 @@ body {
   border-image: var(--frame) 48 / 26px stretch;
 }
 .card .lvl { z-index: 3; }
-.card .art { align-self: flex-start; flex: none; margin-top: -8px; position: relative; z-index: 3; border-color: color-mix(in srgb, var(--rc, #888) 80%, #000); }
+.card .art { align-self: flex-start; flex: none; margin-top: -8px; position: relative; z-index: 3;
+  border-color: color-mix(in srgb, var(--rc, #888) 80%, #000); }
 .card .name { text-shadow: 0 2px 0 rgb(0 0 0 / 60%); }
 .card .meta { color: color-mix(in srgb, var(--rc, #aaa) 55%, #fff); }
 
@@ -112,7 +114,8 @@ body {
 .card .army-strip { margin-top: 6px; }
 .card .flags { flex-wrap: nowrap; gap: 4px; margin-top: auto; padding-top: 6px; min-width: 0; }
 .card .flags:empty { display: none; }
-.card .flag { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; padding: 1px 6px; }
+.card .flag { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 10.5px; padding: 1px 6px; }
 .card .flag.wild { padding: 1px 6px 1px 2px; gap: 3px; }
 .card .flag.wild .ico { width: 13px; height: 13px; flex: none; }
 .card .flag.boost { padding: 1px 6px 1px 4px; gap: 2px; }
@@ -131,7 +134,7 @@ body {
 /* leaders get a soft gold halo, as in the game's leader list */
 .card.leader { filter: drop-shadow(0 0 5px rgb(255 205 90 / 45%)) drop-shadow(0 3px 0 rgb(0 0 0 / 45%)); }
 
-/* ---- army board: the leader's faction "lunchbox" ------------------------------------------------- */
+/* Army board: the leader's faction "lunchbox" */
 .army-wrap {
   --board: url("/static/ui/board-neutral.webp");
   border: 0;
@@ -161,7 +164,7 @@ body {
   color: #fff3d0;
 }
 
-/* ---- armory: a tome on each saved army ---------------------------------------------------------- */
+/* Armory: a tome on each saved army */
 .am-card { position: relative; }
 
 @media (max-width: 700px) {

@@ -1,13 +1,10 @@
-// Local server: scans the game's save, records changes and serves the page (web/) on 127.0.0.1.
-// Usage: npm start, then open http://localhost:8765
-//
-// The parts: context.mjs (shared state), tables.mjs (game data), userdata.mjs (the user's files), scan/ (reading the
-// save), state.mjs (what the page gets), http/ (server and API), datapack/ (game-data updates), update/ (app updates),
-// notifications/, backup.mjs. This file starts them and runs the timers.
+// The tracker's server reads the game's save, keeps its history and serves the page on 127.0.0.1. From source, run
+// npm start and open http://localhost:8765. This file starts the parts and runs their timers.
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createContext } from './context.mjs';
+import { host } from './host.mjs';
 import { createTables } from './tables.mjs';
 import { loadUserData } from './userdata.mjs';
 import { readJson, flushWrites } from './store.mjs';
@@ -17,6 +14,7 @@ import { createScanner } from './scan/scanner.mjs';
 import { allowedUrl } from './datapack/datapack.mjs';
 import { createPackChecker } from './datapack/checker.mjs';
 import { firstRunDownload } from './datapack/firstrun.mjs';
+import { PACK_URL } from './datapack/pack_keys.mjs';
 import { createUpdater } from './update/updater.mjs';
 import { cleanUpdates } from './update/appupdate.mjs';
 import { createNotifier } from './notifications/runner.mjs';
@@ -30,32 +28,40 @@ const SCANS_AFTER_EXIT = 6;     // the game may still write its save while closi
 const NOTIFY_MS = 30000;
 const PACK_CHECK_MS = 6 * 60 * 60 * 1000;
 const BACKUP_MS = 24 * 60 * 60 * 1000;
-const STANDALONE = !!process.env.RUMBLE_STANDALONE; // set by desktop/launcher.cjs
+// In RumbleTracker.exe the launcher has already attached to host.mjs with its options. From source, environment
+// variables and defaults apply.
+const STANDALONE = host.attached;
 
 const ctx = createContext({
   root: ROOT,
-  // user data: data/ from source, %APPDATA%\RumbleTracker in the exe (RUMBLE_DATA_DIR)
-  data: path.resolve(process.env.RUMBLE_DATA_DIR || path.join(ROOT, 'data')),
-  port: Number(process.env.PORT || 8765),
+  data: path.resolve(host.options.dataDir || process.env.RUMBLE_DATA_DIR || path.join(ROOT, 'data')),
+  port: Number(host.options.port || process.env.PORT || 8765),
   standalone: STANDALONE,
   appVersion: await readJson(path.join(ROOT, 'package.json'), {}).then((p) => p.version || null, () => null),
 });
-process.on('unhandledRejection', (e) => { console.log(`Unexpected error: ${e?.message || e}`); ctx.errorLog.add('server', e?.stack || String(e)); });
+process.on('unhandledRejection', (e) => {
+  console.log(`Unexpected error: ${e?.message || e}`);
+  ctx.errorLog.add('server', e?.stack || String(e));
+});
 await mkdir(ctx.paths.STATE, { recursive: true });
 
-// ---- game data ----------------------------------------------------------------------------------------------------
+// Game data
 ctx.tables = createTables(ctx.paths);
-// data packs: config.json "dataPackUrl" or RUMBLE_DATA_PACK_URL (the exe sets RUMBLE_DEFAULT_DATA_PACK_URL)
+// Game-data updates come from RUMBLE_DATA_PACK_URL or config.json's dataPackUrl. The exe also has PACK_URL; from
+// source there are none unless one is set, and npm run fetch-gamedata updates gamedata/.
 const config = await ctx.readUserJson(path.join(ctx.paths.DATA, 'config.json'), {});
-ctx.dataPack.url = process.env.RUMBLE_DATA_PACK_URL || config.dataPackUrl || process.env.RUMBLE_DEFAULT_DATA_PACK_URL || '';
-if (ctx.dataPack.url && !allowedUrl(ctx.dataPack.url)) { console.log('Data pack address ignored: it must be https.'); ctx.dataPack.url = ''; }
+ctx.dataPack.url = process.env.RUMBLE_DATA_PACK_URL || config.dataPackUrl || (host.attached ? PACK_URL : '');
+if (ctx.dataPack.url && !allowedUrl(ctx.dataPack.url)) {
+  console.log('Data pack address ignored: it must be https.');
+  ctx.dataPack.url = '';
+}
 const canDownload = !!ctx.dataPack.url;
 
-// Game data isn't bundled: from source, npm run fetch-gamedata fills gamedata/; the exe's first start installs the
-// signed data pack.
+// Game data isn't bundled. From source, npm run fetch-gamedata downloads it; the exe installs it on its first start.
 if (!(await ctx.tables.hasGameData())) {
   if (!canDownload) {
-    console.error(`No game data in ${ctx.paths.STATIC}. Run  npm run fetch-gamedata  once (it downloads the signed data pack), then start again.`);
+    console.error(`No game data in ${ctx.paths.STATIC}. Run "npm run fetch-gamedata" once to download the signed data pack, `
+      + 'then start again.');
     process.exit(1);
   }
   await firstRunDownload(ctx);
@@ -63,7 +69,7 @@ if (!(await ctx.tables.hasGameData())) {
 try {
   await ctx.tables.load();
 } catch (e) {
-  // a damaged installed pack: set it aside, then use the bundled tables or download the pack again
+  // The installed pack is damaged. Set it aside, then use the bundled tables or download the pack again.
   if (!(await ctx.tables.packInstalled())) throw e;
   const moved = await ctx.tables.setPackAside();
   const msg = `The installed game data could not be read (${e.message}); it was moved to ${moved}.`;
@@ -76,12 +82,12 @@ try {
   await ctx.tables.load();
 }
 
-// ---- the user's data (the research log of shop changes only from source) -----------------------------------------
+// The user's data
 ctx.user = await loadUserData(ctx, { storeLog: !STANDALONE });
 
-// ---- the game: read the save only while it runs ------------------------------------------------------------------
-// The save only changes while Warcraft Rumble runs, so it is read every SCAN_MS then, a few more times after the game
-// closes, and not at all otherwise. Unknown (no watcher yet, or it failed): read all the time.
+// Reading the save
+// The save only changes while Warcraft Rumble runs, so it is read every SCAN_MS then, a few more times after the
+// game closes, and not at all otherwise. While it isn't known whether the game runs, it is read all the time.
 const { scan } = createScanner(ctx, { readPrefs: readRumblePrefs });
 let scansLeft = 0;
 let stopping = false;
@@ -91,13 +97,16 @@ const onGame = (running) => {
   else scansLeft = SCANS_AFTER_EXIT;
   ctx.bump();
 };
-const onGameWatchFailed = (message) => { console.log(`Game check: ${message}; reading the save all the time`); ctx.errorLog.add('game check', message); };
-// in the exe the tray icon's process reports it (desktop/launcher.cjs)
+const onGameWatchFailed = (message) => {
+  console.log(`Game check: ${message}; reading the save all the time`);
+  ctx.errorLog.add('game check', message);
+};
+// In the exe the tray icon's process reports whether the game runs.
 ctx.game = STANDALONE ? watchGameFromTray(onGame, onGameWatchFailed) : watchGame(onGame, onGameWatchFailed);
 const gameRunning = async () => ctx.game.running() ?? gameRunningOnce();
 
-// ---- automatic backups: at start, every 24 hours and when the tracker stops (backup.mjs) --------------------------
-// Not while a data file was found damaged at start: its backup would replace the last good one of the day.
+// Automatic backups, at start, every 24 hours and when the tracker stops. They pause when a data file was damaged at
+// start, so the damage can't replace the last good backup of the day.
 const backupsPaused = ctx.errorLog.list().some((e) => e.source === 'data file');
 if (backupsPaused) console.log('Automatic backups paused: a data file was damaged at start');
 async function autoBackup() {
@@ -113,7 +122,7 @@ async function autoBackup() {
   }
 }
 
-// ---- stopping: page Quit, tray Quit, Windows shutting down, an app update -----------------------------------------
+// Stopping, for Quit on the page or in the tray, Windows shutting down, or an app update
 /** Stops once a running scan and every queued write are done, after writing today's backup (at most 15 s). */
 async function shutdown(reason, code = 0) {
   if (stopping) return;
@@ -126,24 +135,27 @@ async function shutdown(reason, code = 0) {
   await Promise.race([flushWrites(), left()]);
   process.exit(code);
 }
-process.on('rumble:quit', (reason) => shutdown(reason || 'Quit from the tray')); // desktop/launcher.cjs
+host.onQuit((reason) => shutdown(reason));
 if (!STANDALONE) for (const sig of ['SIGINT', 'SIGTERM', 'SIGBREAK']) process.on(sig, () => shutdown(`Stopped (${sig})`));
 
-// ---- notifications, data packs, app updates ------------------------------------------------------------------------
+// Notifications, data packs, app updates
 const notifier = createNotifier(ctx, { gameRunning });
-const notify = () => notifier.tick().catch((e) => { console.log(`Notifications: ${e.message}`); ctx.errorLog.add('notifications', e.message); });
+const notify = () => notifier.tick().catch((e) => {
+  console.log(`Notifications: ${e.message}`);
+  ctx.errorLog.add('notifications', e.message);
+});
 const checkDataPack = createPackChecker(ctx, { onNews: notify });
 const startUpdate = createUpdater(ctx, { shutdown });
 cleanUpdates(ctx.paths.UPDATE); // a download the launcher already copied into place
 
-// Start with Windows (exe only): the Run key names this exe
+// Start with Windows, in the exe only. The Run key always names the exe that is running.
 const autostart = STANDALONE ? {
   get: async () => (await readAutostart()) === autostartCommand(process.execPath),
   set: (on) => setAutostart(on, process.execPath),
 } : null;
 if (STANDALONE) refreshAutostart(process.execPath).catch(() => {});
 
-// ---- start ----------------------------------------------------------------------------------------------------------
+// Start
 await scan();
 autoBackup();
 setInterval(autoBackup, BACKUP_MS);
@@ -164,6 +176,6 @@ const server = createHttpServer(ctx, { scan, shutdown, startUpdate, notifier, ga
 server.listen(ctx.port, '127.0.0.1', () => {
   console.log(`Rumble tracker running at http://localhost:${ctx.port}`);
   console.log(`Data folder: ${ctx.paths.DATA}`);
-  // count only: account names are user-given and the log may be attached to bug reports
+  // only the count, as account names are chosen by the player and the log may be attached to bug reports
   console.log(`Accounts found: ${ctx.accounts.size}${ctx.scan.lastErrorLog ? `  (error: ${ctx.scan.lastErrorLog})` : ''}`);
 });

@@ -1,5 +1,4 @@
-// The server's shared state, passed to every module. One object so modules stay small and can be tested with a
-// context built from temporary folders (see test/helpers.mjs).
+// The server's shared state. Every module gets this one object, so the tests can build one from temporary folders.
 import path from 'node:path';
 import { createErrorLog } from './report.mjs';
 import { readJson } from './store.mjs';
@@ -17,30 +16,32 @@ export function createContext({ root, data, port = 8765, standalone = false, app
       STATE: path.join(data, 'state'),         // scan snapshots per account
       PUBLIC: path.join(root, 'web'),
       STATIC: path.join(root, 'gamedata'),     // bundled game data, served as /static/
-      GAMEDATA: path.join(data, 'gamedata'),   // an installed data pack (takes precedence)
+      GAMEDATA: path.join(data, 'gamedata'),   // an installed data pack, used before the bundled data
       UPDATE: path.join(data, 'update'),       // a downloaded app update
-      BACKUPS: path.join(data, 'backups'),     // daily backups
+      BACKUPS: path.join(data, 'backups'),     // automatic backups
     },
     port, standalone, appVersion,
-    // recent errors for "Report a problem": cleaned of personal details, in memory only
+    // recent errors for Report a problem, without personal details and kept in memory only
     errorLog,
-    // revision of the state the page shows; starts from the clock so a restarted server never repeats one
+    // The revision of what the page shows. It starts from the clock, so a restarted server never repeats one.
     rev: Date.now(),
     bump() { ctx.rev++; },
     tables: null,
     user: null,
     accounts: new Map(), // account id -> { snapshot, events, lastChange, activeEvents, shop, pvp, … } (state/<id>.json)
     scan: { lastScan: null, lastError: null, lastErrorLog: null, gameBuild: null, scanning: false },
-    // data pack checks (datapack/checker.mjs); newVersion: a newer app release, latestApp: its download checksums
-    dataPack: { url: '', lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false, newVersion: null, latestApp: null },
-    // app update (update/updater.mjs): state null | 'downloading' | 'restarting' | 'failed'
+    // The last data-pack check. newVersion is a newer app release, latestApp the checksums for downloading it.
+    dataPack: { url: '', lastCheck: null, result: null, error: null, badSignatures: 0, needsAppUpdate: false,
+      newVersion: null, latestApp: null },
+    // An app update in progress. Its state is null, 'downloading', 'restarting' or 'failed'.
     appUpdate: { state: null, error: null, later: null, done: 0, total: 0 },
-    // whether Warcraft Rumble runs: true, false or null (unknown); set by main.mjs
+    // whether Warcraft Rumble runs, or null while that isn't known
     game: { running: () => null },
-    /** Reads one of the user's JSON files; a damaged one is moved aside and reported (store.mjs). */
+    /** Reads one of the player's files. A damaged file is moved aside and reported instead of stopping the tracker. */
     readUserJson: (p, fallback) => readJson(p, fallback, {
       onCorrupt: (file, moved) => {
-        const msg = `${path.basename(file)} was damaged and could not be read. It was moved to ${path.basename(moved)} and the tracker started without it; restore a backup to get the data back.`;
+        const msg = `${path.basename(file)} was damaged and could not be read. It was moved to ${path.basename(moved)} `
+          + 'and the tracker started without it. Restore a backup to get the data back.';
         console.log(msg);
         errorLog.add('data file', msg);
       },

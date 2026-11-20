@@ -8,14 +8,14 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { updateDataPack } from '../server/datapack/datapack.mjs';
+import { PACK_URL } from '../server/datapack/pack_keys.mjs';
 
-export const DEFAULT_PACK_URL = 'https://razingo.github.io/rumble-tracker-data/';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = path.join(ROOT, 'gamedata');
 
 const args = process.argv.slice(2);
 const force = args.includes('--force');
-const base = args.find((a) => !a.startsWith('--')) || process.env.RUMBLE_DATA_PACK_URL || DEFAULT_PACK_URL;
+const base = args.find((a) => !a.startsWith('--')) || process.env.RUMBLE_DATA_PACK_URL || PACK_URL;
 
 const current = force ? null : await readFile(path.join(DIR, 'gamedata.json'), 'utf8').then(JSON.parse, () => null);
 console.log(`Game data from ${base}`);

@@ -1,8 +1,9 @@
-// "Download now" in the update pop-up (exe only): downloads and verifies the release named by the signed data pack
-// (appupdate.mjs), then asks the launcher to swap the exe in (desktop/launcher.cjs, 'rumble:apply-update') and stops.
+// "Download now" in the update pop-up (exe only): downloads and checks the release the signed data pack names
+// (appupdate.mjs), has the launcher install it, then stops so the new version can start.
 import { downloadUpdate } from './appupdate.mjs';
+import { host } from '../host.mjs';
 
-/** shutdown(reason): stops the tracker cleanly (main.mjs). Returns start() -> [status, body]. */
+/** shutdown(reason) stops the tracker cleanly. Returns start(), which answers [status, body]. */
 export function createUpdater(ctx, { shutdown, download = downloadUpdate, applyDelay = 1500 }) {
   const u = ctx.appUpdate;
   const fail = (message) => {
@@ -26,11 +27,8 @@ export function createUpdater(ctx, { shutdown, download = downloadUpdate, applyD
         ctx.bump();
         // a moment for the page to show it, then the launcher swaps the exe and this instance stops cleanly
         await new Promise((r) => setTimeout(r, applyDelay));
-        if (!process.listenerCount('rumble:apply-update')) return fail('This copy of the tracker can\'t install updates by itself.');
-        process.emit('rumble:apply-update', {
-          exe, version: app.version,
-          done: (err) => (err ? fail(err) : shutdown(`App update: restarting as ${app.version}`)),
-        });
+        await host.applyUpdate({ exe, version: app.version });
+        shutdown(`App update: restarting as ${app.version}`);
       } catch (e) {
         fail(e.message);
       }

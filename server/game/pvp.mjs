@@ -25,14 +25,15 @@ export function parsePvp(buf) {
 export function vpValues(rules) {
   const base = rules?.base ?? 80;
   const loss = Math.round(base * (rules?.loss ?? 1));
-  const wins = [...new Set((rules?.streak?.length ? rules.streak : [{ x: 1 }]).map((b) => Math.round(base * (rules?.win ?? 2) * (b.x ?? 1))))];
+  const wins = [...new Set((rules?.streak?.length ? rules.streak
+    : [{ x: 1 }]).map((b) => Math.round(base * (rules?.win ?? 2) * (b.x ?? 1))))];
   return { loss, wins };
 }
 
 /**
- * Matches between two readings of the same season: { wins, losses, estimated, honorOnly } or null (nothing happened
- * or it can't be told). estimated: more than one combination fits (honor picked one); honorOnly: VP didn't move
- * (Victory Road may stop counting once finished), so the result comes from honor alone: one match.
+ * The matches between two readings of the same season: { wins, losses, estimated, honorOnly }, or null when nothing
+ * happened or it can't be told. estimated means more than one combination fits and honor picked one. honorOnly means
+ * the Victory Points didn't move (Victory Road may stop counting once finished), so honor alone counts one match.
  */
 export function inferMatches(prev, cur, rules, maxMatches = 12) {
   if (!prev || !cur || prev.season !== cur.season) return null;
@@ -58,7 +59,7 @@ export function inferMatches(prev, cur, rules, maxMatches = 12) {
   search(dv, 0, []);
   if (!found.length) return null;
   const options = [...new Map(found.map((o) => [`${o.wins}/${o.losses}`, o])).values()];
-  // honor: up = more wins than not, down = more losses; flat (floors, caps) says nothing
+  // Rising honor means more wins than losses, falling honor the opposite; unchanged honor (at a floor or cap) says nothing.
   const fits = options.filter((o) => (dh > 0 ? o.wins > 0 : dh < 0 ? o.losses > 0 : true));
   const pool = fits.length ? fits : options;
   const fewest = Math.min(...pool.map((o) => o.wins + o.losses));
@@ -82,7 +83,7 @@ export function pvpReading(prev, cur, now, rules) {
   entry.dv = cur.vp - prev.vp;
   const m = inferMatches(prev, cur, rules);
   if (m) return { ...entry, ...m };
-  // only honor2 moved: not a match
+  // only the second honor value moved, which isn't a match
   if (!entry.dh && !entry.dv) return entry;
   return { ...entry, unexplained: true };
 }

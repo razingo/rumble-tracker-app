@@ -1,9 +1,9 @@
-// App updates (download progress, installing), data-pack checks and loading damaged files.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { writeFile, readdir } from 'node:fs/promises';
 import { createUpdater } from '../server/update/updater.mjs';
+import { host } from '../server/host.mjs';
 import { downloadUpdate } from '../server/update/appupdate.mjs';
 import { createPackChecker } from '../server/datapack/checker.mjs';
 import { testContext } from './helpers.mjs';
@@ -27,11 +27,12 @@ test('updater: downloads, then asks the launcher to install, then stops', async 
   const stops = [];
   const download = async (a, dir, { onProgress }) => { onProgress(5, 10); return path.join(dir, 'new.exe'); };
   const start = createUpdater(ctx, { shutdown: (r) => stops.push(r), download, applyDelay: 0 });
-  const listener = ({ exe, version, done }) => { assert.equal(version, '9.9.9'); assert.match(exe, /new\.exe$/); done(null); };
-  process.on('rumble:apply-update', listener);
+  const installed = [];
+  host.attach({ options: {}, applyUpdate: async (update) => { installed.push(update); } });
   assert.deepEqual(await start(), [200, { ok: true }]);
   await until(() => stops.length);
-  process.off('rumble:apply-update', listener);
+  assert.equal(installed[0].version, '9.9.9');
+  assert.match(installed[0].exe, /new\.exe$/);
   assert.equal(ctx.appUpdate.state, 'restarting');
   assert.deepEqual([ctx.appUpdate.done, ctx.appUpdate.total], [5, 10]);
   assert.deepEqual(stops, ['App update: restarting as 9.9.9']);
@@ -43,11 +44,9 @@ test('updater: a failed install is shown, and nothing to install is refused', as
   const start = createUpdater(ctx, { shutdown: () => assert.fail('must not stop'), download: async () => 'x.exe', applyDelay: 0 });
   assert.equal((await start())[0], 409);
   Object.assign(ctx.dataPack, { newVersion: '9.9.9', latestApp: app });
-  const listener = ({ done }) => done('Could not replace the program file (EPERM).');
-  process.on('rumble:apply-update', listener);
+  host.attach({ options: {}, applyUpdate: async () => { throw new Error('The program file could not be replaced (EPERM).'); } });
   await start();
   await until(() => ctx.appUpdate.state === 'failed');
-  process.off('rumble:apply-update', listener);
   assert.match(ctx.appUpdate.error, /EPERM/);
   assert.equal(ctx.errorLog.list().length, 1);
   await cleanup();
@@ -57,7 +56,8 @@ test('data pack checks run one at a time and announce a newer app', async () => 
   const { ctx, cleanup } = await testContext();
   ctx.dataPack.url = 'https://example.invalid/';
   let calls = 0, news = 0;
-  const update = async () => { calls++; await new Promise((r) => setTimeout(r, 30)); return { updated: false, reason: 'up to date', latestAppVersion: '9.9.9', latestApp: app }; };
+  const update = async () => { calls++; await new Promise((r) => setTimeout(r, 30));
+    return { updated: false, reason: 'up to date', latestAppVersion: '9.9.9', latestApp: app }; };
   const check = createPackChecker(ctx, { update, onNews: () => news++ });
   await Promise.all([check(), check(), check()]);
   assert.equal(calls, 1);
@@ -71,7 +71,8 @@ test('data pack checks run one at a time and announce a newer app', async () => 
 });
 
 test('a damaged user file is moved aside and reported; the rest loads', async () => {
-  const { ctx, cleanup } = await testContext({ files: { 'plans.json': '{"broken": ', 'names.json': { accounts: { a: 'Main' }, units: {} } } });
+  const { ctx, cleanup } = await testContext({ files: { 'plans.json': '{"broken": ',
+    'names.json': { accounts: { a: 'Main' }, units: {} } } });
   assert.deepEqual(ctx.user.plans, {});
   assert.equal(ctx.user.names.accounts.a, 'Main');
   assert.equal(ctx.errorLog.list()[0].source, 'data file');

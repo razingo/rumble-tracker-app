@@ -1,7 +1,8 @@
-// Problem reports: a log of recent errors and the diagnostics a user can attach to an issue. Nothing is sent
-// automatically. All report text passes clean(), which removes user names in paths, account and save IDs, login
-// tokens, e-mail addresses and long encoded values.
+// Report a problem keeps a log of recent errors and builds the diagnostics a player can add to an issue. Nothing is
+// sent automatically. All report text goes through clean(), which removes user names in paths, account and save IDs,
+// login tokens, e-mail addresses and long encoded values.
 import os from 'node:os';
+import { host } from './host.mjs';
 
 // Repository where issues are filed.
 export const ISSUES_REPO = process.env.RUMBLE_ISSUES_REPO || 'razingo/rumble-tracker-app';
@@ -51,10 +52,11 @@ export function diagnostics({ appVersion, gameBuild, data, accounts, errors, pag
   const lines = [
     `App version: ${appVersion || 'unknown'}`,
     `Game build (from the save): ${gameBuild || 'unknown'}`,
-    `Game data: build ${data?.dataBuild || 'unknown'}, version ${data?.dataVersion || 'unknown'}${data?.pack ? ' (downloaded pack)' : ' (built in)'}${data?.stale ? ', older than the game' : ''}`,
+    `Game data: build ${data?.dataBuild || 'unknown'}, version ${data?.dataVersion || 'unknown'}${data?.pack
+      ? ' (downloaded pack)' : ' (built in)'}${data?.stale ? ', older than the game' : ''}`,
     `Data pack check: ${data?.packResult || data?.packError || 'not configured'}`,
     `Accounts found: ${accounts ?? 'unknown'}`,
-    `System: ${os.type()} ${os.release()} ${os.arch()}, Node ${process.versions.node}${process.env.RUMBLE_STANDALONE ? ' (standalone exe)' : ''}`,
+    `System: ${os.type()} ${os.release()} ${os.arch()}, Node ${process.versions.node}${host.attached ? ' (standalone exe)' : ''}`,
     ...(page ? [`Page: ${clean(page).slice(0, 200)}`] : []),
     '',
     errors.length ? `Recent errors (${errors.length}):` : 'Recent errors: none',

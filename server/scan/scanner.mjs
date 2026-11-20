@@ -2,11 +2,12 @@
 import path from 'node:path';
 import { writeJson } from '../store.mjs';
 import { parsePvp } from '../game/pvp.mjs';
-import { parseUnits, parseCurrencies, parseActiveEvents, parseIncomeBonuses, parseOwnedAvatars, parseStore, parseGameBuild, storeFieldsForLog, diffSnapshots, updateLearned } from '../game/model.mjs';
+import { parseUnits, parseCurrencies, parseActiveEvents, parseIncomeBonuses, parseOwnedAvatars, parseStore,
+  parseGameBuild, storeFieldsForLog, diffSnapshots, updateLearned } from '../game/model.mjs';
 import { recordProgress, logGrid, recordPvp, createStoreLog } from './history.mjs';
-import { accountLabel } from '../state.mjs';
+import { accountLabel } from '../userdata.mjs';
 
-export const MAX_EVENTS = 500;
+const MAX_EVENTS = 500;
 // Reads can collide with the game saving; only failures that persist are reported.
 export const FAILS_BEFORE_ERROR = 3;
 
@@ -53,7 +54,7 @@ export function createScanner(ctx, { readPrefs }) {
       cur = { units: parseUnits(entries.units), currencies: parseCurrencies(entries.currencies) };
       noteSuccess(id);
     } catch (e) {
-      // usually a value caught mid-save: keep the last snapshot and retry
+      // Usually a value caught while the game was saving. Keep the last snapshot and try again next time.
       noteFailure(id, `Could not decode ${accountLabel(ctx, id)}: ${e.message}`, `Could not decode an account: ${e.message}`);
       return false;
     }
@@ -68,14 +69,15 @@ export function createScanner(ctx, { readPrefs }) {
     if (updateLearned(u.learned, cur, events, rules, now)) dirty.add('learned');
     acc.snapshot = cur;
     if (recordProgress(u.progress, id, cur, Date.parse(now), rules)) dirty.add('progress');
-    // running events, avatars, shop; a value caught mid-save keeps the previous one until the next scan
+    // Running events, avatars and the shop. A value caught mid-save keeps the previous one until the next scan.
     try {
       const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
       const active = parseActiveEvents(entries.store);
       if (entries.store && !same(active, acc.activeEvents || [])) { acc.activeEvents = active; acc.activeEventsAt = now; changed = true; }
       const avatars = parseOwnedAvatars(entries.profile);
       if (entries.profile && !same(avatars, acc.ownedAvatars || [])) { acc.ownedAvatars = avatars; changed = true; }
-      if (storeLog && storeLog(id, storeFieldsForLog(entries.store), now, (offer) => storeTable?.offers?.[offer]?.name)) dirty.add('storeChanges');
+      if (storeLog && storeLog(id, storeFieldsForLog(entries.store), now,
+        (offer) => storeTable?.offers?.[offer]?.name)) dirty.add('storeChanges');
       const shop = parseStore(entries.store);
       if (shop && !same(shop, acc.shop || null)) {
         acc.shop = shop;
@@ -86,7 +88,8 @@ export function createScanner(ctx, { readPrefs }) {
       if (entries.store && !same(bonuses, acc.incomeBonuses || [])) { acc.incomeBonuses = bonuses; changed = true; }
     } catch { /* caught mid-save */ }
     try {
-      if (recordPvp(u.pvpHistory, id, acc, parsePvp(entries.pvp), now, pvpTable?.victoryPoints)) { changed = true; dirty.add('pvpHistory'); }
+      if (recordPvp(u.pvpHistory, id, acc, parsePvp(entries.pvp), now, pvpTable?.victoryPoints)) { changed = true;
+        dirty.add('pvpHistory'); }
     } catch { /* caught mid-save */ }
     if (changed) await writeJson(path.join(ctx.paths.STATE, `${id}.json`), acc);
     return changed;
@@ -116,7 +119,7 @@ export function createScanner(ctx, { readPrefs }) {
         if (entries.units && await scanAccount(id, entries, now, dirty)) changed = true;
       }
       for (const key of dirty) await ctx.user.save(key);
-      // the page shows these; the research log and G.R.I.D. history change nothing it shows on their own
+      // The research log and the G.R.I.D. history change nothing the page shows, so they need no new revision.
       if (changed || dirty.has('learned') || dirty.has('progress') || dirty.has('pvpHistory')) ctx.bump();
     } finally {
       status.scanning = false;

@@ -1,4 +1,3 @@
-// Request filtering: only the tracker's own page may use the server.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createGuard, requestPath } from '../server/guard.mjs';
@@ -37,7 +36,7 @@ test('API writes must be JSON (a form cannot send it)', () => {
   assert.equal(refusal(req({ 'content-type': 'application/x-www-form-urlencoded' }, 'POST'), '/api/restore'), 'JSON requests only');
 });
 
-test('malformed addresses are recognised', () => {
+test('malformed addresses are recognized', () => {
   assert.equal(requestPath('/static/a%20b.webp?x=1'), '/static/a b.webp');
   assert.equal(requestPath('/%E0%A4%A'), null);
   assert.equal(requestPath('/%'), null);

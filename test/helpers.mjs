@@ -7,7 +7,6 @@ import { createContext } from '../server/context.mjs';
 import { createTables } from '../server/tables.mjs';
 import { loadUserData } from '../server/userdata.mjs';
 
-// ---- protobuf writer ----------------------------------------------------------------------------------------------
 export const varint = (n) => {
   let v = BigInt(n);
   const out = [];
@@ -18,6 +17,8 @@ export const tag = (fn, wt) => varint((fn << 3) | wt);
 export const int = (fn, n) => Buffer.concat([tag(fn, 0), varint(n)]);
 export const msg = (fn, ...parts) => { const body = Buffer.concat(parts); return Buffer.concat([tag(fn, 2), varint(body.length), body]); };
 export const fixed64 = (fn, n) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(n)); return Buffer.concat([tag(fn, 1), b]); };
+export const str = (fn, s) => msg(fn, Buffer.from(s, 'utf8'));
+export const double = (fn, n) => { const b = Buffer.alloc(8); b.writeDoubleLE(n); return Buffer.concat([tag(fn, 1), b]); };
 export const id = (fn, a, b) => msg(fn, fixed64(1, a), fixed64(2, b));
 export const hexId = (a, b) => a.toString(16).padStart(16, '0') + b.toString(16).padStart(16, '0');
 
@@ -26,11 +27,12 @@ export const unitsValue = (units) => Buffer.concat(units.map((u) => msg(1,
   id(1, u.a, u.b), int(2, u.level ?? 1), int(3, u.xp ?? 0), int(6, u.xpNeeded ?? 10), int(7, u.xpLevel ?? 1),
   int(8, 0), int(10, u.stars ?? 0), msg(9, int(1, u.talents ?? 0), int(2, u.rarity ?? 0)))));
 /** A currencies value: [{ a, b, balance, lifetime }]. */
-export const currenciesValue = (list) => Buffer.concat(list.flatMap((c) => [msg(1, id(1, c.a, c.b), int(2, c.balance)), msg(4, id(1, c.a, c.b), int(2, c.lifetime ?? c.balance))]));
+export const currenciesValue = (list) => Buffer.concat(list.flatMap((c) =>
+  [msg(1, id(1, c.a, c.b), int(2, c.balance)), msg(4, id(1, c.a, c.b), int(2, c.lifetime ?? c.balance))]));
 /** A PvpPlayerRankState value. */
-export const pvpValue = ({ season = [1, 2], honor, vp }) => Buffer.concat([msg(2, fixed64(1, season[0]), fixed64(2, season[1])), msg(3, int(1, honor), int(2, honor)), msg(4, int(1, vp))]);
+export const pvpValue = ({ season = [1, 2], honor, vp }) => Buffer.concat([msg(2, fixed64(1, season[0]),
+  fixed64(2, season[1])), msg(3, int(1, honor), int(2, honor)), msg(4, int(1, vp))]);
 
-// ---- a tracker context ----------------------------------------------------------------------------------------------
 export const RULES = {
   rarities: [{ name: 'Common' }], rarityUpgrade: [{ stars: 5, arcEnergy: 10 }], xpToNext: { 1: 10, 2: 20 }, maxXpLevel: 10,
   currencyIds: { gold: hexId(1, 2) },
@@ -50,10 +52,13 @@ export async function testContext({ files = {}, standalone = false, storeLog = f
   await mkdir(gd, { recursive: true });
   await mkdir(path.join(data, 'state'), { recursive: true });
   await mkdir(path.join(root, 'web'), { recursive: true });
-  const tables = { 'rules.json': RULES, 'minis.json': { minis: MINIS }, 'pvp.json': PVP, 'unit_ids.json': { units: { [hexId(0xa, 0xb)]: 'kobold-miner' } }, 'gamedata.json': { gameBuild: '1.0.0.1', dataVersion: '2026-01-01T00:00:00.000Z' } };
+  const tables = { 'rules.json': RULES, 'minis.json': { minis: MINIS }, 'pvp.json': PVP,
+    'unit_ids.json': { units: { [hexId(0xa, 0xb)]: 'kobold-miner' } },
+    'gamedata.json': { gameBuild: '1.0.0.1', dataVersion: '2026-01-01T00:00:00.000Z' } };
   for (const [name, value] of Object.entries(tables)) await writeFile(path.join(gd, name), JSON.stringify(value));
   await writeFile(path.join(root, 'web', 'index.html'), '<!doctype html><title>t</title>');
-  for (const [name, value] of Object.entries(files)) await writeFile(path.join(data, name), typeof value === 'string' ? value : JSON.stringify(value));
+  for (const [name, value] of Object.entries(files)) await writeFile(path.join(data, name),
+    typeof value === 'string' ? value : JSON.stringify(value));
   const ctx = createContext({ root, data, standalone, appVersion: '1.0.0' });
   ctx.tables = createTables(ctx.paths);
   await ctx.tables.load();

@@ -2,10 +2,13 @@
 // have no DOM, so they run here as they do in the page.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { occurrences, rotationAt, rotationName, DAY } from '../web/scripts/lib/schedule.js';
-import { seasonAt, rankOf, nextRank, setAt, record, streak, matchesWithMods, modifierStats, withModifiers, winRateSeries } from '../web/scripts/lib/pvp.js';
+import { occurrences, rotationAt, rotationName } from '../web/scripts/lib/schedule.js';
+import { DAY, HOUR, MINUTE, fmt, esc, span, spanWords, localDay, when, dayOnly, titleCase } from '../web/scripts/lib/format.js';
+import { seasonAt, rankOf, nextRank, setAt, record, streak, matchesWithMods, modifierStats, withModifiers,
+  winRateSeries } from '../web/scripts/lib/pvp-season.js';
 import { setTables, setState } from '../web/scripts/core.js';
-import { nextUpgrade, xpToMax, armyOf, totalLevel, armyTotals, remainingToLegendary, effectivePicks, unitName } from '../web/scripts/units.js';
+import { nextUpgrade, xpToMax, armyOf, totalLevel, armyTotals, remainingToLegendary, effectivePicks,
+  unitName } from '../web/scripts/units.js';
 
 test('schedules: monthly n-th weekday, fixed days and one-off events', () => {
   // 2nd Wednesday of every month, 18:00 UTC, 7 days
@@ -30,9 +33,9 @@ test('rotations wrap around and work before their start', () => {
   assert.equal(rotationAt(rot, Date.UTC(2025, 11, 30)).item, 'C');
 });
 
-// ---- PvP ---------------------------------------------------------------------------------------------------------
 const PVP = {
-  seasons: [{ id: 's1', saveId: 'x', start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z', rotation: { start: '2026-01-01T00:00:00Z', periodDays: 3, sets: [['m1', 'm2'], ['m2', 'm3']] } }],
+  seasons: [{ id: 's1', saveId: 'x', start: '2026-01-01T00:00:00Z', end: '2026-02-01T00:00:00Z',
+    rotation: { start: '2026-01-01T00:00:00Z', periodDays: 3, sets: [['m1', 'm2'], ['m2', 'm3']] } }],
   ranks: [{ id: 'r0', from: 0 }, { id: 'r1', from: 1000 }, { id: 'r2', from: 2000 }],
 };
 const at = (day) => new Date(Date.UTC(2026, 0, day, 12)).toISOString();
@@ -71,21 +74,23 @@ test('PvP: records, streaks and win rates by modifier', () => {
   assert.deepEqual(series.map((p) => p.rate), [1, 0.5, 2 / 3, 0.8]);
 });
 
-// ---- minis and armies --------------------------------------------------------------------------------------------
 const RULES = {
   rarities: [{ name: 'Common' }, { name: 'Rare' }, { name: 'Epic' }],
   rarityUpgrade: [{ stars: 5, arcEnergy: 100 }, { stars: 10, arcEnergy: 300, core: 'epicCore' }],
   talentSlotsByRarity: [1, 2, 3],
   xpToNext: { 1: 10, 2: 20, 3: 40 }, maxXpLevel: 4,
   currencyIds: { arcEnergy: 'arc', epicCore: 'core' },
-  armySlots: { count: 7, leaderSlot: 0, boostSlot: 6, diamondValorCost: 50, tiers: [{ bonus: 0 }, { bonus: 1 }, { bonus: 2 }, { bonus: 3 }] },
+  armySlots: { count: 7, leaderSlot: 0, boostSlot: 6, diamondValorCost: 50,
+    tiers: [{ bonus: 0 }, { bonus: 1 }, { bonus: 2 }, { bonus: 3 }] },
 };
 const MINIS = { minis: [
-  { slug: 'boss', name: 'Boss', category: 'Leader', talents: [{}, {}, {}], fixedArmySlots: ['Melee', 'Ranged', 'Wildcard'], armySlotUpgrades: ['Tank', 'Flying', 'Spell'] },
+  { slug: 'boss', name: 'Boss', category: 'Leader', talents: [{}, {}, {}],
+    fixedArmySlots: ['Melee', 'Ranged', 'Wildcard'], armySlotUpgrades: ['Tank', 'Flying', 'Spell'] },
   { slug: 'grunt', name: 'Grunt', category: 'Unit', talents: [{}, {}, {}] },
 ] };
 setTables(RULES, MINIS);
-const unit = (o) => ({ id: 'abcdef0123456789', slug: 'grunt', level: 5, rarity: 0, stars: 0, talents: 0, talentPicks: [], xp: 0, xpNeeded: 10, xpLevel: 1, ...o });
+const unit = (o) => ({ id: 'abcdef0123456789', slug: 'grunt', level: 5, rarity: 0, stars: 0, talents: 0,
+  talentPicks: [], xp: 0, xpNeeded: 10, xpLevel: 1, ...o });
 
 test('rarity upgrades: stars, Arc Energy and cores', () => {
   setState({ currencies: [{ id: 'arc', balance: 150 }] });
@@ -119,4 +124,51 @@ test('leader army slots: fixed slots, bottom-row rules, Boost and level bonus', 
   assert.equal(totalLevel(unit({ level: 10 })), 10);
   const t = armyTotals([leader, unit()]);
   assert.deepEqual([t.leaders, t.slots, t.diamonds, t.goldReady], [1, 7, 3, 1]);
+});
+
+test('formatting: en-US numbers and dates, durations, day keys', () => {
+  assert.equal(fmt(1234567), '1,234,567');
+  assert.equal(fmt('x'), 'x');
+  assert.equal(esc(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
+  assert.equal(span(2 * DAY + 3 * HOUR), '2d 3h');
+  assert.equal(span(4 * HOUR + 12 * MINUTE), '4h 12m');
+  assert.equal(span(-5), '0m');
+  assert.equal(spanWords(3 * DAY), '3 days');
+  assert.equal(spanWords(5 * HOUR), '5 h');
+  assert.equal(spanWords(20 * MINUTE), '20 min');
+  assert.equal(localDay(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
+  assert.match(when(new Date(2026, 10, 19, 19, 0)), /^Thu, Nov 19, 7:00\sPM$/);
+  assert.equal(dayOnly(new Date(2026, 10, 19)), 'Nov 19');
+  assert.equal(titleCase('MAJOR TOME'), 'Major Tome');
+  assert.equal(titleCase('Major tome'), 'Major tome');
+});
+
+test('tags: cleaned, unique ignoring case, at most 20; known spelling kept', async () => {
+  const { cleanTag, cleanTags, withTag, LIMITS } = await import('../web/scripts/lib/limits.js');
+  assert.equal(cleanTag('  rush   down '), 'rush down');
+  assert.equal(cleanTag('x'.repeat(50)).length, LIMITS.tag);
+  assert.deepEqual(cleanTags(['Rush', 'rush', ' ', 'Tank']), ['Rush', 'Tank']);
+  assert.equal(cleanTags(Array.from({ length: 30 }, (_, i) => `t${i}`)).length, LIMITS.tagsPerArmy);
+  assert.deepEqual(withTag(['Tank'], 'rush', ['Rush']), ['Tank', 'Rush']);
+  assert.equal(withTag(['Tank'], 'tank'), null);
+  assert.equal(withTag(['Tank'], '  '), null);
+  assert.equal(withTag(Array.from({ length: 20 }, (_, i) => `t${i}`), 'new'), null);
+});
+
+test('reward tree: cheapest path, shared requirements paid once, requireAll', async () => {
+  const { rewardPlanner, rewardKey } = await import('../web/scripts/lib/reward-tree.js');
+  //   row 0:  A(10)        B(5)
+  //   row 1:  C(20, needs A or B)   D(30, needs A and B)
+  //   row 2:  E(1, needs C)
+  const tree = [
+    { row: 0, col: 0, cost: 10 }, { row: 0, col: 1, cost: 5 },
+    { row: 1, col: 0, cost: 20, requires: ['0-0', '0-1'] }, { row: 1, col: 1, cost: 30, requires: ['0-0', '0-1'], requireAll: true },
+    { row: 2, col: 0, cost: 1, requires: ['1-0'] },
+  ];
+  const p = rewardPlanner(tree);
+  assert.deepEqual(p.order.map(rewardKey), ['0-0', '0-1', '1-0', '1-1', '2-0']);
+  assert.deepEqual(p.cheapest(['2-0']), { cost: 26, take: ['2-0', '1-0', '0-1'] }); // through B, the cheaper one
+  assert.equal(p.cheapest(['1-1']).cost, 45); // needs both A and B
+  assert.equal(p.cheapest(['2-0', '1-1']).cost, 66); // A and B paid once
+  assert.equal(p.cheapest([]).cost, 0);
 });

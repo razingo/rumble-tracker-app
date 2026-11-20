@@ -1,15 +1,27 @@
 // Collection tab: currencies, summary, what's needed next, the upgrade planner, filters, the mini grid and recent
 // changes.
 import { familiesOf } from './army.js';
-import { when } from './calendar.js';
-import { $, esc, fmt, store, ago, RULES, MINIS, TAG_ICONS, state, ui, GRID_CURRENCY_IDS, ANKH_ID } from './core.js';
+import { $, store, RULES, MINIS, TAG_ICONS, state, GRID_CURRENCY_IDS, ANKH_ID } from './core.js';
 import { ico } from './drawer.js';
-import { rarityName, rarityColor, miniOf, unitName, balance, curName, coreName, nextUpgrade, talentSlots, effectivePicks, isLeader, armyOf, hasBoost, totalLevel, armyTotals, remainingToLegendary } from './units.js';
+import { esc, fmt, ago } from './lib/format.js';
+import { rarityName, rarityColor, miniOf, unitName, balance, curName, coreName, nextUpgrade, talentSlots,
+  effectivePicks, isLeader, armyOf, hasBoost, totalLevel, armyTotals, remainingToLegendary } from './units.js';
 
-/** Currency chip: icon, name and balance; lifetime total as tooltip. */
+// What the Collection shows, kept between visits.
+const view = {
+  show: store.get('show', 'owned'),
+  sort: store.get('sort', 'level'),
+  planExpanded: store.get('planExpanded', false),
+  filters: { types: [], families: [], traits: [], traitMode: 'all', ...store.get('filters', {}) },
+  traitPickerOpen: false,
+  traitSearch: '',
+};
+
+/** A currency chip with its icon, name and balance; the tooltip has the total earned. */
 export function currencyChip(c) {
   const icon = RULES.currencyIcons?.[c.id];
-  return `<div class="cur" title="${esc(c.name)} · earned all time: ${fmt(c.lifetime)}">${icon ? `<img class="cur-ico" src="/static/${icon}" alt="">` : ''}<span>${esc(c.name)}</span><b>${fmt(c.balance)}</b></div>`;
+  return `<div class="cur" title="${esc(c.name)} · earned all time: ${fmt(c.lifetime)}">${icon
+    ? `<img class="cur-ico" src="/static/${icon}" alt="">` : ''}<span>${esc(c.name)}</span><b>${fmt(c.balance)}</b></div>`;
 }
 
 export function renderCurrencies() {
@@ -26,7 +38,8 @@ export function renderSummary() {
   const ready = units.filter((u) => nextUpgrade(u)?.ready).length;
   const openSlots = units.reduce((n, u) => n + Math.max(0, talentSlots(u) - u.talents), 0);
   const picksMissing = units.filter((u) => u.talents > effectivePicks(u).length).length;
-  const toLeg = units.reduce((acc, u) => { const r = remainingToLegendary(u); acc.arcEnergy += r.arcEnergy; for (const [k, v] of Object.entries(r.cores)) acc.cores[k] = (acc.cores[k] || 0) + v; return acc; }, { arcEnergy: 0, cores: {} });
+  const toLeg = units.reduce((acc, u) => { const r = remainingToLegendary(u); acc.arcEnergy += r.arcEnergy;
+    for (const [k, v] of Object.entries(r.cores)) acc.cores[k] = (acc.cores[k] || 0) + v; return acc; }, { arcEnergy: 0, cores: {} });
   const coresText = Object.entries(toLeg.cores).map(([k, v]) => `${v} ${coreName(k).replace(/ Upgrade Core$/, '')}`).join(', ') || 'none';
   $('#summary').innerHTML = [
     ['Minis owned', `${units.length} / ${MINIS.length}`, `${identified} identified`],
@@ -38,12 +51,14 @@ export function renderSummary() {
       const a = armyTotals(units);
       if (!a.leaders) return [];
       return [[`${curName('valor')} for Diamond slots`, fmt(a.goldReady * a.cost),
-        `${a.goldReady} Gold slot${a.goldReady === 1 ? '' : 's'} ready · ${fmt(a.notDiamond * a.cost)} for all ${a.slots} · have ${fmt(balance('valor'))}`]];
+        `${a.goldReady} Gold slot${a.goldReady === 1
+          ? '' : 's'} ready · ${fmt(a.notDiamond * a.cost)} for all ${a.slots} · have ${fmt(balance('valor'))}`]];
     })(),
-  ].map(([k, v, s]) => `<div class="stat-card"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="small">${esc(s)}</div></div>`).join('');
+  ].map(([k, v, s]) => `<div class="stat-card"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div
+    class="small">${esc(s)}</div></div>`).join('');
 }
 
-export function lastEventFor(id) {
+function lastEventFor(id) {
   for (let i = state.events.length - 1; i >= 0; i--) if (state.events[i].id === id) return state.events[i];
   return null;
 }
@@ -53,7 +68,8 @@ export function miniOptions(currentSlug) {
   const groups = { Unit: [], Leader: [], Spell: [] };
   for (const m of MINIS) if (!taken.has(m.slug) || m.slug === currentSlug) groups[m.category].push(m);
   return '<option value="">Choose a mini…</option>' + Object.entries(groups)
-    .map(([g, list]) => `<optgroup label="${g}s">${list.map((m) => `<option value="${m.slug}">${esc(m.name)}</option>`).join('')}</optgroup>`)
+    .map(([g, list]) => `<optgroup label="${g}s">${list.map((m) =>
+      `<option value="${m.slug}">${esc(m.name)}</option>`).join('')}</optgroup>`)
     .join('');
 }
 
@@ -65,25 +81,27 @@ export function renderNeeds() {
     const ev = lastEventFor(u.id);
     rows.push(`<div class="row" data-unit-row="${u.id}">
       <div class="what"><b>New mini (not in the tracker's data yet)</b> <span class="mono muted">${u.id.slice(0, 8)}</span><br>
-        <span class="small">${rarityName(u.rarity)} · level ${totalLevel(u)} · XP level ${u.xpLevel}${u.xpLevel < RULES.maxXpLevel ? ` (${u.xp}/${u.xpNeeded})` : ' (max)'} · ${u.stars} stars${ev ? ` · last change: ${esc(eventText(ev))} ${ago(ev.t)}` : ''}</span></div>
+        <span class="small">${rarityName(u.rarity)} · level ${totalLevel(u)} · XP level
+          ${u.xpLevel}${u.xpLevel < RULES.maxXpLevel ? ` (${u.xp}/${u.xpNeeded})` : ' (max)'} · ${u.stars}
+          stars${ev ? ` · last change: ${esc(eventText(ev))} ${ago(ev.t)}` : ''}</span></div>
       <select class="keep" data-name-unit="${u.id}">${miniOptions(null)}</select>
       <button class="btn" data-save-unit="${u.id}">Save</button></div>`);
   }
-  if (unknownUnits.length > 12) rows.push(`<div class="row small">…and ${unknownUnits.length - 12} more. Tip: level up or upgrade a mini in the game and it moves to the top, ready to name.</div>`);
+  if (unknownUnits.length > 12) rows.push(`<div class="row small">…and ${unknownUnits.length - 12} more. Level up or
+    upgrade a mini in the game and it moves to the top, ready to name.</div>`);
   // shown only when something needs naming
   $('#needs').hidden = rows.length === 0;
   $('#needs').innerHTML = rows.length ? `<h2>Needs your input (${unknownUnits.length})</h2>${rows.join('')}` : '';
 }
 
-// ---- planner: which minis are closest to their next level / rarity ------------------------
-export const PLAN_SIZE = 8;
+const PLAN_SIZE = 8;
 
-export function planArt(u) {
+function planArt(u) {
   const m = miniOf(u);
   return m ? `<img src="/static/${m.art}" alt="" loading="lazy">` : '<div class="art unknown">?</div>';
 }
 
-export function planRow(u, pct, label, togo, togoUnit, extra = '') {
+function planRow(u, pct, label, togo, togoUnit, extra = '') {
   return `<button class="plan-row" style="--rc:${rarityColor(u.rarity)}" data-open-unit="${u.id}">
     ${planArt(u)}
     <div><b>${esc(unitName(u))}</b> <span class="small">${esc(label)}</span>
@@ -93,17 +111,17 @@ export function planRow(u, pct, label, togo, togoUnit, extra = '') {
 }
 
 export function renderPlanner() {
-  // type and faction filters apply; trait filters affect only the grid
+  // the type and faction filters apply here; the trait filters only affect the grid
   const pool = state.units.filter((u) => !u.synthetic && passes(miniOf(u), 'traits'));
-  const narrowed = ui.filters.types.length + ui.filters.families.length > 0;
+  const narrowed = view.filters.types.length + view.filters.families.length > 0;
 
   const byXp = pool
     .filter((u) => u.xpLevel < RULES.maxXpLevel && u.xpNeeded > 0)
     .map((u) => ({ u, pct: u.xp / u.xpNeeded, togo: u.xpNeeded - u.xp }))
     .sort((a, b) => b.pct - a.pct || a.togo - b.togo)
     .slice(0, PLAN_SIZE);
-  // collapsed to one row per list; "Show more" expands to PLAN_SIZE
-  const expanded = !!ui.planExpanded;
+  // one row per list until "Show more" opens up to PLAN_SIZE
+  const expanded = !!view.planExpanded;
 
   const byStars = pool
     .map((u) => ({ u, up: nextUpgrade(u) }))
@@ -124,24 +142,27 @@ export function renderPlanner() {
     const status = up.ready
       ? '<span class="flag good">Ready - upgrade now</span>'
       : togo === 0
-        ? `<span class="flag warn">Stars done · need ${[!up.arcOk ? curName('arcEnergy') : '', !up.coreOk ? coreName(up.core) : ''].filter(Boolean).join(' + ')}</span>`
+        ? `<span class="flag warn">Stars done · need ${[!up.arcOk ? curName('arcEnergy') : '',
+          !up.coreOk ? coreName(up.core) : ''].filter(Boolean).join(' + ')}</span>`
         : '';
-    return planRow(u, Math.round(pct * 100), `${rarityName(u.rarity)} → ${rarityName(up.to)} · ${u.stars}/${up.stars} stars · ${costs}`, togo, 'stars',
+    return planRow(u, Math.round(pct * 100), `${rarityName(u.rarity)} → ${rarityName(up.to)} · ${u.stars}/${up.stars} stars · ${costs}`,
+      togo, 'stars',
       status ? `<div class="flags" style="margin-top:4px">${status}</div>` : '');
   }).join('');
 
   const empty = (txt) => `<div class="small">${pool.length ? txt : 'No owned minis match the filters.'}</div>`;
   $('#planner').innerHTML = `<div class="planner-head"><h2>Closest to next step</h2>
-      <span class="small">${narrowed ? `Filtered: ${pool.length} of ${state.units.length} minis` : `All ${state.units.length} minis`}</span></div>
+      <span class="small">${narrowed ? `Filtered: ${pool.length} of ${state.units.length} minis`
+        : `All ${state.units.length} minis`}</span></div>
     <div class="planner-cols">
       <div><h3>Next level (XP)</h3>${xpHtml || empty('Every mini here is at XP level 20.')}</div>
       <div><h3>Next rarity (stars)</h3>${starsHtml || empty('Every mini here is Legendary.')}</div>
     </div>
-    ${moreAvailable ? `<div class="planner-more"><button class="chip" data-plan-toggle aria-expanded="${expanded}">${expanded ? 'Show less ▴' : `Show more (top ${PLAN_SIZE}) ▾`}</button></div>` : ''}`;
+    ${moreAvailable ? `<div class="planner-more"><button class="chip" data-plan-toggle
+      aria-expanded="${expanded}">${expanded ? 'Show less ▴' : `Show more (top ${PLAN_SIZE}) ▾`}</button></div>` : ''}`;
 }
 
-// ---- collection filters: type, faction, traits (all multi-select) ---------------------------
-export const TYPES = [['Unit', 'Units'], ['Leader', 'Leaders'], ['Spell', 'Spells'], ['unknown', 'New / unknown']];
+const TYPES = [['Unit', 'Units'], ['Leader', 'Leaders'], ['Spell', 'Spells'], ['unknown', 'New / unknown']];
 export const FAMILIES = ['Alliance', 'Horde', 'Undead', 'Beast', 'Blackrock', 'Cenarion'];
 
 export function allTraits() {
@@ -150,9 +171,9 @@ export function allTraits() {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Whether a mini (null: unidentified) passes the filters; `skip` ignores one group, for facet counts. */
-export function passes(m, skip) {
-  const f = ui.filters;
+/** Whether a mini (null when unidentified) passes the filters. `skip` leaves out one group, for the counts on the filters. */
+function passes(m, skip) {
+  const f = view.filters;
   if (skip !== 'types' && f.types.length && !f.types.includes(m ? m.category : 'unknown')) return false;
   // dual-faction leaders match either faction
   if (skip !== 'families' && f.families.length && !(m && familiesOf(m).some((x) => f.families.includes(x)))) return false;
@@ -165,19 +186,19 @@ export function passes(m, skip) {
   return true;
 }
 
-/** Grid items: owned units, plus unowned minis when "Owned + not owned" is selected. */
-export function gridPool() {
+/** The grid: owned units, plus the minis not owned when "Owned + not owned" is chosen. */
+function gridPool() {
   const pool = state.units.map((u) => ({ unit: u, mini: miniOf(u) }));
-  if (ui.show === 'all') {
+  if (view.show === 'all') {
     const owned = new Set(state.units.map((u) => u.slug));
     for (const m of MINIS) if (!owned.has(m.slug)) pool.push({ unit: null, mini: m });
   }
   return pool;
 }
 
-export const filtersActive = () => ui.filters.types.length + ui.filters.families.length + ui.filters.traits.length > 0;
+const filtersActive = () => view.filters.types.length + view.filters.families.length + view.filters.traits.length > 0;
 
-export function saveFilters() { store.set('filters', ui.filters); }
+function saveFilters() { store.set('filters', view.filters); }
 
 export function toggleIn(list, value) {
   const i = list.indexOf(value);
@@ -185,35 +206,41 @@ export function toggleIn(list, value) {
 }
 
 export function renderFilters() {
-  const f = ui.filters;
+  const f = view.filters;
   const pool = gridPool();
   const count = (group, test) => pool.filter(({ mini }) => passes(mini, group) && test(mini)).length;
 
   const typeChips = TYPES
     .filter(([k]) => k !== 'unknown' || state.units.some((u) => !u.slug))
-    .map(([k, label]) => `<button class="chip" aria-pressed="${f.types.includes(k)}" data-f-type="${k}">${label}<small>${count('types', (m) => (m ? m.category : 'unknown') === k)}</small></button>`)
+    .map(([k, label]) => `<button class="chip" aria-pressed="${f.types.includes(k)}"
+      data-f-type="${k}">${label}<small>${count('types', (m) => (m ? m.category : 'unknown') === k)}</small></button>`)
     .join('');
 
   const famChips = FAMILIES
-    .map((fam) => `<button class="chip" aria-pressed="${f.families.includes(fam)}" data-f-family="${fam}">${ico(TAG_ICONS[fam], fam)}${fam}<small>${count('families', (m) => !!m && familiesOf(m).includes(fam))}</small></button>`)
+    .map((fam) => `<button class="chip" aria-pressed="${f.families.includes(fam)}"
+      data-f-family="${fam}">${ico(TAG_ICONS[fam], fam)}${fam}<small>${count('families',
+      (m) => !!m && familiesOf(m).includes(fam))}</small></button>`)
     .join('');
 
   const traits = allTraits();
   const traitCount = (name) => count('traits', (m) => !!m && m.traits.some((t) => t.name === name));
-  // floating trait picker: match mode on top, selected traits first
+  // the trait picker lists the match mode first, then the chosen traits
   const opt = (t) => `<label class="trait-opt" data-trait-name="${esc(t.name.toLowerCase())}">
       <input type="checkbox" data-f-trait-box="${esc(t.name)}" ${f.traits.includes(t.name) ? 'checked' : ''}>
       ${ico(t.icon, t.name)}<span>${esc(t.name)}</span><small>${traitCount(t.name)}</small></label>`;
   const ticked = traits.filter((t) => f.traits.includes(t.name));
   const rest = traits.filter((t) => !f.traits.includes(t.name));
   const any = f.traitMode === 'any';
-  const popup = ui.traitPickerOpen ? `<div class="trait-pop" role="dialog" aria-label="Traits">
+  const popup = view.traitPickerOpen ? `<div class="trait-pop" role="dialog" aria-label="Traits">
       <div class="trait-pop-head">
-        <span class="seg"><button class="chip small-chip" aria-pressed="${!any}" data-trait-mode="all" title="Minis with every selected trait">Match all</button><button class="chip small-chip" aria-pressed="${any}" data-trait-mode="any" title="Minis with any selected trait">Match any</button></span>
+        <span class="seg"><button class="chip small-chip" aria-pressed="${!any}" data-trait-mode="all"
+          title="Minis with every selected trait">Match all</button><button class="chip small-chip"
+          aria-pressed="${any}" data-trait-mode="any" title="Minis with any selected trait">Match any</button></span>
         ${f.traits.length ? '<button class="chip small-chip" data-clear-traits>Clear</button>' : ''}
       </div>
-      <input class="trait-search" type="search" placeholder="Search traits…" value="${esc(ui.traitSearch)}">
-      <div class="trait-list">${ticked.map(opt).join('')}${ticked.length && rest.length ? '<hr class="trait-sep">' : ''}${rest.map(opt).join('')}</div>
+      <input class="trait-search" type="search" placeholder="Search traits…" value="${esc(view.traitSearch)}">
+      <div class="trait-list">${ticked.map(opt).join('')}${ticked.length && rest.length
+        ? '<hr class="trait-sep">' : ''}${rest.map(opt).join('')}</div>
     </div>` : '';
 
   $('#filters').innerHTML = `
@@ -221,22 +248,24 @@ export function renderFilters() {
     <div class="filter-row"><span class="filter-label">Faction</span><div class="chips">${famChips}</div></div>
     <div class="filter-row"><span class="filter-label">Traits</span>
       <div class="chips">
-        <span class="trait-anchor"><button class="chip picker-btn" aria-expanded="${ui.traitPickerOpen}" aria-pressed="${f.traits.length > 0}" data-trait-picker>${f.traits.length ? `${f.traits.length} selected` : 'Choose traits'} ▾</button>${popup}</span>
+        <span class="trait-anchor"><button class="chip picker-btn" aria-expanded="${view.traitPickerOpen}"
+          aria-pressed="${f.traits.length > 0}" data-trait-picker>${f.traits.length ? `${f.traits.length} selected` : 'Choose traits'}
+          ▾</button>${popup}</span>
       </div>
       <button class="chip clear-filters" data-clear-filters ${filtersActive() ? '' : 'disabled'}>✕ Clear filters</button>
     </div>`;
   applyTraitSearch();
 }
 
-export function applyTraitSearch() {
-  const q = ui.traitSearch.trim().toLowerCase();
+function applyTraitSearch() {
+  const q = view.traitSearch.trim().toLowerCase();
   for (const el of document.querySelectorAll('#filters .trait-opt')) el.hidden = !!q && !el.dataset.traitName.includes(q);
 }
 
 /** Card frame class for the mini's family (theme-art.css). */
-export const frameCls = (m) => `frame-${String(m?.family || 'neutral').toLowerCase()}`;
+const frameCls = (m) => `frame-${String(m?.family || 'neutral').toLowerCase()}`;
 
-export function cardForUnit(u) {
+function cardForUnit(u) {
   const m = miniOf(u);
   if (u.synthetic) {
     return `<button class="card ${frameCls(m)}" data-open-unit="${u.id}">
@@ -252,8 +281,11 @@ export function cardForUnit(u) {
   if (up?.ready) flags.push('<span class="flag good">Upgrade ready</span>');
   if (u.talents < slots) flags.push('<span class="flag good">Talent slot open</span>');
   if (effectivePicks(u).length < u.talents) flags.push('<span class="flag warn">Tick talents</span>');
-  if (isLeader(u) && armyOf(u).some((s) => s.type === 'Wildcard')) flags.push(`<span class="flag wild">${ico(TAG_ICONS.Wildcard, 'Wildcard')}Wildcard</span>`);
-  if (hasBoost(u)) flags.push('<span class="flag boost" title="Its army has a Boost slot: that mini plays at XP level 20"><svg class="boost-bolt" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 0 2 9h5l-1.5 7L14 6.5H8.8z"/></svg>Boost</span>');
+  if (isLeader(u) && armyOf(u).some((s) => s.type === 'Wildcard')) flags.push(`<span
+    class="flag wild">${ico(TAG_ICONS.Wildcard, 'Wildcard')}Wildcard</span>`);
+  if (hasBoost(u)) flags.push('<span class="flag boost" title="Its army has a Boost slot, so that mini plays at XP ' +
+    'level 20"><svg class="boost-bolt" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 0 2 9h5l-1.5 7L14 ' +
+    '6.5H8.8z"/></svg>Boost</span>');
   const xpPct = u.xpLevel >= RULES.maxXpLevel ? 100 : Math.round((u.xp / Math.max(1, u.xpNeeded)) * 100);
   const starsTxt = up ? `${u.stars}/${up.stars} stars` : 'Max rarity';
   const starsPct = up ? Math.min(100, Math.round((u.stars / up.stars) * 100)) : 100;
@@ -263,7 +295,8 @@ export function cardForUnit(u) {
     <div class="name">${esc(unitName(u))}</div>
     <div class="meta">${rarityName(u.rarity)}${m ? ` · ${m.category}` : ''}</div>
     <div class="bar"><span style="width:${xpPct}%"></span></div>
-    <div class="small">${u.xpLevel >= RULES.maxXpLevel ? 'XP level 20 (max)' : `XP level ${u.xpLevel} · ${fmt(u.xp)}/${fmt(u.xpNeeded)}`}</div>
+    <div class="small">${u.xpLevel >= RULES.maxXpLevel ? 'XP level 20 (max)'
+      : `XP level ${u.xpLevel} · ${fmt(u.xp)}/${fmt(u.xpNeeded)}`}</div>
     <div class="bar stars"><span style="width:${starsPct}%"></span></div>
     <div class="small">${starsTxt} · talents ${u.talents}/${slots}</div>
     ${isLeader(u) ? armyStrip(u) : ''}
@@ -271,16 +304,18 @@ export function cardForUnit(u) {
   </button>`;
 }
 
-export function armyStrip(u) {
+function armyStrip(u) {
   const tiers = RULES.armySlots.tiers;
   const cells = armyOf(u).map((s) => {
     const t = tiers[s.tier];
-    return `<span class="army-cell${s.type === 'Wildcard' ? ' wild' : ''}${s.boost ? ' boost' : ''}" style="--tc:${t.color}" title="${esc(s.type || 'Type not set')}: ${t.name}${t.bonus ? ` (+${t.bonus})` : ''}${s.boost ? ' · Boost' : ''}"></span>`;
+    return `<span class="army-cell${s.type === 'Wildcard' ? ' wild' : ''}${s.boost ? ' boost' : ''}"
+      style="--tc:${t.color}" title="${esc(s.type || 'Type not set')}: ${t.name}${t.bonus
+      ? ` (+${t.bonus})` : ''}${s.boost ? ' · Boost' : ''}"></span>`;
   }).join('');
   return `<div class="army-strip" aria-label="Army slots">${cells}</div>`;
 }
 
-export function cardForMissing(m) {
+function cardForMissing(m) {
   return `<button class="card missing ${frameCls(m)}" data-open-mini="${m.slug}">
     <img class="art" src="/static/${m.art}" alt="" loading="lazy">
     <div class="name">${esc(m.name)}</div>
@@ -289,13 +324,13 @@ export function cardForMissing(m) {
   </button>`;
 }
 
-export function sortUnits(list) {
+function sortUnits(list) {
   const by = {
     level: (a, b) => totalLevel(b) - totalLevel(a) || unitName(a).localeCompare(unitName(b)),
     name: (a, b) => unitName(a).localeCompare(unitName(b)),
     rarity: (a, b) => b.rarity - a.rarity || totalLevel(b) - totalLevel(a),
     ready: (a, b) => (nextUpgrade(b)?.ready ? 1 : 0) - (nextUpgrade(a)?.ready ? 1 : 0) || totalLevel(b) - totalLevel(a),
-  }[ui.sort];
+  }[view.sort];
   return [...list].sort(by);
 }
 
@@ -304,12 +339,13 @@ export function renderGrid() {
   const units = sortUnits(pool.filter((p) => p.unit).map((p) => p.unit));
   const missing = pool.filter((p) => !p.unit).map((p) => p.mini).sort((a, b) => a.name.localeCompare(b.name));
   const html = units.map(cardForUnit).join('') + missing.map(cardForMissing).join('');
-  const total = state.units.length + (ui.show === 'all' ? MINIS.length - new Set(state.units.map((u) => u.slug).filter(Boolean)).size : 0);
+  const total = state.units.length + (view.show === 'all' ? MINIS.length - new Set(state.units.map((u) =>
+    u.slug).filter(Boolean)).size : 0);
   $('#gridCount').textContent = filtersActive() ? `Showing ${units.length + missing.length} of ${total}` : `${total} minis`;
   $('#grid').innerHTML = html || '<p class="muted">No minis match these filters.</p>';
 }
 
-export function eventText(e) {
+function eventText(e) {
   const u = state.units.find((x) => x.id === e.id);
   const who = u ? unitName(u) : null;
   const cur = state.currencies.find((x) => x.id === e.id);
@@ -330,4 +366,73 @@ export function renderEvents() {
   $('#events').innerHTML = list.length
     ? list.map((e) => `<li><time>${ago(e.t)}</time>${esc(eventText(e))}</li>`).join('')
     : '<li class="muted">No changes yet. Play a battle or upgrade a mini and it shows up here.</li>';
+}
+
+// what a click on the Collection tab can act on: the filters, the trait picker and the planner
+const CLICKABLE = [
+  'data-f-type', 'data-f-family', 'data-f-trait', 'data-trait-picker', 'data-trait-mode', 'data-clear-traits',
+  'data-clear-filters', 'data-plan-toggle',
+].map((a) => `[${a}]`).join(',');
+
+export function bindCollection() {
+  $('#show').value = view.show;
+  $('#sort').value = view.sort;
+  $('#show').addEventListener('change', (e) => {
+    view.show = e.target.value;
+    store.set('show', view.show);
+    renderFilters();
+    renderGrid();
+  });
+  $('#sort').addEventListener('change', (e) => { view.sort = e.target.value; store.set('sort', view.sort); renderGrid(); });
+  const refilter = () => { saveFilters(); renderFilters(); renderPlanner(); renderGrid(); };
+  document.addEventListener('click', (e) => {
+    if (view.traitPickerOpen && !e.target.closest('#filters .trait-pop,[data-trait-picker]')) {
+      view.traitPickerOpen = false;
+      renderFilters();
+    }
+    const t = e.target.closest(CLICKABLE);
+    if (!t) return;
+    if (t.hasAttribute('data-plan-toggle')) {
+      view.planExpanded = !view.planExpanded;
+      store.set('planExpanded', view.planExpanded);
+      renderPlanner();
+    }
+    else if (t.dataset.fType) { toggleIn(view.filters.types, t.dataset.fType); refilter(); }
+    else if (t.dataset.fFamily) { toggleIn(view.filters.families, t.dataset.fFamily); refilter(); }
+    else if (t.dataset.fTrait) { toggleIn(view.filters.traits, t.dataset.fTrait); refilter(); }
+    else if (t.hasAttribute('data-trait-picker')) {
+      view.traitPickerOpen = !view.traitPickerOpen;
+      view.traitSearch = '';
+      renderFilters();
+      if (view.traitPickerOpen) $('#filters .trait-search')?.focus();
+    }
+    else if (t.dataset.traitMode) { view.filters.traitMode = t.dataset.traitMode; refilter(); }
+    else if (t.hasAttribute('data-clear-traits')) { view.filters.traits = []; refilter(); }
+    else if (t.hasAttribute('data-clear-filters')) {
+      view.filters = { types: [], families: [], traits: [], traitMode: view.filters.traitMode };
+      view.traitPickerOpen = false;
+      refilter();
+    }
+  });
+  // Esc closes the trait picker (the side panel handles it first when open)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !e.defaultPrevented && view.traitPickerOpen) { view.traitPickerOpen = false; renderFilters(); }
+  });
+  // in the trait picker, the search filters the list in place, and ticking a trait keeps the picker open
+  $('#filters').addEventListener('input', (e) => {
+    if (!e.target.matches('.trait-search')) return;
+    view.traitSearch = e.target.value;
+    applyTraitSearch();
+  });
+  $('#filters').addEventListener('change', (e) => {
+    const name = e.target.dataset?.fTraitBox;
+    if (!name) return;
+    toggleIn(view.filters.traits, name);
+    saveFilters();
+    const scroll = $('#filters .trait-list')?.scrollTop;
+    renderFilters();
+    renderPlanner();
+    renderGrid();
+    if ($('#filters .trait-list')) $('#filters .trait-list').scrollTop = scroll || 0;
+  });
 }
