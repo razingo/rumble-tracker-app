@@ -1,10 +1,11 @@
 // What closing the app window does: keep the tracker running in the tray, quit it, or ask once and remember the
-// answer. The page reports its window closing; a reload connects again at once and another open window polls at least
-// every minute, so the window only counts as closed when neither happens.
+// answer. The page reports its window closing, and a new page reports itself as the first thing it does. A reload
+// therefore shows up well within RELOAD_WAIT, and another open window polls at least every minute; the window only counts
+// as closed when neither happens.
 import { SECOND } from '../web/scripts/lib/constants.js';
 
 export const CLOSE_CHOICES = ['ask', 'tray', 'quit'];
-const RELOAD_WAIT = 5 * SECOND;
+const RELOAD_WAIT = 600; // ms; a reloaded page reports itself within about 50 ms
 const SLOWEST_POLL = 70 * SECOND;
 
 /** `ask()` resolves to 'tray', 'quit' or null (no answer); `quit(reason)` stops the tracker. */
@@ -29,7 +30,7 @@ export function createWindowWatch(ctx, { ask, quit, wait = RELOAD_WAIT }) {
   }
 
   return {
-    /** A page polled; `id` is its page ID. */
+    /** A page opened or polled; `id` is its page ID. */
     seen(id) {
       if (id) pages.set(id, Date.now());
     },

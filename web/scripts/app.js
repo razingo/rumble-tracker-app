@@ -63,6 +63,8 @@ function reportWindowClosing() {
 }
 
 async function boot() {
+  // first, so that a reload is told apart from a closed window
+  post('/api/page-opened', { page: PAGE_ID }).catch(() => {});
   await loadTables();
   $('#accountLabel').maxLength = LIMITS.accountName;
   bindHeader();

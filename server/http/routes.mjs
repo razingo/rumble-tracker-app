@@ -78,6 +78,11 @@ export function createRoutes(ctx, deps) {
     'POST /api/armies': json(h.armies),
     'POST /api/pvp/result': json(h.pvpResult),
     'POST /api/restore': json(h.restore, 20 * MB),
+    // A page reports itself as soon as it opens, so a reload isn't taken for a closed window (window.mjs).
+    'POST /api/page-opened': async (req) => {
+      deps.window?.seen(String((await readBody(req)).page || ''));
+      return [200, { ok: true }];
+    },
     // The automatic backups, and restoring one of them.
     'GET /api/backups': async () => [200, { backups: await listDailyBackups(ctx.paths.BACKUPS) }],
     'POST /api/backups/restore': async (req) => {

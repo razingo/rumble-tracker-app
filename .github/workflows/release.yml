@@ -48,14 +48,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          Write-Host "Looking for the Test workflow's run of $env:GITHUB_SHA"
           for ($i = 0; $i -lt 60; $i++) {
             $run = gh run list --repo $env:GITHUB_REPOSITORY --workflow test.yml --commit $env:GITHUB_SHA --limit 1 `
-              --json status,conclusion | ConvertFrom-Json
+              --json status,conclusion,url | ConvertFrom-Json
             if ($run -and $run[0].status -eq 'completed') {
-              if ($run[0].conclusion -eq 'success') { exit 0 }
-              throw "The Test workflow ended with '$($run[0].conclusion)' for this commit, so it is not released."
+              if ($run[0].conclusion -eq 'success') {
+                Write-Host "The tests passed for this commit: $($run[0].url)"
+                exit 0
+              }
+              throw "The Test workflow ended with '$($run[0].conclusion)' for this commit, so it is not released: $($run[0].url)"
             }
             if (!$run -and $i -ge 10) { throw 'The Test workflow has not run for this commit. Push it to a branch before tagging it.' }
+            if ($run) { $state = "The tests are still running ($($run[0].status))" } else { $state = 'No Test run yet' }
+            Write-Host "$state; checking again in 20 seconds."
             Start-Sleep -Seconds 20
           }
           throw 'The Test workflow did not finish within 20 minutes.'

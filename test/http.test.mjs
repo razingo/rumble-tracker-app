@@ -139,14 +139,15 @@ test('turns Start with Windows on and off', async () => {
   assert.equal(calls.autostart, true);
 });
 
-test('saves what closing the window does, and passes on page polls and closed windows', async () => {
+test('saves what closing the window does, and passes on opened, polling and closed pages', async () => {
   assert.equal((await api('GET', '/api/settings')).body.closeWindow, 'ask');
   assert.equal((await api('POST', '/api/settings', { closeWindow: 'tray' })).body.closeWindow, 'tray');
   assert.equal(ctx.user.appSettings.closeWindow, 'tray');
   assert.equal((await api('POST', '/api/settings', { closeWindow: 'later' })).status, 400);
   await api('GET', '/api/state?page=p1');
+  await api('POST', '/api/page-opened', { page: 'p2' });
   await api('POST', '/api/window-closed', { page: 'p1' });
-  assert.ok(calls.seen.includes('p1'));
+  assert.ok(calls.seen.includes('p1') && calls.seen.includes('p2'));
   assert.deepEqual(calls.closed, ['p1']);
 });
 

@@ -3,6 +3,10 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.8.3
+
+- The "Close the tracker?" question appears about a second after you close the window, instead of after several.
+
 ## 0.8.2
 
 - The first time you close the window, the tracker asks whether to keep running in the tray or quit, and remembers
