@@ -7,12 +7,17 @@ import { GIT } from './git.mjs';
 const MAX = 140;
 const CHECKED = /^(\.github|desktop|server|test|tools|web)\/.*\.(m?js|cjs|css|html|ps1|ya?ml)$/;
 
-const files = execFileSync(GIT,['ls-files', '-co', '--exclude-standard'], { encoding: 'utf8' })
+const files = execFileSync(GIT, ['ls-files', '-co', '--exclude-standard'], { encoding: 'utf8' })
   .split('\n').filter((f) => CHECKED.test(f));
 const problems = [];
 for (const f of files) {
   let text;
-  try { text = readFileSync(f, 'utf8'); } catch { continue; } // deleted but not yet staged
+  // deleted but not yet staged
+  try {
+    text = readFileSync(f, 'utf8');
+  } catch {
+    continue;
+  }
   if (text.includes('\r')) problems.push(`${f}: CRLF line endings`);
   if (text && !text.endsWith('\n')) problems.push(`${f}: no newline at the end`);
   text.split('\n').forEach((line, i) => {

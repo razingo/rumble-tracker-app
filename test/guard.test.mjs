@@ -16,24 +16,24 @@ test('own page is allowed', () => {
 });
 
 test('other hosts (DNS rebinding) and ports are refused', () => {
-  assert.equal(refusal(req({ host: 'evil.example:8765' }), '/'), 'unknown host');
-  assert.equal(refusal(req({ host: 'localhost:8766' }), '/'), 'unknown host');
-  assert.equal(refusal(req({ host: undefined }), '/'), 'unknown host');
+  assert.match(refusal(req({ host: 'evil.example:8765' }), '/'), /its own address/);
+  assert.match(refusal(req({ host: 'localhost:8766' }), '/'), /its own address/);
+  assert.match(refusal(req({ host: undefined }), '/'), /its own address/);
 });
 
 test('cross-site requests are refused', () => {
-  assert.equal(refusal(req({ origin: 'https://evil.example' }), '/'), 'cross-site request');
-  assert.equal(refusal(req({ origin: 'http://localhost:8766', ...json }, 'POST'), '/api/army'), 'cross-site request');
-  assert.equal(refusal(req({ 'sec-fetch-site': 'cross-site' }), '/api/state'), 'cross-site request');
-  assert.equal(refusal(req({ 'sec-fetch-site': 'same-site' }), '/api/state'), 'cross-site request');
-  // pages and images may be opened from elsewhere (the launcher, a link), the API may not
+  assert.match(refusal(req({ origin: 'https://evil.example' }), '/'), /not other websites/);
+  assert.match(refusal(req({ origin: 'http://localhost:8766', ...json }, 'POST'), '/api/army'), /not other websites/);
+  assert.match(refusal(req({ 'sec-fetch-site': 'cross-site' }), '/api/state'), /not other websites/);
+  assert.match(refusal(req({ 'sec-fetch-site': 'same-site' }), '/api/state'), /not other websites/);
+  // Pages and images may be opened from elsewhere (the launcher, a link), the API may not.
   assert.equal(refusal(req({ 'sec-fetch-site': 'cross-site' }), '/'), null);
 });
 
 test('API writes must be JSON (a form cannot send it)', () => {
-  assert.equal(refusal(req({}, 'POST'), '/api/quit'), 'JSON requests only');
-  assert.equal(refusal(req({ 'content-type': 'text/plain' }, 'POST'), '/api/quit'), 'JSON requests only');
-  assert.equal(refusal(req({ 'content-type': 'application/x-www-form-urlencoded' }, 'POST'), '/api/restore'), 'JSON requests only');
+  assert.match(refusal(req({}, 'POST'), '/api/quit'), /only accepts JSON/);
+  assert.match(refusal(req({ 'content-type': 'text/plain' }, 'POST'), '/api/quit'), /only accepts JSON/);
+  assert.match(refusal(req({ 'content-type': 'application/x-www-form-urlencoded' }, 'POST'), '/api/restore'), /only accepts JSON/);
 });
 
 test('malformed addresses are recognized', () => {

@@ -33,15 +33,25 @@ before(async () => {
   server = createHttpServer(ctx, {
     scan: async () => { calls.scan++; },
     shutdown: (reason) => calls.quit.push(reason),
-    startUpdate: async () => { calls.update++; return [200, { ok: true }]; },
+    startUpdate: async () => {
+      calls.update++;
+      return [200, { ok: true }];
+    },
     notifier: { test: async () => true },
     gameRunning: async () => false,
-    autostart: { get: async () => calls.autostart, set: async (on) => { calls.autostart = on; return true; } },
+    autostart: { get: async () => calls.autostart, set: async (on) => {
+      calls.autostart = on;
+      return true;
+    } },
   });
   await new Promise((r) => server.listen(ctx.port, '127.0.0.1', r));
   base = `http://localhost:${ctx.port}`;
 });
-after(async () => { server.close(); await flushWrites(); await cleanup(); });
+after(async () => {
+  server.close();
+  await flushWrites();
+  await cleanup();
+});
 
 test('state, and "unchanged" for a revision the page already has', async () => {
   const s = (await api('GET', '/api/state')).body;
@@ -51,7 +61,7 @@ test('state, and "unchanged" for a revision the page already has', async () => {
   const u = (await api('GET', `/api/state?rev=${s.rev}&for=${ACC}`)).body;
   assert.equal(u.unchanged, true);
   assert.deepEqual(Object.keys(u).sort(), ['gameRunning', 'lastError', 'lastScan', 'problems', 'rev', 'unchanged', 'update']);
-  // another account, or an old revision: the full state
+  // Another account or an old revision gets the full state.
   assert.equal((await api('GET', `/api/state?rev=${s.rev - 1}&for=${ACC}`)).body.unchanged, undefined);
 });
 
@@ -66,7 +76,7 @@ test('the page, game data and refused requests', async () => {
   assert.equal(ctx.errorLog.list().length, 0); // none of these is a server error
 });
 
-test('names: accounts and unit assignments', async () => {
+test('saves account names and unit assignments', async () => {
   const rev = ctx.rev;
   assert.equal((await api('POST', '/api/name', { kind: 'account', id: ACC, value: ' Main ' })).status, 200);
   assert.equal(ctx.user.names.accounts[ACC], 'Main');
@@ -101,7 +111,7 @@ test('talents, army slots, plans, drafts and saved armies are cleaned', async ()
   assert.equal((await api('POST', '/api/armies', { account: ACC, armies: Array(51).fill({}) })).status, 400);
 });
 
-test('PvP: marking an unexplained change', async () => {
+test('marks an unexplained PvP change as a win or a loss', async () => {
   assert.equal((await api('POST', '/api/pvp/result', { account: ACC, t: 'T1', result: 'win' })).status, 200);
   assert.equal(ctx.user.pvpHistory[ACC][0].wins, 1);
   assert.equal((await api('POST', '/api/pvp/result', { account: ACC, t: 'nope', result: 'win' })).status, 400);
@@ -122,13 +132,13 @@ test('backup and restore', async () => {
   assert.equal((await api('POST', '/api/restore', { backup: { format: 'x' } })).status, 400);
 });
 
-test('settings: Start with Windows', async () => {
+test('turns Start with Windows on and off', async () => {
   assert.equal((await api('GET', '/api/settings')).body.startWithWindows, false);
   assert.equal((await api('POST', '/api/settings', { startWithWindows: true })).body.startWithWindows, true);
   assert.equal(calls.autostart, true);
 });
 
-test('exe-only actions: quit, update, Later', async () => {
+test('quit, update and Later work only in the exe', async () => {
   await api('POST', '/api/update', {});
   assert.equal(calls.update, 1);
   ctx.dataPack.newVersion = '9.9.9';
@@ -146,7 +156,7 @@ test('army cleaning', () => {
     { id: null, name: 'Army', leader: null, minis: ['a', null, null, null, null, null], talents: { a: 1 }, description: '', tags: [] });
 });
 
-test('automatic backups: listed and restored by day', async () => {
+test('lists automatic backups and restores one by day', async () => {
   const { writeDailyBackup } = await import('../server/backup.mjs');
   ctx.user.names.accounts[ACC] = 'Backed up';
   await writeDailyBackup(ctx.paths.BACKUPS, ctx.user.backupFiles(), { now: new Date(2026, 10, 18, 12) });

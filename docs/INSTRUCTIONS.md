@@ -164,7 +164,7 @@ ending soon, a mini ready to upgrade, enough tickets for a reward goal, the PvP 
 Victory Road rewards), new PvP modifiers and a new tracker version. Clicking one opens the tracker.
 
 - *For* sends them for all accounts or just one.
-- Types left unticked under *Also while playing* wait until Warcraft Rumble is closed.
+- Types left unticked under *Also while playing* are skipped while Warcraft Rumble is running.
 - During *Quiet hours*, notifications are held until the quiet hours end.
 
 **Send a test notification** checks that Windows shows them. If nothing appears, make sure notifications for *Rumble
@@ -201,7 +201,7 @@ The tracker also backs up by itself when it starts, every 24 hours and when it s
 | You see | What to do |
 |---|---|
 | *The game was updated to …* | Right after a patch, new events or minis may be missing or unnamed. The tracker installs updated game data by itself once it's published (it checks at start and every 6 hours). |
-| *Tracker server not reachable* | The tracker was stopped. Start `RumbleTracker.exe` again. |
+| *The tracker isn't responding* | The tracker was stopped. Start `RumbleTracker.exe` again. |
 | A pop-up about a new version | *Download now* downloads it with a progress bar, checks it and restarts the tracker with it, keeping your data. If the new version can't start, the previous one is put back. *Later* hides the pop-up until the tracker restarts. |
 | A damaged data file, under *Report a problem* | The tracker moved it aside (`<name>.corrupt-<date>` in the data folder) and started without it. Restore the last good backup from **Backup → Automatic backups**. |
 | *No Rumble data found on this PC* | Start Warcraft Rumble on this PC at least once and log in. The tracker reads what the game saved here. |

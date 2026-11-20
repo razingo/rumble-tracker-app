@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import net from 'node:net';
 import { REG } from '../system.mjs';
+import { SECOND } from '../../web/scripts/lib/constants.js';
 
 const KEY = 'HKCU\\Software\\Blizzard Entertainment, Inc.\\Warcraft Rumble';
 const WANTED = {
@@ -58,7 +59,7 @@ function queryOnce() {
       if (settled || !exited || open > 0) return;
       const { err, stderr } = exited;
       if (err) {
-        // no key: the game has never run on this PC
+        // Without the key, the game has never run on this PC.
         if (err.code === 1 && !connections) return finish(resolve, {});
         const detail = String(stderr || err.message).split(/\r?\n/).filter(Boolean).pop();
         return finish(reject, new Error(`Could not read the game's saved data (${detail})`));
@@ -67,7 +68,7 @@ function queryOnce() {
         const data = received.reduce((a, b) => (b.length > a.length ? b : a), Buffer.alloc(0));
         finish(resolve, parse(data.toString('utf16le')));
       } catch (e) {
-        // a value caught mid-write: treat as a failed read
+        // A value caught mid-write counts as a failed read.
         finish(reject, e);
       }
     };
@@ -76,13 +77,17 @@ function queryOnce() {
       open++;
       const chunks = [];
       socket.on('data', (c) => chunks.push(c));
-      socket.on('close', () => { open--; received.push(Buffer.concat(chunks)); done(); });
+      socket.on('close', () => {
+        open--;
+        received.push(Buffer.concat(chunks));
+        done();
+      });
       socket.on('error', () => {});
     });
     server.on('error', (e) => finish(reject, new Error(`Could not read the game's saved data (${e.message})`)));
-    const timer = setTimeout(() => finish(reject, new Error("Could not read the game's saved data (timed out)")), 30000);
+    const timer = setTimeout(() => finish(reject, new Error("Could not read the game's saved data (timed out)")), 30 * SECOND);
     server.listen(pipe, () => {
-      execFile(REG, ['export', KEY, pipe, '/y'], { windowsHide: true, timeout: 25000 }, (err, stdout, stderr) => {
+      execFile(REG, ['export', KEY, pipe, '/y'], { windowsHide: true, timeout: 25 * SECOND }, (err, stdout, stderr) => {
         exited = { err, stderr };
         done();
       });
@@ -100,7 +105,7 @@ function parse(text) {
     const hex = hexList.replace(/,/g, '');
     const kind = Object.keys(WANTED).find((k) => WANTED[k].test(entry));
     if (!kind) continue;
-    // value: null-terminated base64 of a protobuf message
+    // The value is null-terminated base64 of a protobuf message.
     const b64 = Buffer.from(hex, 'hex').toString('latin1').replace(/\0+$/, '');
     (result[account] ??= {})[kind] = Buffer.from(b64, 'base64');
   }

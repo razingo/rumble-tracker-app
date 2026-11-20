@@ -4,12 +4,14 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createGuard, requestPath } from '../guard.mjs';
-import { buildBackup, replaceContents, listDailyBackups, readDailyBackup } from '../backup.mjs';
+import { buildBackup, replaceContents, listDailyBackups, readDailyBackup, backupFileName } from '../backup.mjs';
 import { NOTIFY_TYPES, cleanSettings } from '../notifications/notify.mjs';
 import { ISSUES_REPO, diagnostics } from '../report.mjs';
 import { buildState, liveState, resolveAccount, dataStale } from '../state.mjs';
 import { createHandlers } from './handlers.mjs';
 import { host } from '../host.mjs';
+import { MINUTE, MB } from '../../web/scripts/lib/constants.js';
+import { localDay } from '../../web/scripts/lib/format.js';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -31,7 +33,7 @@ const SECURITY_HEADERS = {
   'cross-origin-resource-policy': 'same-origin',
 };
 
-// links the exe's window may open in the default browser
+// Links the exe's window may open in the default browser.
 const EXTERNAL_LINKS = [`https://github.com/${ISSUES_REPO}`, 'https://buymeacoffee.com/razingo'];
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
@@ -41,14 +43,14 @@ function send(res, status, body, type = 'application/json; charset=utf-8') {
 
 async function serveFile(res, base, rel) {
   const file = path.resolve(base, `.${rel}`);
-  if (!file.startsWith(base + path.sep)) return send(res, 403, { error: 'forbidden' });
+  if (!file.startsWith(base + path.sep)) return send(res, 403, { error: 'That file is outside the tracker\'s folders.' });
   try {
     const body = await readFile(file);
     res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': TYPES[path.extname(file)] || 'application/octet-stream',
       'cache-control': 'no-cache' });
     res.end(body);
   } catch {
-    send(res, 404, { error: 'not found' });
+    send(res, 404, { error: 'The tracker has no such file.' });
   }
 }
 
@@ -57,16 +59,27 @@ async function readBody(req, limit = 64 * 1024) {
   const chunks = [];
   for await (const c of req) {
     size += c.length;
-    if (size > limit) throw Object.assign(new Error('body too large'), { status: 413 });
+    if (size > limit) throw Object.assign(new Error('The request is too large for the tracker to accept.'), { status: 413 });
     chunks.push(c);
   }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); }
-  catch { throw Object.assign(new Error('request body is not valid JSON'), { status: 400 }); }
+  catch {
+    throw Object.assign(new Error('The request is not valid JSON.'), { status: 400 });
+  }
 }
 
-// page error reports: at most 20 per minute
-const rateLimit = (n, ms) => ({ n: 0, since: Date.now(), allow() {
-  if (Date.now() - this.since > ms) { this.n = 0; this.since = Date.now(); } return ++this.n <= n; } });
+// at most 20 page error reports a minute
+const rateLimit = (n, ms) => ({
+  n: 0,
+  since: Date.now(),
+  allow() {
+    if (Date.now() - this.since > ms) {
+      this.n = 0;
+      this.since = Date.now();
+    }
+    return ++this.n <= n;
+  },
+});
 
 /**
  * deps: { scan, shutdown(reason), startUpdate(), notifier: { save, test }, gameRunning(), autostart: { get(), set(on) } | null }.
@@ -75,7 +88,7 @@ const rateLimit = (n, ms) => ({ n: 0, since: Date.now(), allow() {
 export function createHttpServer(ctx, deps) {
   const refusal = createGuard(ctx.port);
   const h = createHandlers(ctx);
-  const clientErrors = rateLimit(20, 60000);
+  const clientErrors = rateLimit(20, MINUTE);
   const { PUBLIC, STATIC, GAMEDATA } = ctx.paths;
   const json = (handler, limit) => async (req) => handler(await readBody(req, limit));
 
@@ -88,15 +101,18 @@ export function createHttpServer(ctx, deps) {
     'POST /api/draft': json(h.draft),
     'POST /api/armies': json(h.armies),
     'POST /api/pvp/result': json(h.pvpResult),
-    'POST /api/restore': json(h.restore, 20 * 1024 * 1024),
-    // the automatic backups, and restoring one of them
+    'POST /api/restore': json(h.restore, 20 * MB),
+    // The automatic backups, and restoring one of them.
     'GET /api/backups': async () => [200, { backups: await listDailyBackups(ctx.paths.BACKUPS) }],
     'POST /api/backups/restore': async (req) => {
       const backup = await readDailyBackup(ctx.paths.BACKUPS, (await readBody(req)).day);
       if (!backup) return [404, { error: 'That backup is not there any more.' }];
       return h.restore({ backup });
     },
-    'POST /api/scan': async () => { await deps.scan(); return [200, { ok: true }]; },
+    'POST /api/scan': async () => {
+      await deps.scan();
+      return [200, { ok: true }];
+    },
     'GET /api/notifications': async () => {
       const { notifySettings, sentLog } = ctx.user;
       return [200, { settings: notifySettings, types: NOTIFY_TYPES, log: sentLog.log.slice(-20).reverse(),
@@ -111,7 +127,7 @@ export function createHttpServer(ctx, deps) {
       const ok = await deps.notifier.test();
       return ok ? [200, { ok: true }] : [500, { error: 'Windows did not accept the notification.' }];
     },
-    // Start with Windows, null where it isn't available
+    // Start with Windows, null where it isn't available.
     'GET /api/settings': async () => [200, { startWithWindows: deps.autostart ? await deps.autostart.get() : null }],
     'POST /api/settings': async (req) => {
       const b = await readBody(req);
@@ -121,14 +137,14 @@ export function createHttpServer(ctx, deps) {
       }
       return [200, { ok: true, startWithWindows: deps.autostart ? await deps.autostart.get() : null }];
     },
-    // script errors reported by the page, for "Report a problem"
+    // Script errors reported by the page, for "Report a problem".
     'POST /api/client-error': async (req) => {
       const b = await readBody(req, 8 * 1024);
       if (clientErrors.allow()) ctx.errorLog.add(`page${b.where ? ` ${String(b.where).slice(0, 20)}` : ''}`,
         `${b.message || ''}${b.stack ? `\n${b.stack}` : ''}`);
       return [200, { ok: true }];
     },
-    // diagnostics shown before opening an issue (already cleaned)
+    // Diagnostics shown before opening an issue (already cleaned).
     'GET /api/report': async (req, url) => {
       const t = ctx.tables, dp = ctx.dataPack;
       const text = diagnostics({
@@ -141,12 +157,20 @@ export function createHttpServer(ctx, deps) {
       });
       return [200, { repo: ISSUES_REPO, appVersion: ctx.appVersion, diagnostics: text, errors: ctx.errorLog.list().length }];
     },
-    'POST /api/report/clear': async () => { ctx.errorLog.clear(); ctx.bump(); return [200, { ok: true }]; },
-    // Later in the update pop-up hides it until the tracker restarts
-    'POST /api/update/later': async () => { ctx.appUpdate.later = ctx.dataPack.newVersion; ctx.bump(); return [200, { ok: true }]; },
+    'POST /api/report/clear': async () => {
+      ctx.errorLog.clear();
+      ctx.bump();
+      return [200, { ok: true }];
+    },
+    // Later in the update pop-up hides it until the tracker restarts.
+    'POST /api/update/later': async () => {
+      ctx.appUpdate.later = ctx.dataPack.newVersion;
+      ctx.bump();
+      return [200, { ok: true }];
+    },
   }));
   if (ctx.standalone) {
-    // the app window has its own browser profile, so allowed outside links open in the default browser
+    // The app window has its own browser profile, so allowed outside links open in the default browser.
     routes.set('POST /api/open-external', async (req) => {
       const target = String((await readBody(req, 16 * 1024)).url || '');
       if (!/^[^\s"<>^`|]+$/.test(target) || !EXTERNAL_LINKS.some((ok) => target === ok
@@ -154,9 +178,15 @@ export function createHttpServer(ctx, deps) {
       host.openLink(target);
       return [200, { ok: true }];
     });
-    // Take a screenshot in Report a problem opens Windows' snipping overlay, which copies the capture
-    routes.set('POST /api/screenshot', async () => { host.takeScreenshot(); return [200, { ok: true }]; });
-    routes.set('POST /api/quit', async () => { setTimeout(() => deps.shutdown('Quit from the page'), 200); return [200, { ok: true }]; });
+    // Take a screenshot in Report a problem opens Windows' snipping overlay, which copies the capture.
+    routes.set('POST /api/screenshot', async () => {
+      host.takeScreenshot();
+      return [200, { ok: true }];
+    });
+    routes.set('POST /api/quit', async () => {
+      setTimeout(() => deps.shutdown('Quit from the page'), 200);
+      return [200, { ok: true }];
+    });
     routes.set('POST /api/update', async () => deps.startUpdate());
   }
 
@@ -164,7 +194,7 @@ export function createHttpServer(ctx, deps) {
     try {
       const url = new URL(req.url, 'http://localhost');
       const p = requestPath(req.url);
-      if (p === null) return send(res, 400, { error: 'bad address' }); // a malformed % escape is the client's error
+      if (p === null) return send(res, 400, { error: 'The address is not valid.' }); // a malformed % escape
       const refused = refusal(req, p);
       if (refused) return send(res, 403, { error: refused });
       if (req.method === 'GET' && p === '/api/state') {
@@ -176,22 +206,27 @@ export function createHttpServer(ctx, deps) {
         return send(res, 200, buildState(ctx, account));
       }
       if (req.method === 'GET' && p === '/api/backup') {
-        const day = new Date().toISOString().slice(0, 10);
         res.writeHead(200, {
           ...SECURITY_HEADERS, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
-          'content-disposition': `attachment; filename="rumble-tracker-backup-${day}.json"`,
+          'content-disposition': `attachment; filename="${backupFileName(localDay())}"`,
         });
         return res.end(JSON.stringify(buildBackup(ctx.user.backupFiles()), null, 2));
       }
       const route = routes.get(`${req.method} ${p}`);
       if (route) return send(res, ...(await route(req, url)));
-      if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+      if (req.method !== 'GET') return send(res, 405, { error: 'The tracker doesn\'t accept this kind of request here.' });
       if (p.startsWith('/static/')) {
-        // an installed data pack takes precedence
+        // An installed data pack takes precedence.
         const rel = p.slice('/static'.length);
         const inPack = path.resolve(GAMEDATA, `.${rel}`);
-        if (inPack.startsWith(GAMEDATA + path.sep)) { try { await stat(inPack); return serveFile(res, GAMEDATA, rel);
-          } catch { /* not in the pack */ } }
+        if (inPack.startsWith(GAMEDATA + path.sep)) {
+          try {
+            await stat(inPack);
+            return serveFile(res, GAMEDATA, rel);
+          } catch {
+            // not in the pack
+          }
+        }
         return serveFile(res, STATIC, rel);
       }
       return serveFile(res, PUBLIC, p === '/' ? '/index.html' : p);

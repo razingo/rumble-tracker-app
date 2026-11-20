@@ -1,13 +1,14 @@
 // Display formatting shared by the page and the server. Numbers and dates are always shown in en-US.
-const LOCALE = 'en-US';
+import { MINUTE, HOUR, MB } from './constants.js';
 
-export const MINUTE = 60 * 1000;
-export const HOUR = 60 * MINUTE;
-export const DAY = 24 * HOUR;
+const LOCALE = 'en-US';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export const fmt = (n) => (typeof n === 'number' ? n.toLocaleString(LOCALE) : n);
+/** "1 win", "3 wins". `many` defaults to `one` with an s. */
+export const plural = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
+export const megabytes = (bytes) => (bytes / MB).toFixed(1);
 
 const dateFormat = (options) => (t) => new Date(t).toLocaleString(LOCALE, options);
 /** "Thu, Nov 19, 7:00 PM" */

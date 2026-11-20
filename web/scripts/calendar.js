@@ -1,16 +1,17 @@
 // Calendar tab: the event schedules from gamedata/events.json and the events the save reports as running.
-import { $, post, RULES, BY_SLUG, TAG_ICONS, state, onTablesReload, ui, ANKH_ID } from './core.js';
+import { $, imageUrl, getJson, post, RULES, BY_SLUG, TAG_ICONS, state, onTablesReload, ui, ANKH_ID } from './core.js';
 import { ico } from './drawer.js';
 import { STORE, loadStore } from './grid.js';
-import { DAY, esc, fmt, when, dayOnly, dayWithYear, longDay, timeOnly, span, ago, titleCase } from './lib/format.js';
+import { SECOND, MINUTE, DAY } from './lib/constants.js';
+import { esc, fmt, plural, when, dayOnly, dayWithYear, longDay, timeOnly, span, ago, titleCase } from './lib/format.js';
 import { rewardKey, rewardPlanner } from './lib/reward-tree.js';
 import { occurrences, rotationAt, rotationName } from './lib/schedule.js';
 
 let EVENTS = null; // { currencies: { A|B|C: saveId }, rotations: [...], events: [...] }
 onTablesReload(() => { EVENTS = null; });
-// How far the timeline is shifted (in days), the event whose reward tree is open, and the rewards picked in it
+// How far the timeline is shifted (in days), the event whose reward tree is open, and the rewards picked in it.
 const view = { offset: 0, tree: null, picks: [] };
-// the event ticket slots A, B and C, with their currency IDs (events.json)
+// The event ticket slots A, B and C, with their currency IDs (events.json).
 const ticketSlots = () => EVENTS?.currencies || {};
 const EVENT_ICON = new Set(['darkmoon', 'pilgrim', 'solo', 'winterveil', 'hallow', 'arthas', 'family', 'love', 'newyear']);
 const eventIcon = (ev) => `/static/events/${EVENT_ICON.has(ev.family) ? ev.family : 'generic'}.webp`;
@@ -23,7 +24,7 @@ const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : { 1: 'st',
 
 export async function loadEvents() {
   if (EVENTS) return EVENTS;
-  EVENTS = await fetch('/static/events.json').then((r) => r.json());
+  EVENTS = await getJson('/static/events.json', 'the event schedule');
   return EVENTS;
 }
 
@@ -56,13 +57,13 @@ const rotColor = (rot, item) =>
   (rot.id === 'dungeonFamily' ? `var(--fam-${String(item).toLowerCase()}, var(--ev-default))` : rot.id === 'raid'
   ? (item.type === 'Siege' ? 'var(--ev-siege)' : 'var(--ev-raid)') : 'var(--ev-dungeon)');
 const rotIcon = (rot, item) => (rot.id === 'dungeonFamily' && TAG_ICONS?.[item]
-  ? `<img class="rot-ico" src="/static/${TAG_ICONS[item]}" alt="">` : '');
+  ? `<img class="rotation-ico" src="/static/${TAG_ICONS[item]}" alt="">` : '');
 
 /** The account's Ankh, which continues a failed dungeon, for the Dungeon card. */
 function ankhLine() {
   const c = state?.currencies?.find((x) => x.id === ANKH_ID);
   const icon = RULES.currencyIcons?.[ANKH_ID];
-  return `<div class="rot-ankh" title="Used to continue failed dungeons">${icon
+  return `<div class="rotation-ankh" title="Used to continue failed dungeons">${icon
     ? `<img class="cur-ico" src="/static/${icon}" alt="">` : ''}${esc(c?.name || 'Ankh')} <b>${fmt(c?.balance
     ?? 0)}</b> <small class="muted">continues a failed dungeon</small></div>`;
 }
@@ -71,18 +72,19 @@ function renderRotations(now) {
   const card = (rot) => {
     const cur = rotationAt(rot, now);
     const next = [1, 2, 3].map((k) => rotationAt(rot, cur.end + (k - 1) * rot.periodDays * DAY));
-    return `<article class="rot-card" style="--ev:${rotColor(rot, cur.item)}">
-      <div class="rot-label">${esc(rot.label)} <span class="muted">· every
+    return `<article class="rotation-card" style="--ev:${rotColor(rot, cur.item)}">
+      <div class="card-label">${esc(rot.label)} <span class="muted">· every
         ${rot.periodDays === 7 ? 'week' : `${rot.periodDays / 7} weeks`}</span></div>
-      <div class="rot-now">${rotIcon(rot, cur.item)}<b>${esc(rotationName(cur.item))}</b></div>
-      <div class="cal-when">Changes in ${span(cur.end - now)}</div>
+      <div class="rotation-now">${rotIcon(rot, cur.item)}<b>${esc(rotationName(cur.item))}</b></div>
+      <div class="time-highlight">Changes in ${span(cur.end - now)}</div>
       ${rot.id === 'dungeon' ? ankhLine() : ''}
-      <div class="rot-next">${next.map((x) => `<span title="${esc(when(x.start))}">${rotIcon(rot,
+      <div class="rotation-next">${next.map((x) => `<span title="${esc(when(x.start))}">${rotIcon(rot,
         x.item)}${esc(rotationName(x.item))} <small>${esc(dayOnly(x.start))}</small></span>`).join('')}</div>
     </article>`;
   };
   return `<section class="panel">
-    <div class="cal-head"><h2>Dungeons, raids &amp; sieges</h2><span class="muted small">Rotations from the game files</span></div>
+    <div class="section-head"><h2>Dungeons, raids &amp;
+    sieges</h2><span class="muted small">Rotations from the game files</span></div>
     <div class="cal-cards">${(EVENTS.rotations || []).map(card).join('')}</div>
   </section>`;
 }
@@ -90,7 +92,7 @@ function renderRotations(now) {
 // Shop offers
 // The save's timed store slots and limited offers, with titles and prices from static/store.json. Permanent packs
 // have no timer and aren't listed.
-// The tome an offer sells, from the save or from a generic offer's name
+// The tome an offer sells, from the save or from a generic offer's name.
 function offerTome(o) {
   if (o.tome && STORE?.tomes?.[o.tome]) return STORE.tomes[o.tome];
   const m = /Tome(Modest|Major|Mega|Mythic)(?:_(\w+?))?_StoreOffer/.exec(STORE?.offers?.[o.offer]?.name || '');
@@ -111,8 +113,8 @@ function offerTitle(o) {
 function renderShopOffers(now) {
   const shop = state?.shop;
   if (!shop || !STORE) return '';
-  const timed = [...shop.offers.filter((o) => o.expires && Date.parse(o.expires) > now - 60000),
-    ...shop.limited.filter((o) => o.expires && Date.parse(o.expires) > now - 60000)]
+  const timed = [...shop.offers.filter((o) => o.expires && Date.parse(o.expires) > now - MINUTE),
+    ...shop.limited.filter((o) => o.expires && Date.parse(o.expires) > now - MINUTE)]
     .sort((a, b) => Date.parse(a.expires) - Date.parse(b.expires));
   if (!timed.length) return '';
   const card = (o) => {
@@ -121,23 +123,23 @@ function renderShopOffers(now) {
     const price = isFree ? 'Free' : info.cost ? `${fmt(info.cost.amount)}
       ${info.cost.coins ? '<span class="gold">●</span>' : esc(info.cost.currency || '')}` : info.realMoney ? 'Real money' : '';
     const minis = (o.slugs || []).map((s) => s && BY_SLUG.get(s)).filter(Boolean);
-    // the offered minis' art, else the tome, else the offer banner
+    // The offered minis' art, else the tome, else the offer banner.
     const tIcon = o.tome ? tomeIcon(offerTome(o)) : null;
     const art = minis.length ? minis.slice(0, 2).map((m) => `<img src="/static/${m.art}" alt="">`).join('')
       : tIcon ? `<img class="tome" src="${tIcon}" alt="">`
-        : info.icon ? `<img class="tome" src="/static/store/${encodeURIComponent(info.icon)}.webp" alt="">`
+        : info.icon ? `<img class="tome" src="${imageUrl('store', info.icon)}" alt="">`
           : `<span>${isFree ? '🎁' : '◆'}</span>`;
     return `<article class="shop-card">
       <div class="shop-art">${art}</div>
       <div class="shop-body">
         <div class="cal-name">${esc(offerTitle(o))}</div>
-        <div class="cal-when">${isFree ? 'Next free gift in' : /Siege|Chain/i.test(info.name || '')
+        <div class="time-highlight">${isFree ? 'Next free gift in' : /Siege|Chain/i.test(info.name || '')
           ? 'Ends in' : 'Resets in'} ${esc(span(Date.parse(o.expires) - now))}</div>
         <div class="cal-dates">${esc(when(Date.parse(o.expires)))}${price ? ` · ${price}` : ''}</div>
       </div>
     </article>`;
   };
-  // daily offers first (the free gift leading), then special offers, then the rest
+  // Daily offers first (the free gift leading), then special offers, then the rest.
   const nameOf = (o) => STORE.offers[o.offer]?.name || '';
   const groups = [
     ['Daily offers', timed.filter((o) => /^(FreeGift|Daily)_/.test(nameOf(o))).sort((a, b) =>
@@ -146,7 +148,7 @@ function renderShopOffers(now) {
     ['Other offers', timed.filter((o) => !/^(FreeGift|Daily|Special)_/.test(nameOf(o)))],
   ].filter(([, list]) => list.length);
   return `<section class="panel">
-    <div class="cal-head"><h2>Shop offers</h2><span class="muted small">From your save · daily offers reset at 18:00 UTC</span></div>
+    <div class="section-head"><h2>Shop offers</h2><span class="muted small">From your save · daily offers reset at 18:00 UTC</span></div>
     ${groups.map(([title, list]) => `<h3 class="shop-group">${title}</h3><div
       class="cal-cards shop-cards">${list.map(card).join('')}</div>`).join('')}
   </section>`;
@@ -159,7 +161,7 @@ function renderTickets(now) {
     const c = state?.currencies?.find((x) => x.id === id);
     const runs = soon.filter((r) => r.ev.currency === k && r.end > now);
     const users = [...new Set(runs.map((r) => r.ev.name || r.ev.id))].slice(0, 3);
-    // icon of the current or next event using these tickets
+    // Icon of the current or next event using these tickets.
     const icon = RULES.currencyIcons?.[id] ? `/static/${RULES.currencyIcons[id]}` : runs[0] ? eventIcon(runs[0].ev) : null;
     // Between events the slot is idle; its old balance resets when the next event starts.
     const name = c?.name || 'Event tickets';
@@ -175,13 +177,16 @@ function renderTickets(now) {
 // Reward tree
 function rewardImg(r, ev) {
   const art = r.mini && BY_SLUG.get(r.mini)?.art;
-  const src = art ? `/static/${art}` : r.icon ? `/static/rewards/${encodeURIComponent(r.icon)}.webp` : eventIcon(ev);
-  return `<img class="${art ? 'mini-art' : ''}" src="${esc(src)}" alt="" data-fallback="${esc(eventIcon(ev))}">`;
+  const src = art ? `/static/${art}` : r.icon ? imageUrl('rewards', r.icon) : eventIcon(ev);
+  return `<img class="${art ? 'mini-art' : ''}" src="${esc(src)}" alt="" data-image-fallback="${esc(eventIcon(ev))}">`;
 }
-// an image that fails falls back once to data-fallback (the CSP blocks inline handlers)
+// An image that fails falls back once to data-image-fallback (the CSP blocks inline handlers).
 document.addEventListener('error', (e) => {
   const img = e.target;
-  if (img instanceof HTMLImageElement && img.dataset.fallback) { const f = img.dataset.fallback; delete img.dataset.fallback; img.src = f; }
+  if (!(img instanceof HTMLImageElement) || !img.dataset.imageFallback) return;
+  const fallback = img.dataset.imageFallback;
+  delete img.dataset.imageFallback;
+  img.src = fallback;
 }, true);
 /** Extra coin percentage from owned income bonuses. */
 function coinBonusPercent() {
@@ -193,16 +198,19 @@ function renderChallenges(ev) {
   if (!groups.length) return '';
   const count = groups.reduce((s, g) => s + g.challenges.length, 0);
   const steps = (c) => (c.steps.length > 1
-    ? `<span class="ch-steps">${c.steps.map((x) => `<span title="${esc(x.title)}">${fmt(x.target)} →
+    ? `<span class="challenge-steps">${c.steps.map((x) => `<span title="${esc(x.title)}">${fmt(x.target)} →
       ${fmt(x.tickets)}</span>`).join('')}</span>`
-    : c.steps[0] && c.steps[0].target > 1 ? `<span class="ch-steps"><span>${fmt(c.steps[0].target)} →
+    : c.steps[0] && c.steps[0].target > 1 ? `<span class="challenge-steps"><span>${fmt(c.steps[0].target)} →
       ${fmt(c.steps[0].tickets)}</span></span>` : '');
-  const item = (c) => `<li><span class="ch-title">${esc(c.title)}</span>${steps(c)}<b>${fmt(c.total)}</b></li>`;
-  const head = (g) => g.kind === 'daily' ? `Daily challenges · ${g.active} a day from ${g.poolSize}, about ${fmt(g.perDay)} tickets a day`
-    : g.kind === 'weekly' ? `Weekly challenge${g.challenges.length > 1 ? 's' : ''}` : `Event challenges · ${g.challenges.length}`;
+  const item = (c) => `<li><span class="challenge-title">${esc(c.title)}</span>${steps(c)}<b>${fmt(c.total)}</b></li>`;
+  const head = (g) => {
+    if (g.kind === 'daily') return `Daily challenges · ${g.active} a day from ${g.poolSize}, about ${fmt(g.perDay)} tickets a day`;
+    if (g.kind === 'weekly') return g.challenges.length > 1 ? 'Weekly challenges' : 'Weekly challenge';
+    return `Event challenges · ${g.challenges.length}`;
+  };
   return `<details class="tree-challenges" ${view.chOpen ? 'open' : ''}>
     <summary>Challenges <span class="muted small">${count} · ${fmt(ev.challengeTickets || 0)} tickets in total</span></summary>
-    ${groups.map((g) => `<h4>${head(g)}</h4><ul class="ch-list${g.kind === 'daily'
+    ${groups.map((g) => `<h4>${head(g)}</h4><ul class="challenge-list${g.kind === 'daily'
       ? ' pool' : ''}">${g.challenges.map(item).join('')}</ul>`).join('')}
   </details>`;
 }
@@ -217,8 +225,8 @@ function dailiesLeft(ev, now) {
 }
 
 /**
- * How a reward is shown. An owned cosmetic is replaced by its fallback, as in the game: avatars are checked against
- * the save; skins aren't in the save, so their replacement is only mentioned.
+ * How a reward is shown. As in the game, an owned cosmetic is replaced by its fallback. Avatars are checked against
+ * the save. Skins aren't in the save, so their replacement is only mentioned.
  */
 function rewardLook(ev) {
   const bonus = coinBonusPercent();
@@ -268,8 +276,8 @@ function goalButton(ev, plan) {
       title="You'll get a notification when you have ${fmt(goal.cost)} tickets">🔔 Goal set · remove</button>`;
   }
   const label = plan.targets.length === 1 ? plan.targets[0].label : `${plan.targets.length} rewards`;
-  return `<button class="chip small-chip tree-goal" data-tree-goal="set" data-cost="${plan.cost}"
-    data-label="${esc(label)}" title="Get a notification when you have ${fmt(plan.cost)} tickets">🔔 Notify me when I
+  return `<button class="chip small-chip tree-goal" data-tree-goal="set" data-tree-cost="${plan.cost}"
+    data-tree-label="${esc(label)}" title="Get a notification when you have ${fmt(plan.cost)} tickets">🔔 Notify me when I
     have enough tickets</button>`;
 }
 
@@ -278,11 +286,11 @@ function treePath(ev, plan, look) {
   const have = ticketBalance(ev);
   const dailies = dailiesLeft(ev, Date.now());
   const notes = [
-    `${plan.path.length} reward${plan.path.length === 1 ? '' : 's'} to claim`,
+    `${plural(plan.path.length, 'reward')} to claim`,
     have != null ? `you have ${fmt(have)} (${have >= plan.cost ? 'enough' : `${fmt(plan.cost - have)} short`})` : null,
     ev.challengeTickets != null ? `${plan.cost <= ev.challengeTickets
       ? 'fits within' : 'more than'} the ${fmt(ev.challengeTickets)} collectable` : null,
-    dailies ? `daily challenges still pay about ${fmt(dailies.tickets)} (${dailies.days} day${dailies.days === 1 ? '' : 's'} left)` : null,
+    dailies ? `daily challenges still pay about ${fmt(dailies.tickets)} (${plural(dailies.days, 'day')} left)` : null,
   ].filter(Boolean);
   const title = plan.targets.length === 1 ? `Cheapest path to ${esc(plan.targets[0].label)}`
     : `Cheapest way to get all ${plan.targets.length} picks`;
@@ -348,8 +356,8 @@ function renderRewardTree(ev) {
       path: planner.order.filter((r) => best.take.includes(rewardKey(r))) }
     : null;
   return `<section class="panel cal-tree" id="calTree" style="--ev:var(--ev-${esc(ev.family)}, var(--ev-default))">
-    <div class="cal-head"><img class="tree-head-ico" src="${eventIcon(ev)}" alt=""><h2>${esc(ev.name || ev.id)} rewards</h2>
-      <button class="chip" data-cal-tree="" style="margin-left:auto">Close</button></div>
+    <div class="section-head"><img class="tree-head-ico" src="${eventIcon(ev)}" alt=""><h2>${esc(ev.name || ev.id)} rewards</h2>
+      <button class="chip" data-calendar-tree="" style="margin-left:auto">Close</button></div>
     ${treeTotals(ev, rewards)}
     <p class="muted small">Collectable means every challenge, random dailies and weeklies at their usual
       count${ev.family === 'darkmoon' ? ', plus tickets from guild mates' : ''}.
@@ -373,12 +381,12 @@ function eventCard(r, now) {
   return `<article class="cal-card" style="--ev:var(--ev-${esc(ev.family)}, var(--ev-default))">
     <img src="${eventIcon(ev)}" alt="">
     <div class="cal-name">${esc(ev.name || ev.id)}</div>
-    <div class="cal-when">${status}</div>
+    <div class="time-highlight">${status}</div>
     <div class="cal-dates">${r.unknown ? 'Dates not in the game files' : `${when(r.start)} – ${when(r.end)}`}</div>
     ${live || tickets != null || ev.rewards ? `<div class="cal-badges">
       ${live ? '<span class="cal-badge" title="Your game lists this event as running">Running in your game</span>' : ''}
       ${tickets != null ? `<span class="cal-badge tickets" title="As last saved by the game">${fmt(tickets)} tickets</span>` : ''}
-      ${ev.rewards ? `<button class="cal-badge tree-btn" data-cal-tree="${esc(ev.id)}"
+      ${ev.rewards ? `<button class="cal-badge tree-btn" data-calendar-tree="${esc(ev.id)}"
         aria-pressed="${view.tree === ev.id}">Rewards</button>` : ''}
     </div>` : ''}
   </article>`;
@@ -396,14 +404,14 @@ function timelineRange(now) {
 function renderCalendarTimeline(now) {
   const off = view.offset || 0;
   return `<section class="panel cal-timeline">
-    <div class="cal-head">
+    <div class="section-head">
       <h2 id="calRange">${esc(timelineRange(now))}</h2>
-      <button class="chip" data-cal-nav="0" title="Back to today in the middle" ${off ? '' : 'disabled'}>Today</button>
+      <button class="chip" data-calendar-nav="0" title="Back to today in the middle" ${off ? '' : 'disabled'}>Today</button>
       <span class="muted small">Wednesdays are highlighted because most events start and end on one.</span>
     </div>
     <div class="cal-slide-row">
       <span class="muted small">Earlier · later</span>
-      <input type="range" class="cal-slider keep" data-cal-slider min="${-TIMELINE_RANGE}" max="${TIMELINE_RANGE}"
+      <input type="range" class="cal-slider keep" data-calendar-slider min="${-TIMELINE_RANGE}" max="${TIMELINE_RANGE}"
         step="1" value="${off}" list="calTicks" aria-label="Move the timeline (days from today)">
       <datalist id="calTicks"><option value="0"></option></datalist>
     </div>
@@ -412,82 +420,99 @@ function renderCalendarTimeline(now) {
 }
 
 /** Full and short bar labels; CSS container queries show the one that fits. */
-const barLabel = (full, short) => `<span class="lb lb-full">${full}</span><span class="lb lb-short">${short}</span>`;
+const barLabel = (full, short) => `<span class="bar-label bar-label-full">${full}</span><span
+  class="bar-label bar-label-short">${short}</span>`;
 
-function renderTimelineBody(now) {
-  // TIMELINE_DAYS centered on today, shifted by the slider
+/** The days the timeline shows: TIMELINE_DAYS centered on today, shifted by the slider. */
+function timelineWindow(now) {
   const n = TIMELINE_DAYS;
   const today = new Date(now);
   const base = new Date(today.getFullYear(), today.getMonth(), today.getDate() - Math.floor(n / 2) + (view.offset || 0));
-  const dayAt = (i) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
-  const from = base.getTime();
-  const to = dayAt(n).getTime();
+  const dates = Array.from({ length: n + 1 }, (_, i) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + i));
+  const from = dates[0].getTime();
+  const to = dates.pop().getTime();
+  // A time's position across the timeline, in percent.
   const pct = (t) => ((Math.min(Math.max(t, from), to) - from) / (to - from)) * 100;
-  const runs = runsBetween(from, to);
-  // one row per event name, in alphabetical order so rows keep their place while the slider moves
+  return { n, today, dates, from, to, pct };
+}
+
+/** One row per event name, in alphabetical order so rows keep their place while the slider moves. */
+function eventRows(runs) {
   const byName = new Map();
-  for (const r of runs.sort((a, b) => a.start - b.start)) {
+  for (const r of runs.sort((x, y) => x.start - y.start)) {
     const key = r.ev.name || r.ev.id;
     if (!byName.has(key)) byName.set(key, { ev: r.ev, runs: [] });
     byName.get(key).runs.push(r);
   }
-  const rows = new Map([...byName].sort(([a], [b]) => a.localeCompare(b)));
-  const todayIn = now >= from && now < to;
-  const dates = Array.from({ length: n }, (_, i) => dayAt(i));
-  const isToday = (d) => d.toDateString() === today.toDateString();
-  const days = dates.map((d, i) => {
-    const cls = [d.getDay() === 3 ? 'wed' : '', isToday(d) ? 'today' : '',
-      i > 0 && d.getDate() === 1 ? 'm1' : ''].filter(Boolean).join(' ');
+  return [...byName].sort(([x], [y]) => x.localeCompare(y)).map(([, row]) => row);
+}
+
+function dayHeader(w) {
+  return w.dates.map((d, i) => {
+    const cls = [d.getDay() === 3 ? 'wednesday' : '', d.toDateString() === w.today.toDateString() ? 'today' : '',
+      i > 0 && d.getDate() === 1 ? 'month-start' : ''].filter(Boolean).join(' ');
     return `<span class="${cls}" title="${longDay(d)}">${d.getDate()}</span>`;
   }).join('');
-  // month labels spanning their days
+}
+
+/** Month labels spanning their days; short names where a month has only a few days showing. */
+function monthHeader(w) {
   const months = [];
-  dates.forEach((d, i) => {
+  w.dates.forEach((d, i) => {
     const last = months[months.length - 1];
     if (last && last.m === d.getMonth()) last.span++;
     else months.push({ m: d.getMonth(), y: d.getFullYear(), start: i + 1, span: 1 });
   });
-  const monthRow = months.map((x) => `<span class="${x.start > 1 ? 'm1' : ''}"
+  return months.map((x) => `<span class="${x.start > 1 ? 'month-start' : ''}"
     style="grid-column:${x.start} / span ${x.span}" title="${MONTH_NAMES[x.m]} ${x.y}">${x.span >= 6
     ? `${MONTH_NAMES[x.m]} ${x.y}` : MONTH_NAMES[x.m].slice(0, 3)}</span>`).join('');
-  const nowLine = todayIn ? `<span class="cal-now" style="left:${pct(now)}%"></span>` : '';
-  const bar = (r) => {
-    const left = pct(r.start), width = Math.max(pct(r.end) - left, 0.8);
-    const cls = ['cal-bar', r.end <= now ? 'past' : '', r.start < from ? 'cut-l' : '', r.end > to ? 'cut-r' : '',
-      r.start <= now && now < r.end && isLive(r.ev) ? 'live' : ''].filter(Boolean).join(' ');
-    return `<span class="${cls}" style="left:${left}%;width:${width}%"
-      title="${esc(r.ev.name
-      || r.ev.id)}: ${esc(when(r.start))} – ${esc(when(r.end))}">${barLabel(`${esc(dayOnly(r.start))} –
-      ${esc(dayOnly(r.end))}`, `${new Date(r.start).getDate()} – ${new Date(r.end).getDate()}`)}</span>`;
-  };
-  // rotation rows
-  const rotRows = (EVENTS.rotations || []).map((rot) => {
-    const segs = [];
-    for (let s = rotationAt(rot, from); s.start < to; s = rotationAt(rot, s.end)) segs.push(s);
-    const bars = segs.map((s) => {
-      const left = pct(s.start), width = pct(s.end) - left;
-      const ico = rotIcon(rot, s.item);
-      const cls = ['cal-bar', 'rot', ico ? 'has-ico' : '', s.end <= now ? 'past' : '', s.start < from ? 'cut-l' : '',
-        s.end > to ? 'cut-r' : ''].filter(Boolean).join(' ');
-      return `<span class="${cls}" style="left:${left}%;width:${width}%;--ev:${rotColor(rot, s.item)}"
-        title="${esc(rotationName(s.item))}: ${esc(when(s.start))} – ${esc(when(s.end))}">${ico}<span
-        class="lb lb-name">${esc(rotationName(s.item))}</span></span>`;
-    }).join('');
-    return `<div class="cal-row-label rot-row"><span>${esc(rot.label)}</span></div><div class="cal-track">${bars}${nowLine}</div>`;
+}
+
+/** The classes a bar gets for being over, or cut off by either edge. */
+const barEdges = (w, start, end, now) => [end <= now ? 'past' : '', start < w.from ? 'cut-l' : '', end > w.to ? 'cut-r' : ''];
+
+function eventBar(w, r, now) {
+  const left = w.pct(r.start), width = Math.max(w.pct(r.end) - left, 0.8);
+  const cls = ['cal-bar', ...barEdges(w, r.start, r.end, now), r.start <= now && now < r.end && isLive(r.ev) ? 'live' : '']
+    .filter(Boolean).join(' ');
+  const label = barLabel(`${esc(dayOnly(r.start))} – ${esc(dayOnly(r.end))}`,
+    `${new Date(r.start).getDate()} – ${new Date(r.end).getDate()}`);
+  return `<span class="${cls}" style="left:${left}%;width:${width}%"
+    title="${esc(r.ev.name || r.ev.id)}: ${esc(when(r.start))} – ${esc(when(r.end))}">${label}</span>`;
+}
+
+function rotationRow(w, rot, now, nowLine) {
+  const segments = [];
+  for (let seg = rotationAt(rot, w.from); seg.start < w.to; seg = rotationAt(rot, seg.end)) segments.push(seg);
+  const bars = segments.map((seg) => {
+    const left = w.pct(seg.start), width = w.pct(seg.end) - left;
+    const ico = rotIcon(rot, seg.item);
+    const cls = ['cal-bar', 'rotation-bar', ico ? 'has-ico' : '', ...barEdges(w, seg.start, seg.end, now)].filter(Boolean).join(' ');
+    return `<span class="${cls}" style="left:${left}%;width:${width}%;--ev:${rotColor(rot, seg.item)}"
+      title="${esc(rotationName(seg.item))}: ${esc(when(seg.start))} – ${esc(when(seg.end))}">${ico}<span
+      class="bar-label bar-label-name">${esc(rotationName(seg.item))}</span></span>`;
   }).join('');
-  return `${rows.size ? `<div class="cal-grid" style="--n:${n}">
-      <span></span><div class="cal-months">${monthRow}</div>
-      <span></span><div class="cal-days">${days}</div>
-      ${[...rows.values()].map((row) => `
+  return `<div class="cal-row-label rotation-row"><span>${esc(rot.label)}</span></div><div class="cal-track">${bars}${nowLine}</div>`;
+}
+
+function renderTimelineBody(now) {
+  const w = timelineWindow(now);
+  const rows = eventRows(runsBetween(w.from, w.to));
+  if (!rows.length) return '<p class="muted">No events in the game files for these days.</p>';
+  const nowLine = now >= w.from && now < w.to ? `<span class="cal-now" style="left:${w.pct(now)}%"></span>` : '';
+  return `<div class="cal-grid" style="--n:${w.n}">
+      <span></span><div class="cal-months">${monthHeader(w)}</div>
+      <span></span><div class="cal-days">${dayHeader(w)}</div>
+      ${rows.map((row) => `
         <div class="cal-row-label"><img src="${eventIcon(row.ev)}" alt=""><span>${esc(row.ev.name || row.ev.id)}</span></div>
         <div class="cal-track" style="--ev:var(--ev-${esc(row.ev.family)}, var(--ev-default))">
-          ${row.runs.map(bar).join('')}${nowLine}</div>`).join('')}
-      ${rotRows}
-    </div>` : '<p class="muted">No events in the game files for these days.</p>'}`;
+          ${row.runs.map((r) => eventBar(w, r, now)).join('')}${nowLine}</div>`).join('')}
+      ${(EVENTS.rotations || []).map((rot) => rotationRow(w, rot, now, nowLine)).join('')}
+    </div>`;
 }
 
 function renderCalendarRules() {
-  // one line per event name (some events have one definition per month)
+  // One line per event name (some events have one definition per month).
   const groups = new Map();
   for (const ev of EVENTS.events) {
     if (ev.schedule.kind === 'once') continue;
@@ -518,15 +543,18 @@ function renderCalendarRules() {
 export async function renderCalendar() {
   const page = $('#tab-calendar');
   if (!page) return;
-  try { await loadEvents(); await loadStore(); } catch {
-    page.innerHTML = '<div class="panel muted">Could not load the event schedule (static/events.json).</div>';
+  try {
+    await loadEvents();
+    await loadStore();
+  } catch (err) {
+    page.innerHTML = `<div class="panel muted">${esc(err.message)}</div>`;
     return;
   }
   if (ui.tab !== 'calendar') return;
   const now = Date.now();
   const soon = runsBetween(now - 60 * DAY, now + 60 * DAY);
   const running = soon.filter((r) => r.start <= now && now < r.end).sort((a, b) => a.end - b.end);
-  // running events not covered by the schedule rules
+  // Running events not covered by the schedule rules.
   for (const id of state?.activeEvents || []) {
     if (running.some((r) => r.ev.saveId === id)) continue;
     const ev = EVENTS.events.find((e) => e.saveId === id);
@@ -539,7 +567,7 @@ export async function renderCalendar() {
   page.innerHTML = `
     ${renderTickets(now)}
     <section class="panel">
-      <div class="cal-head"><h2>Running now</h2>
+      <div class="section-head"><h2>Running now</h2>
         ${state?.activeEventsAt ? `<span class="muted small">Your game last reported its events
           ${esc(ago(state.activeEventsAt))}</span>` : ''}</div>
       ${running.length ? `<div class="cal-cards">${running.map((r) => eventCard(r, now)).join('')}</div>`
@@ -549,7 +577,7 @@ export async function renderCalendar() {
     ${renderShopOffers(now)}
     ${renderRotations(now)}
     <section class="panel">
-      <div class="cal-head"><h2>Coming up</h2><span class="muted small">Next 60 days</span></div>
+      <div class="section-head"><h2>Coming up</h2><span class="muted small">Next 60 days</span></div>
       ${upcoming.length ? `<div class="cal-cards">${upcoming.map((r) => eventCard(r, now)).join('')}</div>`
         : '<p class="muted">Nothing scheduled in the next 60 days.</p>'}
     </section>
@@ -560,7 +588,7 @@ export async function renderCalendar() {
 
 export function bindCalendar() {
   const page = $('#tab-calendar');
-  // a click picks one reward and a second click clears it; Ctrl+click adds or removes it from the picks
+  // A click picks one reward and a second click clears it; Ctrl+click adds or removes it from the picks.
   const pick = (el, multi) => {
     const k = el.dataset.treePick;
     const picks = view.picks || [];
@@ -579,9 +607,9 @@ export function bindCalendar() {
       const set = goalEl.dataset.treeGoal === 'set';
       try {
         await post('/api/plans', { account: state.account, eventId: view.tree,
-          plan: set ? { cost: Number(goalEl.dataset.cost), label: goalEl.dataset.label } : null });
+          plan: set ? { cost: Number(goalEl.dataset.treeCost), label: goalEl.dataset.treeLabel } : null });
         state.plans = { ...(state.plans || {}) };
-        if (set) state.plans[view.tree] = { cost: Number(goalEl.dataset.cost), label: goalEl.dataset.label };
+        if (set) state.plans[view.tree] = { cost: Number(goalEl.dataset.treeCost), label: goalEl.dataset.treeLabel };
         else delete state.plans[view.tree];
         renderCalendar();
       } catch (err) { goalEl.textContent = `Not saved. ${err.message}`; }
@@ -589,32 +617,32 @@ export function bindCalendar() {
     }
     const pickEl = e.target.closest('[data-tree-pick]');
     if (pickEl) return pick(pickEl, e.ctrlKey || e.metaKey);
-    const treeBtn = e.target.closest('[data-cal-tree]');
+    const treeBtn = e.target.closest('[data-calendar-tree]');
     if (treeBtn) {
-      const id = treeBtn.dataset.calTree;
+      const id = treeBtn.dataset.calendarTree;
       view.tree = id && view.tree !== id ? id : null;
       view.picks = [];
       await renderCalendar();
       if (view.tree) $('#calTree')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-    const nav = e.target.closest('[data-cal-nav]');
+    const nav = e.target.closest('[data-calendar-nav]');
     if (!nav) return;
-    const step = Number(nav.dataset.calNav);
+    const step = Number(nav.dataset.calendarNav);
     if (step === 0) view.offset = 0;
     renderCalendar();
   });
   page.addEventListener('input', (e) => {
-    if (!e.target.matches('[data-cal-slider]')) return;
+    if (!e.target.matches('[data-calendar-slider]')) return;
     view.offset = Number(e.target.value);
     const now = Date.now();
     $('.cal-timeline .cal-body').innerHTML = renderTimelineBody(now);
     $('#calRange').textContent = timelineRange(now);
-    $('.cal-timeline [data-cal-nav="0"]').disabled = !view.offset;
+    $('.cal-timeline [data-calendar-nav="0"]').disabled = !view.offset;
   });
-  // remember whether the challenge list is open across redraws
+  // Remember whether the challenge list is open across redraws.
   page.addEventListener('toggle', (e) => { if (e.target.classList?.contains('tree-challenges')) view.chOpen = e.target.open; }, true);
-  // refresh the countdowns, except while the slider is in use
+  // Refresh the countdowns, except while the slider is in use.
   setInterval(() => { if (ui.tab === 'calendar' && !document.hidden
-    && !document.activeElement?.matches('[data-cal-slider]')) renderCalendar(); }, 30000);
+    && !document.activeElement?.matches('[data-calendar-slider]')) renderCalendar(); }, 30 * SECOND);
 }

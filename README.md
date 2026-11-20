@@ -117,7 +117,7 @@ whose licenses are in `THIRD-PARTY-NOTICES` in the zip.
 ## For developers
 
 The tracker is plain Node.js (no npm packages): a local server that reads the game's save and a page it serves on this
-PC only. Run it from source with Node.js 20 or newer on Windows:
+PC only. Run it from source with Node.js 22 or newer on Windows:
 
 ```
 npm run fetch-gamedata
@@ -142,7 +142,7 @@ folder, or to the folder in `RUMBLE_DATA_DIR`.
 | `server/game/` | The save: reading it from the registry (`prefs.mjs`), decoding it (`protobuf.mjs`, `model.mjs`), currency names, PvP match results and whether the game runs (`watch.mjs`) |
 | `server/notifications/` | What's due (`notify.mjs`), sending it (`runner.mjs`) and the Windows notification itself (`toast.mjs`) |
 | `server/datapack/` | Signed game-data updates (`datapack.mjs`), when to check (`checker.mjs`), the first start's download (`firstrun.mjs`) and the accepted public keys |
-| `web/` | The page. `scripts/app.js` starts it and switches tabs, `core.js` holds what the modules share, and each tab, dialog and menu has its own module. `scripts/lib/` has the code the server uses too: formatting, schedules, PvP seasons, input limits and the reward-tree planner |
+| `web/` | The page. `scripts/app.js` starts it and switches tabs, `core.js` holds what the modules share, and each tab, dialog and menu has its own module. `scripts/lib/` has the code the server and build tools use too: shared names and units, formatting, schedules, PvP seasons, input limits and the reward-tree planner |
 | `gamedata/` | Game data and art (© Blizzard, see NOTICE), served as `/static/…`. Not in the repository; `npm run fetch-gamedata` fills it |
 | `desktop/` | The exe's launcher (`launcher.cjs`), the tray icon (`tray.ps1`), Windows integration (`integration.ps1`) and the icon |
 | `tools/` | Downloading game data (`fetch_gamedata.mjs`), building the release (`build_release.mjs`, Node.js 25.5+) and the style check (`check_style.mjs`) |

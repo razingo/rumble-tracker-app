@@ -1,9 +1,10 @@
-// Whether Warcraft Rumble is running, without starting a process per check: one PowerShell process looks every
+// Whether Warcraft Rumble is running, without starting a process per check. One PowerShell process looks every
 // 2 seconds and writes "1" or "0" when it changes. It exits with the tracker.
 import { spawn, execFile } from 'node:child_process';
 
 import { POWERSHELL, TASKLIST } from '../system.mjs';
 import { host } from '../host.mjs';
+import { SECOND } from '../../web/scripts/lib/constants.js';
 const GAME = 'WarcraftRumble';
 
 const SCRIPT = `
@@ -51,7 +52,10 @@ export function watchGame(onChange, onFail = () => {}) {
         if (v !== '0' && v !== '1') continue;
         failures = 0;
         const running = v === '1';
-        if (running !== state) { state = running; onChange(running); }
+        if (running !== state) {
+          state = running;
+          onChange(running);
+        }
       }
     });
     let done = false;
@@ -60,7 +64,7 @@ export function watchGame(onChange, onFail = () => {}) {
       done = true;
       state = null;
       if (++failures >= 3) return onFail(`the game watcher stopped (${why})`);
-      setTimeout(start, 5000);
+      setTimeout(start, 5 * SECOND);
     };
     child.on('error', (e) => stopped(e.message));
     child.on('exit', (code) => stopped(`exit ${code}`));

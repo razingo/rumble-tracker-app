@@ -10,15 +10,31 @@ import { loadUserData } from '../server/userdata.mjs';
 export const varint = (n) => {
   let v = BigInt(n);
   const out = [];
-  do { let b = Number(v & 0x7fn); v >>= 7n; if (v) b |= 0x80; out.push(b); } while (v);
+  do {
+    let b = Number(v & 0x7fn);
+    v >>= 7n;
+    if (v) b |= 0x80;
+    out.push(b);
+  } while (v);
   return Buffer.from(out);
 };
 export const tag = (fn, wt) => varint((fn << 3) | wt);
 export const int = (fn, n) => Buffer.concat([tag(fn, 0), varint(n)]);
-export const msg = (fn, ...parts) => { const body = Buffer.concat(parts); return Buffer.concat([tag(fn, 2), varint(body.length), body]); };
-export const fixed64 = (fn, n) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(n)); return Buffer.concat([tag(fn, 1), b]); };
+export const msg = (fn, ...parts) => {
+  const body = Buffer.concat(parts);
+  return Buffer.concat([tag(fn, 2), varint(body.length), body]);
+};
+export const fixed64 = (fn, n) => {
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64LE(BigInt(n));
+  return Buffer.concat([tag(fn, 1), b]);
+};
 export const str = (fn, s) => msg(fn, Buffer.from(s, 'utf8'));
-export const double = (fn, n) => { const b = Buffer.alloc(8); b.writeDoubleLE(n); return Buffer.concat([tag(fn, 1), b]); };
+export const double = (fn, n) => {
+  const b = Buffer.alloc(8);
+  b.writeDoubleLE(n);
+  return Buffer.concat([tag(fn, 1), b]);
+};
 export const id = (fn, a, b) => msg(fn, fixed64(1, a), fixed64(2, b));
 export const hexId = (a, b) => a.toString(16).padStart(16, '0') + b.toString(16).padStart(16, '0');
 
@@ -42,8 +58,8 @@ export const MINIS = [{ slug: 'kobold-miner', name: 'Kobold Miner' }, { slug: 'f
 export const PVP = { victoryPoints: { base: 80, win: 2, loss: 1 } };
 
 /**
- * A context in a new temporary folder, with tables and user data loaded. files: extra files to create first
- * ({ 'names.json': {...} } in the data folder). Returns { ctx, dir, cleanup() }.
+ * A context in a new temporary folder, with tables and user data loaded. `files` are extra files to create first, as
+ * { 'names.json': {...} } in the data folder. Returns { ctx, dir, cleanup() }.
  */
 export async function testContext({ files = {}, standalone = false, storeLog = false } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'rumble-ctx-'));

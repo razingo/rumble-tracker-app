@@ -55,7 +55,7 @@ export function parseCurrencies(buf) {
 }
 
 /**
- * Events the game currently runs, from StoreState: the store's dynamic offers carry a list
+ * Events the game currently runs. In StoreState, the store's dynamic offers carry a list
  * f16 = { 1: ?, 2: event definition id }. Returns unique definition ids.
  */
 export function parseActiveEvents(buf) {
@@ -88,7 +88,7 @@ export function parseIncomeBonuses(buf) {
 }
 
 const timeOf = (buf, f) => {
-  // time: { 1: fixed64 milliseconds }
+  // a time is { 1: fixed64 milliseconds }
   if (!f || f.wt !== 2) return null;
   const t = first(sub(buf, f), 1);
   const ms = t && t.wt === 1 ? Number(t.u64) : 0;
@@ -133,13 +133,17 @@ export function parseStore(buf) {
 }
 
 /**
- * StoreState fields as JSON for the diagnostic change log, excluding the G.R.I.D. rows (f2): IDs as hex, times as
- * ISO strings, text omitted. Keyed by "f<n>" or "f<n>:<offer id>".
+ * StoreState fields as JSON for the diagnostic change log, without the G.R.I.D. rows (f2). IDs are hex, times ISO
+ * strings, and text is left out. Keyed by "f<n>" or "f<n>:<offer id>".
  */
 export function storeFieldsForLog(buf) {
   if (!buf || !buf.length) return {};
   const decode = (s, e, depth) => {
-    let f; try { f = parseMessage(buf, s, e); } catch { return '<bytes>'; }
+    let f; try {
+      f = parseMessage(buf, s, e);
+    } catch {
+      return '<bytes>';
+    }
     if (f.length === 2 && f.every((x) => x.wt === 1)) return f[0].u64.toString(16).padStart(16, '0')
       + f[1].u64.toString(16).padStart(16, '0');
     if (f.length === 1 && f[0].fn === 1 && f[0].wt === 1) {

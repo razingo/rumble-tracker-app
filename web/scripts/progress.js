@@ -1,7 +1,8 @@
 // Progress tab: daily income from the lifetime totals, level growth, and when every owned mini could be legendary.
 // The history comes from the server (progress.json).
 import { $, RULES, state } from './core.js';
-import { HOUR, DAY, esc, fmt, dateTime, dayWithYear, span } from './lib/format.js';
+import { HOUR, DAY } from './lib/constants.js';
+import { esc, fmt, dateTime, dayWithYear, span } from './lib/format.js';
 import { balance, curName, remainingToLegendary } from './units.js';
 
 const MIN_SPAN = 12 * HOUR; // minimum history for rates
@@ -45,11 +46,11 @@ function barChart(data, color, unit) {
   const bars = data.map((d, i) => {
     const h = Math.max(1, (d.value / max) * (H - 24));
     const x = pad + i * ((W - pad) / data.length);
-    return `<g class="pg-bar"><rect x="${x}" y="${H - h}" width="${bw}" height="${h}" rx="3" fill="${color}"/>
+    return `<g class="progress-bar"><rect x="${x}" y="${H - h}" width="${bw}" height="${h}" rx="3" fill="${color}"/>
       <rect class="hit" x="${x - 1}" y="0" width="${bw + 2}" height="${H}" fill="transparent"><title>${esc(d.day)}:
         ${fmt(Math.round(d.value))} ${unit}</title></rect></g>`;
   }).join('');
-  return `<svg class="pg-chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${esc(unit)} per day">
+  return `<svg class="chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${esc(unit)} per day">
     <line x1="${pad}" y1="${H}" x2="${W}" y2="${H}" class="axis"/>
     <text x="${pad - 4}" y="12" class="tick" text-anchor="end">${fmt(Math.round(max))}</text>
     <text x="${pad - 4}" y="${H}" class="tick" text-anchor="end">0</text>
@@ -66,7 +67,7 @@ function lineChart(data, color, unit) {
   const x = (i) => pad + (i / (data.length - 1)) * (W - pad - 6);
   const y = (v) => 8 + (1 - (v - lo) / range) * (H - 16);
   const path = data.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d.value).toFixed(1)}`).join(' ');
-  return `<svg class="pg-chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${esc(unit)} over time">
+  return `<svg class="chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${esc(unit)} over time">
     <line x1="${pad}" y1="${H}" x2="${W}" y2="${H}" class="axis"/>
     <text x="${pad - 4}" y="12" class="tick" text-anchor="end">${fmt(hi)}</text>
     <text x="${pad - 4}" y="${H}" class="tick" text-anchor="end">${fmt(lo)}</text>
@@ -113,8 +114,8 @@ export function renderProgress() {
   const slowest = proj.filter((r) => r.left > 0).sort((a, b) => b.days - a.days)[0];
   const levelsWeek = rateOf((p) => p.lv);
   page.innerHTML = `
-    <section class="panel pg-head">
-      <h2>Progress &amp; projections</h2>
+    <section class="panel progress-head">
+      <h2>Progress</h2>
       <span class="muted small">${since
         ? `History since ${esc(dateTime(since))}, from the game's lifetime totals: days without the tracker count too.`
         : 'History starts with the next scan.'}
@@ -128,12 +129,13 @@ export function renderProgress() {
     </div>
     <section class="panel">
       <h2>All minis legendary</h2>
-      ${slowest ? `<p class="pg-hero">${!enough ? '<b>Not enough history yet</b> for a date'
+      ${slowest ? `<p class="progress-hero">${!enough ? '<b>Not enough history yet</b> for a date'
         : isFinite(slowest.days) ? `About <b>${esc(whenText(slowest.days))}</b> at the current pace`
           : `<b>No date yet.</b> No ${esc(slowest.label)} was earned in the last 7 days.`}
-        <span class="muted small">· slowest: ${esc(slowest.label)}</span></p>` : '<p class="pg-hero"><b>Done.</b> ' +
+        <span class="muted small">· slowest: ${esc(slowest.label)}</span></p>` : '<p class="progress-hero"><b>Done.</b> ' +
           'Every owned mini is legendary.</p>'}
-      <table class="pg-table"><thead><tr><th>Still needed</th><th>Amount</th><th>Income per day</th><th>Done by</th></tr></thead><tbody>
+      <table class="progress-table"><thead>
+        <tr><th>Still needed</th><th>Amount</th><th>Income per day</th><th>Done by</th></tr></thead><tbody>
         ${proj.map((r) => `<tr${r === slowest ? ' class="slowest"'
           : ''}><td>${esc(r.label)}</td><td>${fmt(Math.round(r.left))}</td><td>${r.rate == null
           ? '–' : fmt(Math.round(r.rate))}</td><td>${enough || r.left === 0 ? esc(whenText(r.days)) : '–'}</td></tr>`).join('')}
@@ -141,7 +143,7 @@ export function renderProgress() {
       <p class="muted small">For owned minis only, this is what legendary still needs, minus what you have, divided by your income over the
         last 7 days. Cores bought with coins aren't counted.</p>
     </section>
-    <div class="pg-charts">
+    <div class="progress-charts">
       <section class="panel"><h2>${esc(curName('coins'))} earned per day</h2>${barChart(dailyDeltas((p) =>
         lifetimeOf(p, 'coins')), 'var(--gold-2)', curName('coins'))}</section>
       <section class="panel"><h2>${esc(curName('arcEnergy'))} earned per day</h2>${barChart(dailyDeltas((p) =>

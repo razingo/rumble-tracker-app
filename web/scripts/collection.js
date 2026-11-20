@@ -4,6 +4,7 @@ import { familiesOf } from './army.js';
 import { $, store, RULES, MINIS, TAG_ICONS, state, GRID_CURRENCY_IDS, ANKH_ID } from './core.js';
 import { ico } from './drawer.js';
 import { esc, fmt, ago } from './lib/format.js';
+import { traitPicker, bindTraitPicker } from './trait-picker.js';
 import { rarityName, rarityColor, miniOf, unitName, balance, curName, coreName, nextUpgrade, talentSlots,
   effectivePicks, isLeader, armyOf, hasBoost, totalLevel, armyTotals, remainingToLegendary } from './units.js';
 
@@ -25,7 +26,7 @@ export function currencyChip(c) {
 }
 
 export function renderCurrencies() {
-  // event tickets, Ankh and G.R.I.D. currencies are on other tabs
+  // Event tickets, Ankh and G.R.I.D. currencies are on other tabs.
   const named = state.currencies.filter((c) => c.name && !c.slot && !GRID_CURRENCY_IDS.includes(c.id) && c.id !== ANKH_ID);
   const order = ['coins', 'arcEnergy', 'rareCore', 'epicCore', 'legendaryCore', 'valor'].map((r) => RULES.currencyIds[r]);
   named.sort((a, b) => (order.indexOf(a.id) + 1 || 99) - (order.indexOf(b.id) + 1 || 99));
@@ -38,8 +39,12 @@ export function renderSummary() {
   const ready = units.filter((u) => nextUpgrade(u)?.ready).length;
   const openSlots = units.reduce((n, u) => n + Math.max(0, talentSlots(u) - u.talents), 0);
   const picksMissing = units.filter((u) => u.talents > effectivePicks(u).length).length;
-  const toLeg = units.reduce((acc, u) => { const r = remainingToLegendary(u); acc.arcEnergy += r.arcEnergy;
-    for (const [k, v] of Object.entries(r.cores)) acc.cores[k] = (acc.cores[k] || 0) + v; return acc; }, { arcEnergy: 0, cores: {} });
+  const toLeg = { arcEnergy: 0, cores: {} };
+  for (const u of units) {
+    const r = remainingToLegendary(u);
+    toLeg.arcEnergy += r.arcEnergy;
+    for (const [k, v] of Object.entries(r.cores)) toLeg.cores[k] = (toLeg.cores[k] || 0) + v;
+  }
   const coresText = Object.entries(toLeg.cores).map(([k, v]) => `${v} ${coreName(k).replace(/ Upgrade Core$/, '')}`).join(', ') || 'none';
   $('#summary').innerHTML = [
     ['Minis owned', `${units.length} / ${MINIS.length}`, `${identified} identified`],
@@ -84,12 +89,12 @@ export function renderNeeds() {
         <span class="small">${rarityName(u.rarity)} · level ${totalLevel(u)} · XP level
           ${u.xpLevel}${u.xpLevel < RULES.maxXpLevel ? ` (${u.xp}/${u.xpNeeded})` : ' (max)'} · ${u.stars}
           stars${ev ? ` · last change: ${esc(eventText(ev))} ${ago(ev.t)}` : ''}</span></div>
-      <select class="keep" data-name-unit="${u.id}">${miniOptions(null)}</select>
-      <button class="btn" data-save-unit="${u.id}">Save</button></div>`);
+      <select class="keep" data-unit-name="${u.id}">${miniOptions(null)}</select>
+      <button class="btn" data-unit-save="${u.id}">Save</button></div>`);
   }
   if (unknownUnits.length > 12) rows.push(`<div class="row small">…and ${unknownUnits.length - 12} more. Level up or
     upgrade a mini in the game and it moves to the top, ready to name.</div>`);
-  // shown only when something needs naming
+  // Shown only when something needs naming.
   $('#needs').hidden = rows.length === 0;
   $('#needs').innerHTML = rows.length ? `<h2>Needs your input (${unknownUnits.length})</h2>${rows.join('')}` : '';
 }
@@ -102,7 +107,7 @@ function planArt(u) {
 }
 
 function planRow(u, pct, label, togo, togoUnit, extra = '') {
-  return `<button class="plan-row" style="--rc:${rarityColor(u.rarity)}" data-open-unit="${u.id}">
+  return `<button class="plan-row" style="--rc:${rarityColor(u.rarity)}" data-unit-open="${u.id}">
     ${planArt(u)}
     <div><b>${esc(unitName(u))}</b> <span class="small">${esc(label)}</span>
       <div class="bar${togoUnit === 'stars' ? ' stars' : ''}"><span style="width:${pct}%"></span></div>${extra}</div>
@@ -111,7 +116,7 @@ function planRow(u, pct, label, togo, togoUnit, extra = '') {
 }
 
 export function renderPlanner() {
-  // the type and faction filters apply here; the trait filters only affect the grid
+  // The type and faction filters apply here; the trait filters only affect the grid.
   const pool = state.units.filter((u) => !u.synthetic && passes(miniOf(u), 'traits'));
   const narrowed = view.filters.types.length + view.filters.families.length > 0;
 
@@ -120,7 +125,7 @@ export function renderPlanner() {
     .map((u) => ({ u, pct: u.xp / u.xpNeeded, togo: u.xpNeeded - u.xp }))
     .sort((a, b) => b.pct - a.pct || a.togo - b.togo)
     .slice(0, PLAN_SIZE);
-  // one row per list until "Show more" opens up to PLAN_SIZE
+  // One row per list until "Show more" opens up to PLAN_SIZE.
   const expanded = !!view.planExpanded;
 
   const byStars = pool
@@ -158,7 +163,7 @@ export function renderPlanner() {
       <div><h3>Next level (XP)</h3>${xpHtml || empty('Every mini here is at XP level 20.')}</div>
       <div><h3>Next rarity (stars)</h3>${starsHtml || empty('Every mini here is Legendary.')}</div>
     </div>
-    ${moreAvailable ? `<div class="planner-more"><button class="chip" data-plan-toggle
+    ${moreAvailable ? `<div class="planner-more"><button class="chip" data-planner-toggle
       aria-expanded="${expanded}">${expanded ? 'Show less ▴' : `Show more (top ${PLAN_SIZE}) ▾`}</button></div>` : ''}`;
 }
 
@@ -213,53 +218,31 @@ export function renderFilters() {
   const typeChips = TYPES
     .filter(([k]) => k !== 'unknown' || state.units.some((u) => !u.slug))
     .map(([k, label]) => `<button class="chip" aria-pressed="${f.types.includes(k)}"
-      data-f-type="${k}">${label}<small>${count('types', (m) => (m ? m.category : 'unknown') === k)}</small></button>`)
+      data-filter-type="${k}">${label}<small>${count('types', (m) => (m ? m.category : 'unknown') === k)}</small></button>`)
     .join('');
 
   const famChips = FAMILIES
     .map((fam) => `<button class="chip" aria-pressed="${f.families.includes(fam)}"
-      data-f-family="${fam}">${ico(TAG_ICONS[fam], fam)}${fam}<small>${count('families',
+      data-filter-family="${fam}">${ico(TAG_ICONS[fam], fam)}${fam}<small>${count('families',
       (m) => !!m && familiesOf(m).includes(fam))}</small></button>`)
     .join('');
 
   const traits = allTraits();
   const traitCount = (name) => count('traits', (m) => !!m && m.traits.some((t) => t.name === name));
-  // the trait picker lists the match mode first, then the chosen traits
-  const opt = (t) => `<label class="trait-opt" data-trait-name="${esc(t.name.toLowerCase())}">
-      <input type="checkbox" data-f-trait-box="${esc(t.name)}" ${f.traits.includes(t.name) ? 'checked' : ''}>
-      ${ico(t.icon, t.name)}<span>${esc(t.name)}</span><small>${traitCount(t.name)}</small></label>`;
-  const ticked = traits.filter((t) => f.traits.includes(t.name));
-  const rest = traits.filter((t) => !f.traits.includes(t.name));
-  const any = f.traitMode === 'any';
-  const popup = view.traitPickerOpen ? `<div class="trait-pop" role="dialog" aria-label="Traits">
-      <div class="trait-pop-head">
-        <span class="seg"><button class="chip small-chip" aria-pressed="${!any}" data-trait-mode="all"
-          title="Minis with every selected trait">Match all</button><button class="chip small-chip"
-          aria-pressed="${any}" data-trait-mode="any" title="Minis with any selected trait">Match any</button></span>
-        ${f.traits.length ? '<button class="chip small-chip" data-clear-traits>Clear</button>' : ''}
-      </div>
-      <input class="trait-search" type="search" placeholder="Search traits…" value="${esc(view.traitSearch)}">
-      <div class="trait-list">${ticked.map(opt).join('')}${ticked.length && rest.length
-        ? '<hr class="trait-sep">' : ''}${rest.map(opt).join('')}</div>
-    </div>` : '';
+  const picker = traitPicker({
+    scope: 'collection', traits, filter: f, open: view.traitPickerOpen, query: view.traitSearch, count: traitCount,
+    label: f.traits.length ? `${f.traits.length} selected` : 'Choose traits', buttonClass: 'chip picker-btn',
+  });
 
   $('#filters').innerHTML = `
     <div class="filter-row"><span class="filter-label">Type</span><div class="chips">${typeChips}</div></div>
     <div class="filter-row"><span class="filter-label">Faction</span><div class="chips">${famChips}</div></div>
     <div class="filter-row"><span class="filter-label">Traits</span>
       <div class="chips">
-        <span class="trait-anchor"><button class="chip picker-btn" aria-expanded="${view.traitPickerOpen}"
-          aria-pressed="${f.traits.length > 0}" data-trait-picker>${f.traits.length ? `${f.traits.length} selected` : 'Choose traits'}
-          ▾</button>${popup}</span>
+        ${picker}
       </div>
-      <button class="chip clear-filters" data-clear-filters ${filtersActive() ? '' : 'disabled'}>✕ Clear filters</button>
+      <button class="chip clear-filters" data-filter-clear ${filtersActive() ? '' : 'disabled'}>✕ Clear filters</button>
     </div>`;
-  applyTraitSearch();
-}
-
-function applyTraitSearch() {
-  const q = view.traitSearch.trim().toLowerCase();
-  for (const el of document.querySelectorAll('#filters .trait-opt')) el.hidden = !!q && !el.dataset.traitName.includes(q);
 }
 
 /** Card frame class for the mini's family (theme-art.css). */
@@ -268,7 +251,7 @@ const frameCls = (m) => `frame-${String(m?.family || 'neutral').toLowerCase()}`;
 function cardForUnit(u) {
   const m = miniOf(u);
   if (u.synthetic) {
-    return `<button class="card ${frameCls(m)}" data-open-unit="${u.id}">
+    return `<button class="card ${frameCls(m)}" data-unit-open="${u.id}">
       <img class="art" src="/static/${m.art}" alt="" loading="lazy">
       <div class="name">${esc(m.name)}</div>
       <div class="meta">${m.category} · ${esc(m.family)}</div>
@@ -289,7 +272,7 @@ function cardForUnit(u) {
   const xpPct = u.xpLevel >= RULES.maxXpLevel ? 100 : Math.round((u.xp / Math.max(1, u.xpNeeded)) * 100);
   const starsTxt = up ? `${u.stars}/${up.stars} stars` : 'Max rarity';
   const starsPct = up ? Math.min(100, Math.round((u.stars / up.stars) * 100)) : 100;
-  return `<button class="card ${frameCls(m)}${isLeader(u) ? ' leader' : ''}" style="--rc:${rarityColor(u.rarity)}" data-open-unit="${u.id}">
+  return `<button class="card ${frameCls(m)}${isLeader(u) ? ' leader' : ''}" style="--rc:${rarityColor(u.rarity)}" data-unit-open="${u.id}">
     ${m ? `<img class="art" src="/static/${m.art}" alt="" loading="lazy">` : '<div class="art unknown">?</div>'}
     <div class="lvl">${totalLevel(u)}<small>level</small></div>
     <div class="name">${esc(unitName(u))}</div>
@@ -316,7 +299,7 @@ function armyStrip(u) {
 }
 
 function cardForMissing(m) {
-  return `<button class="card missing ${frameCls(m)}" data-open-mini="${m.slug}">
+  return `<button class="card missing ${frameCls(m)}" data-mini-open="${m.slug}">
     <img class="art" src="/static/${m.art}" alt="" loading="lazy">
     <div class="name">${esc(m.name)}</div>
     <div class="meta">${m.category} · ${esc(m.family)}</div>
@@ -368,10 +351,9 @@ export function renderEvents() {
     : '<li class="muted">No changes yet. Play a battle or upgrade a mini and it shows up here.</li>';
 }
 
-// what a click on the Collection tab can act on: the filters, the trait picker and the planner
+// What a click on the Collection tab can act on: the filters, the trait picker and the planner.
 const CLICKABLE = [
-  'data-f-type', 'data-f-family', 'data-f-trait', 'data-trait-picker', 'data-trait-mode', 'data-clear-traits',
-  'data-clear-filters', 'data-plan-toggle',
+  'data-filter-type', 'data-filter-family', 'data-filter-trait', 'data-filter-clear', 'data-planner-toggle',
 ].map((a) => `[${a}]`).join(',');
 
 export function bindCollection() {
@@ -383,56 +365,64 @@ export function bindCollection() {
     renderFilters();
     renderGrid();
   });
-  $('#sort').addEventListener('change', (e) => { view.sort = e.target.value; store.set('sort', view.sort); renderGrid(); });
-  const refilter = () => { saveFilters(); renderFilters(); renderPlanner(); renderGrid(); };
+  $('#sort').addEventListener('change', (e) => {
+    view.sort = e.target.value;
+    store.set('sort', view.sort);
+    renderGrid();
+  });
+  const refilter = () => {
+    saveFilters();
+    renderFilters();
+    renderPlanner();
+    renderGrid();
+  };
   document.addEventListener('click', (e) => {
-    if (view.traitPickerOpen && !e.target.closest('#filters .trait-pop,[data-trait-picker]')) {
-      view.traitPickerOpen = false;
-      renderFilters();
-    }
     const t = e.target.closest(CLICKABLE);
     if (!t) return;
-    if (t.hasAttribute('data-plan-toggle')) {
+    if (t.hasAttribute('data-planner-toggle')) {
       view.planExpanded = !view.planExpanded;
       store.set('planExpanded', view.planExpanded);
       renderPlanner();
     }
-    else if (t.dataset.fType) { toggleIn(view.filters.types, t.dataset.fType); refilter(); }
-    else if (t.dataset.fFamily) { toggleIn(view.filters.families, t.dataset.fFamily); refilter(); }
-    else if (t.dataset.fTrait) { toggleIn(view.filters.traits, t.dataset.fTrait); refilter(); }
-    else if (t.hasAttribute('data-trait-picker')) {
-      view.traitPickerOpen = !view.traitPickerOpen;
-      view.traitSearch = '';
-      renderFilters();
-      if (view.traitPickerOpen) $('#filters .trait-search')?.focus();
+    else if (t.dataset.filterType) {
+      toggleIn(view.filters.types, t.dataset.filterType);
+      refilter();
     }
-    else if (t.dataset.traitMode) { view.filters.traitMode = t.dataset.traitMode; refilter(); }
-    else if (t.hasAttribute('data-clear-traits')) { view.filters.traits = []; refilter(); }
-    else if (t.hasAttribute('data-clear-filters')) {
+    else if (t.dataset.filterFamily) {
+      toggleIn(view.filters.families, t.dataset.filterFamily);
+      refilter();
+    }
+    else if (t.dataset.filterTrait) {
+      toggleIn(view.filters.traits, t.dataset.filterTrait);
+      refilter();
+    }
+    else if (t.hasAttribute('data-filter-clear')) {
       view.filters = { types: [], families: [], traits: [], traitMode: view.filters.traitMode };
       view.traitPickerOpen = false;
       refilter();
     }
   });
-  // Esc closes the trait picker (the side panel handles it first when open)
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !e.defaultPrevented && view.traitPickerOpen) { view.traitPickerOpen = false; renderFilters(); }
-  });
-  // in the trait picker, the search filters the list in place, and ticking a trait keeps the picker open
-  $('#filters').addEventListener('input', (e) => {
-    if (!e.target.matches('.trait-search')) return;
-    view.traitSearch = e.target.value;
-    applyTraitSearch();
-  });
-  $('#filters').addEventListener('change', (e) => {
-    const name = e.target.dataset?.fTraitBox;
-    if (!name) return;
-    toggleIn(view.filters.traits, name);
-    saveFilters();
-    const scroll = $('#filters .trait-list')?.scrollTop;
+  const show = (open) => {
+    view.traitPickerOpen = open;
+    view.traitSearch = '';
     renderFilters();
-    renderPlanner();
-    renderGrid();
-    if ($('#filters .trait-list')) $('#filters .trait-list').scrollTop = scroll || 0;
+  };
+  bindTraitPicker($('#filters'), 'collection', {
+    isOpen: () => view.traitPickerOpen,
+    toggle: () => show(!view.traitPickerOpen),
+    close: () => show(false),
+    mode: (mode) => {
+      view.filters.traitMode = mode;
+      refilter();
+    },
+    clear: () => {
+      view.filters.traits = [];
+      refilter();
+    },
+    tick: (name) => {
+      toggleIn(view.filters.traits, name);
+      refilter();
+    },
+    search: (text) => { view.traitSearch = text; },
   });
 }

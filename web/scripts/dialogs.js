@@ -12,8 +12,8 @@ function showDialog({ title, message, buttons }) {
   const run = () => new Promise((resolve) => {
     const dlg = $('#messageDialog');
     const paragraphs = String(message || '').split(/\n\s*\n/).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
-    dlg.innerHTML = `<form method="dialog" class="dlg-form msg-form">
-      ${title ? `<div class="dlg-head"><h2>${esc(title)}</h2></div>` : ''}
+    dlg.innerHTML = `<form method="dialog" class="dialog-form msg-form">
+      ${title ? `<div class="dialog-head"><h2>${esc(title)}</h2></div>` : ''}
       <div class="msg-body">${paragraphs}</div>
       <div class="msg-actions">${buttons.map((b, i) => `<button value="${i}"
         class="${b.primary ? `btn${b.danger ? ' danger' : ''}` : 'chip'}">${esc(b.label)}</button>`).join('')}</div>

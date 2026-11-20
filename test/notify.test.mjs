@@ -7,7 +7,7 @@ const ctx = (extra = {}) => ({ now: Date.UTC(2026, 4, 6, 12), accounts: [], even
   plans: {}, settings: defaultSettings(), multi: false, ...extra });
 const keys = (c) => dueNotifications(c).map((n) => n.key);
 
-test('new tracker version: one notification per version', () => {
+test('a new tracker version is announced once', () => {
   assert.deepEqual(keys(ctx({ newVersion: '0.2.0' })), ['app-version-0.2.0']);
 });
 
@@ -24,7 +24,7 @@ test('no update notifications when the type or all notifications are off', () =>
   assert.deepEqual(keys(ctx({ appUpdateNeeded: true, settings: all })), []);
 });
 
-test('settings: unknown types dropped, missing ones defaulted', () => {
+test('notification settings drop unknown types and fill in missing ones', () => {
   const s = cleanSettings({ types: { bogus: { on: true }, appUpdate: { on: false } } });
   assert.equal(s.types.bogus, undefined);
   assert.equal(s.types.appUpdate.on, false);
@@ -39,7 +39,7 @@ test('quiet hours wrap past midnight', () => {
   assert.ok(!inQuietHours({ ...q, on: false }, new Date(2026, 0, 1, 23, 30)));
 });
 
-test('reports: personal details removed', () => {
+test('reports leave out personal details', () => {
   const s = clean('mail me at someone@example.com, save 0123456789abcdef0123456789abcdef, token eyJhbGciOiJI.eyJzdWIiOiIx.sig');
   assert.ok(!s.includes('someone@example.com'));
   assert.ok(!s.includes('0123456789abcdef0123456789abcdef'));
@@ -47,7 +47,7 @@ test('reports: personal details removed', () => {
   assert.match(s, /<email>.*<id>.*<token>/);
 });
 
-test('error log: repeats counted, cleaned', () => {
+test('the error log counts repeats and cleans messages', () => {
   const log = createErrorLog();
   log.add('scan', 'failed for a@b.co');
   log.add('scan', 'failed for a@b.co');
@@ -58,7 +58,7 @@ test('error log: repeats counted, cleaned', () => {
   assert.equal(log.list().length, 0);
 });
 
-test('PvP: season ending soon (with ranks) and new modifiers', () => {
+test('notifies about the PvP season ending soon and new modifiers', () => {
   const pvp = {
     seasons: [{ id: 's1', saveId: 'x', name: 'Season 1', start: '2026-04-01T00:00:00Z', end: '2026-05-07T12:00:00Z',
       rotation: { start: '2026-04-01T00:00:00Z', periodDays: 3, sets: [['m1'], ['m2']] } }],
@@ -66,12 +66,12 @@ test('PvP: season ending soon (with ranks) and new modifiers', () => {
     modifiers: { m1: { name: 'One' }, m2: { name: 'Two' } },
   };
   const accounts = [{ id: 'a', label: 'Main', pvp: { season: 'x', honor: 1200 } }];
-  // 24 h before the end: within the default 48 h
+  // 24 h before the end is within the default 48 h
   const end = dueNotifications(ctx({ pvp, accounts })).find((n) => n.type === 'pvpSeasonEnd');
   assert.equal(end.key, 'pvpEnd:s1');
   assert.match(end.title, /Season 1 ends in 24 h/);
   assert.match(end.body, /Silver/);
-  // modifiers are off by default; on, announced in the first hours of a set
+  // Modifiers are off by default; on, announced in the first hours of a set.
   const s = defaultSettings();
   s.types.pvpModifiers.on = true;
   const mods = dueNotifications(ctx({ pvp, accounts, settings: s, now: Date.UTC(2026, 3, 4, 1) })).find((n) => n.type === 'pvpModifiers');

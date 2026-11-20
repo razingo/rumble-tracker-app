@@ -32,7 +32,10 @@ before(async () => {
     if (p === 'manifest.json') return res.end(body);
     if (p === 'manifest.sig') return res.end(sign(null, body, pack.key || privateKey).toString('base64'));
     const content = pack.files?.[p] ?? files[p];
-    if (content === undefined) { res.statusCode = 404; return res.end(); }
+    if (content === undefined) {
+      res.statusCode = 404;
+      return res.end();
+    }
     res.end(content);
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -43,10 +46,18 @@ after(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
-const fresh = async (name) => { const dir = path.join(tmp, name); await rm(dir, { recursive: true, force: true }); return dir; };
-const reset = (p = {}) => { Object.keys(pack).forEach((k) => delete pack[k]); Object.assign(pack, p); requests.length = 0; };
+const fresh = async (name) => {
+  const dir = path.join(tmp, name);
+  await rm(dir, { recursive: true, force: true });
+  return dir;
+};
+const reset = (p = {}) => {
+  Object.keys(pack).forEach((k) => delete pack[k]);
+  Object.assign(pack, p);
+  requests.length = 0;
+};
 
-test('first start: installs every file into an empty folder, with progress', async () => {
+test('the first start installs every file into an empty folder and reports progress', async () => {
   reset();
   const dir = await fresh('first');
   const progress = [];
@@ -60,7 +71,7 @@ test('first start: installs every file into an empty folder, with progress', asy
   assert.equal(progress.length, 3);
 });
 
-test('up to date: nothing downloaded', async () => {
+test('nothing is downloaded when the data is up to date', async () => {
   reset();
   const r = await updateDataPack({ base, current: { dataVersion: '2026-01-01T00:00:00.000Z' },
     dir: await fresh('same'), staticDir: tmp, publicKeys });
@@ -96,7 +107,7 @@ test('a corrupted file is rejected and the installed data is kept', async () => 
   reset();
   const dir = await fresh('corrupt');
   await updateDataPack({ base, current: null, dir, staticDir: path.join(tmp, 'none'), publicKeys });
-  // the signed manifest lists a new file, but the server sends different bytes
+  // The signed manifest lists a new file, but the server sends different bytes.
   reset({ manifest: { dataVersion: '2026-06-01T00:00:00.000Z', files: listing({ ...files, 'new.json': '{"ok":1}' }) },
     files: { 'new.json': '{"tampered":1}' } });
   await assert.rejects(updateDataPack({ base, current: { dataVersion: '2026-01-01T00:00:00.000Z' }, dir,
@@ -110,7 +121,7 @@ test('unsafe file paths in the manifest are rejected', async () => {
   await assert.rejects(updateDataPack({ base, current: null, dir: await fresh('unsafe'), staticDir: tmp, publicKeys }), /invalid entry/);
 });
 
-test('offline: the download fails without touching the folder', async () => {
+test('offline, the download fails without touching the folder', async () => {
   reset();
   const closed = http.createServer();
   await new Promise((r) => closed.listen(0, '127.0.0.1', r));
@@ -120,7 +131,7 @@ test('offline: the download fails without touching the folder', async () => {
     staticDir: tmp, publicKeys }));
 });
 
-test('addresses: https, or http on localhost only', async () => {
+test('pack addresses must be https, or http on localhost', async () => {
   assert.ok(allowedUrl('https://example.org/pack/'));
   assert.ok(allowedUrl('http://127.0.0.1:9000/'));
   assert.ok(!allowedUrl('http://example.org/'));

@@ -5,7 +5,7 @@ import { RULES, BY_SLUG, state } from './core.js';
 export const rarityName = (r) => RULES.rarities[r]?.name ?? `Rarity ${r}`;
 export const rarityColor = (r) => `var(--r${r})`;
 export const miniOf = (u) => (u && u.slug ? BY_SLUG.get(u.slug) : null);
-// a mini the game data doesn't have yet, usually one added by a patch
+// A mini the game data doesn't have yet, usually one added by a patch.
 export const unitName = (u) => miniOf(u)?.name ?? `New mini ${u.id.slice(0, 8)}`;
 // Currencies are found by their ID, which is the same for every player; names are only shown.
 const currencyOf = (role) => state.currencies.find((c) => c.id === RULES.currencyIds[role]);
@@ -40,7 +40,7 @@ export function fixedSlot(u, i) {
   return f && i >= 1 && i <= 3 ? f[i - 1] || null : null;
 }
 export const slotLocked = (u, i) => i >= 1 && i <= 2 && !!fixedSlot(u, i);
-// legacy names for the Siege slot type
+// Legacy names for the Siege slot type.
 const SLOT_ALIASES = { 'Siege Damage': 'Siege', 'Siege Specialist': 'Siege' };
 /** The slot types a leader's bottom slots (4-6) allow, from its army board. Never Wildcard. */
 export const bottomSlotOptions = (u) => miniOf(u)?.armySlotUpgrades || [];
@@ -53,7 +53,7 @@ export function armyOf(u) {
     if (slotLocked(u, i)) type = fixedSlot(u, i);
     else if (i === 3 && fixedSlot(u, 3) && type !== 'Wildcard') type = fixedSlot(u, 3);
     else if (i >= 4) {
-      // the bottom row takes the board's types, no Wildcard and no repeats; anything else reads as empty
+      // The bottom row takes the board's types, no Wildcard and no repeats; anything else reads as empty.
       const opts = bottomSlotOptions(u);
       if (type === 'Wildcard' || (opts.length && !opts.includes(type)) || used.has(type)) type = '';
       if (type) used.add(type);
@@ -76,7 +76,10 @@ export function armyTotals(units) {
     for (const s of armyOf(u)) {
       t.slots++;
       if (s.tier === diamond) t.diamonds++;
-      else { t.notDiamond++; if (s.tier === diamond - 1) t.goldReady++; }
+      else {
+        t.notDiamond++;
+        if (s.tier === diamond - 1) t.goldReady++;
+      }
     }
   }
   return t;

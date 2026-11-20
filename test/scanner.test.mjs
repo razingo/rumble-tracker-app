@@ -26,7 +26,7 @@ test('a scan stores snapshots, events, progress and PvP readings, and bumps the 
   assert.equal(acc.snapshot.units[0].level, 3);
   assert.equal(ctx.scan.lastScan !== null, true);
   assert.equal(ctx.user.pvpHistory[ACC][0].start, true);
-  // second scan: XP gained, gold spent, a PvP win
+  // The second scan has XP gained, gold spent and a PvP win.
   next = save({ xp: 5, gold: 40, pvp: { honor: 1030, vp: 160 } });
   await scan();
   assert.deepEqual(acc.events.map((e) => e.type).sort(), ['currency', 'unit_xp']);
@@ -38,7 +38,7 @@ test('a scan stores snapshots, events, progress and PvP readings, and bumps the 
   assert.equal(onDisk.pvpLog, undefined);
   assert.equal((await readJsonFile(path.join(ctx.paths.DATA, 'pvp_history.json')))[ACC].length, 2);
   assert.ok((await readJsonFile(path.join(ctx.paths.DATA, 'progress.json')))[ACC]);
-  // nothing changed: no new revision
+  // nothing changed, so no new revision
   const rev = ctx.rev;
   await scan();
   assert.equal(ctx.rev, rev);
@@ -61,8 +61,14 @@ test('a PvP log from an older version moves to pvp_history.json', async () => {
 test('read failures are reported only when they persist', async () => {
   const { ctx, cleanup } = await testContext();
   let fail = true;
-  const { scan } = createScanner(ctx, { readPrefs: async () => { if (fail) throw new Error('key busy'); return save(); } });
-  for (let i = 1; i < FAILS_BEFORE_ERROR; i++) { await scan(); assert.equal(ctx.scan.lastError, null); }
+  const { scan } = createScanner(ctx, { readPrefs: async () => {
+    if (fail) throw new Error('key busy');
+    return save();
+  } });
+  for (let i = 1; i < FAILS_BEFORE_ERROR; i++) {
+    await scan();
+    assert.equal(ctx.scan.lastError, null);
+  }
   await scan();
   assert.equal(ctx.scan.lastError, 'key busy');
   assert.equal(ctx.errorLog.list().length, 1);
@@ -86,13 +92,17 @@ test('a damaged account value keeps the last snapshot', async () => {
 test('one scan at a time', async () => {
   const { ctx, cleanup } = await testContext();
   let reads = 0;
-  const { scan } = createScanner(ctx, { readPrefs: async () => { reads++; await new Promise((r) => setTimeout(r, 30)); return save(); } });
+  const { scan } = createScanner(ctx, { readPrefs: async () => {
+    reads++;
+    await new Promise((r) => setTimeout(r, 30));
+    return save();
+  } });
   await Promise.all([scan(), scan(), scan()]);
   assert.equal(reads, 1);
   await cleanup();
 });
 
-test('progress: one sample per day, unchanged samples skipped', () => {
+test('keeps one progress sample a day and skips unchanged ones', () => {
   const progress = {};
   const snap = { units: [{ level: 3, xpLevel: 1, rarity: 0, stars: 2 }], currencies: [{ id: 'g', balance: 5, lifetime: 9 }] };
   const day = Date.parse('2026-03-01T12:00:00');
@@ -104,7 +114,7 @@ test('progress: one sample per day, unchanged samples skipped', () => {
   assert.equal(progress.a.days.length, 2);
 });
 
-test('G.R.I.D.: logged when the refresh time or the items change', () => {
+test('logs the G.R.I.D. when its refresh time or items change', () => {
   const h = {};
   const grid = (refresh, minis) => ({ refresh, rows: [minis.map((m) => ({ mini: m, rarity: 1 }))] });
   assert.equal(logGrid(h, 'a', grid('t1', ['x', 'y']), 'now'), true);
@@ -114,7 +124,7 @@ test('G.R.I.D.: logged when the refresh time or the items change', () => {
   assert.equal(h.a.length, 3);
 });
 
-test('store research log: changes since the previous fields', () => {
+test('the store research log records changes since the previous fields', () => {
   const list = [];
   const log = createStoreLog(list);
   assert.equal(log('a', { 'offer:1': 1 }, 't0'), false);

@@ -17,19 +17,31 @@ function zip(entries, stored = []) {
     const method = stored.includes(name) ? 0 : 8;
     const comp = method ? deflateRawSync(buf) : buf;
     const lh = Buffer.alloc(30);
-    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(method, 8); lh.writeUInt32LE(crc32(buf), 14);
-    lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(buf.length, 22); lh.writeUInt16LE(n.length, 26);
+    lh.writeUInt32LE(0x04034b50, 0);
+    lh.writeUInt16LE(method, 8);
+    lh.writeUInt32LE(crc32(buf), 14);
+    lh.writeUInt32LE(comp.length, 18);
+    lh.writeUInt32LE(buf.length, 22);
+    lh.writeUInt16LE(n.length, 26);
     const ch = Buffer.alloc(46);
-    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(method, 10); ch.writeUInt32LE(crc32(buf), 16);
-    ch.writeUInt32LE(comp.length, 20); ch.writeUInt32LE(buf.length, 24); ch.writeUInt16LE(n.length, 28); ch.writeUInt32LE(pos, 42);
+    ch.writeUInt32LE(0x02014b50, 0);
+    ch.writeUInt16LE(method, 10);
+    ch.writeUInt32LE(crc32(buf), 16);
+    ch.writeUInt32LE(comp.length, 20);
+    ch.writeUInt32LE(buf.length, 24);
+    ch.writeUInt16LE(n.length, 28);
+    ch.writeUInt32LE(pos, 42);
     local.push(lh, n, comp);
     central.push(ch, n);
     pos += 30 + n.length + comp.length;
   }
   const cd = Buffer.concat(central);
   const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10);
-  end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(pos, 16);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(cd.length, 12);
+  end.writeUInt32LE(pos, 16);
   return Buffer.concat([...local, cd, end]);
 }
 
@@ -49,14 +61,14 @@ test('release info must be complete and consistent', () => {
   assert.equal(zipUrl(app), 'https://github.com/razingo/rumble-tracker-app/releases/download/v0.4.0/RumbleTracker-0.4.0-win-x64.zip');
 });
 
-test('zip entries: deflated and stored', () => {
+test('reads both deflated and stored zip entries', () => {
   assert.deepEqual(zipEntry(zipBuf, 'RumbleTracker.exe'), exe);
   assert.deepEqual(zipEntry(zip([['a/RumbleTracker.exe', exe]], ['a/RumbleTracker.exe']), 'RumbleTracker.exe'), exe);
   assert.throws(() => zipEntry(zipBuf, 'other.exe'), /not in the downloaded zip/);
   assert.throws(() => zipEntry(Buffer.from('not a zip at all, just some text here'), 'x'), /not a zip/);
 });
 
-test('download: written only when both checksums match', async () => {
+test('writes the download only when both checksums match', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'rumble-update-'));
   const target = path.join(dir, 'update');
   const file = await downloadUpdate(app, target, { fetchImpl: serve(zipBuf) });
@@ -67,7 +79,7 @@ test('download: written only when both checksums match', async () => {
   await assert.rejects(downloadUpdate({ ...app, exeSha256: sha(Buffer.from('x')) }, target,
     { fetchImpl: serve(zipBuf) }), /program in the download/);
   await assert.rejects(downloadUpdate(app, target, { fetchImpl: serve(zipBuf, 404) }), /download failed \(HTTP 404\)/);
-  // a failed download leaves the earlier one alone
+  // A failed download leaves the earlier one alone.
   assert.deepEqual(await readdir(target), ['RumbleTracker-0.4.0.exe']);
   await rm(dir, { recursive: true });
 });

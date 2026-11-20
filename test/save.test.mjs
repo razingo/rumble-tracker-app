@@ -7,10 +7,10 @@ import { varint, int, msg, str, fixed64, double, id, hexId } from './helpers.mjs
 test('varints', () => {
   assert.deepEqual(readVarint(Buffer.from([0x96, 0x01]), 0), [150n, 2]);
   assert.deepEqual(readVarint(varint(2n ** 40n), 0), [2n ** 40n, 6]);
-  assert.throws(() => readVarint(Buffer.from([0x80]), 0), /past end/);
+  assert.throws(() => readVarint(Buffer.from([0x80]), 0), /runs past the end/);
 });
 
-test('messages: wire types and malformed input', () => {
+test('reads every wire type and rejects malformed input', () => {
   const buf = Buffer.concat([int(1, 7), str(2, 'hi'), fixed64(3, 9)]);
   const f = parseMessage(buf);
   assert.deepEqual(f.map((x) => [x.fn, x.wt]), [[1, 0], [2, 2], [3, 1]]);
@@ -19,7 +19,7 @@ test('messages: wire types and malformed input', () => {
   assert.equal(f[2].u64, 9n);
   assert.throws(() => parseMessage(Buffer.from([0x00])), /invalid field number/);
   assert.throws(() => parseMessage(Buffer.from([0x0b])), /unsupported wire type/);
-  assert.throws(() => parseMessage(Buffer.from([0x12, 0x05, 0x00])), /overran/);
+  assert.throws(() => parseMessage(Buffer.from([0x12, 0x05, 0x00])), /runs past its own length/);
 });
 
 test('units', () => {
@@ -34,7 +34,7 @@ test('units', () => {
   assert.deepEqual(parseUnits(Buffer.alloc(0)), []);
 });
 
-test('currencies: balance and lifetime merged per id', () => {
+test('merges currency balances and lifetime totals by ID', () => {
   const buf = Buffer.concat([
     msg(1, id(1, 1, 2), int(2, 250)),
     msg(4, id(1, 1, 2), int(2, 9000)),

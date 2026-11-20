@@ -4,6 +4,7 @@
 import { execFile } from 'node:child_process';
 import { POWERSHELL } from '../system.mjs';
 import { host } from '../host.mjs';
+import { APP_NAME, SECOND } from '../../web/scripts/lib/constants.js';
 
 // Toasts need a registered app identity; PowerShell's is there on Windows 10 and 11 when the tracker's isn't.
 const POWERSHELL_APP_ID = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe';
@@ -29,9 +30,9 @@ export function showToast(title, body) {
   return new Promise((resolve) => {
     execFile(POWERSHELL, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', SCRIPT], {
       windowsHide: true,
-      timeout: 15000,
+      timeout: 15 * SECOND,
       env: { ...process.env, RT_TITLE: String(title).slice(0, 120), RT_BODY: String(body).slice(0, 400),
-        RT_ATTR: 'Rumble Collection Tracker', RT_APP: id.appId || POWERSHELL_APP_ID, RT_LAUNCH: id.launch || '' },
+        RT_ATTR: APP_NAME, RT_APP: id.appId || POWERSHELL_APP_ID, RT_LAUNCH: id.launch || '' },
     }, (err) => resolve(!err));
   });
 }

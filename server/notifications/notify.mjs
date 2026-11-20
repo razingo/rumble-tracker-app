@@ -1,7 +1,8 @@
 // Determines which notifications are due, from the scanned save and the event schedules. Each has a unique key so
 // it is sent once; the server tracks sent keys, applies quiet hours and delivers them (toast.mjs).
 import { occurrences, rotationAt, rotationName } from '../../web/scripts/lib/schedule.js';
-import { DAY, HOUR, fmt, when, spanWords } from '../../web/scripts/lib/format.js';
+import { APP_NAME, DAY, HOUR } from '../../web/scripts/lib/constants.js';
+import { fmt, when, spanWords } from '../../web/scripts/lib/format.js';
 import { seasonAt, setAt, rankOf } from '../../web/scripts/lib/pvp-season.js';
 
 const GRACE = 3 * HOUR; // older occurrences (tracker not running) are not announced
@@ -54,7 +55,10 @@ export function cleanSettings(s) {
 /** Whether `now` falls within quiet hours (which may span midnight). */
 export function inQuietHours(quiet, now = new Date()) {
   if (!quiet?.on) return false;
-  const mins = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+  const mins = (s) => {
+    const [h, m] = s.split(':').map(Number);
+    return h * 60 + m;
+  };
   const n = now.getHours() * 60 + now.getMinutes(), a = mins(quiet.from), b = mins(quiet.to);
   return a <= b ? n >= a && n < b : n >= a || n < b;
 }
@@ -68,10 +72,10 @@ const isNew = (c, t) => c.now >= t && c.now - t < GRACE;
 function appUpdate(c, add) {
   if (c.appUpdateNeeded) {
     add('appUpdate', 'app-update-needed', 'Tracker update needed',
-      'New game data needs a newer version of Rumble Collection Tracker. Download it from GitHub Releases.');
+      `New game data needs a newer version of ${APP_NAME}. Download it from GitHub Releases.`);
   } else if (c.newVersion) {
     add('appUpdate', `app-version-${c.newVersion}`, 'Tracker update available',
-      `Rumble Collection Tracker ${c.newVersion} is available. Open the tracker to install it.`);
+      `${APP_NAME} ${c.newVersion} is available. Open the tracker to install it.`);
   }
 }
 
@@ -196,7 +200,7 @@ export function dueNotifications(ctx) {
   const out = [];
   const add = (type, key, title, body) => out.push({ type, key, title, body });
   for (const [id, check] of Object.entries(CHECKS)) {
-    // the event check covers two types, each tested inside
+    // The event check covers two types, each tested inside.
     if (id === 'events' ? on('eventStart') || on('eventEnding') : on(id)) check(c, add);
   }
   return out;

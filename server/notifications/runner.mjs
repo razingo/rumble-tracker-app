@@ -1,8 +1,10 @@
-// Sends due notifications every 30 seconds (notify.mjs decides what is due, toast.mjs shows them). Each is sent once;
-// quiet hours hold them, and types the user doesn't want while playing wait until the game is closed.
+// Sends due notifications every 30 seconds. notify.mjs decides what is due and toast.mjs shows it. Each notification
+// is sent once. Quiet hours hold them until the quiet hours end; types the player doesn't want while playing are
+// skipped while the game runs.
 import { NOTIFY_TYPES, dueNotifications, inQuietHours } from './notify.mjs';
 import { showToast } from './toast.mjs';
 import { accountLabel, unitSlug } from '../userdata.mjs';
+import { DAY } from '../../web/scripts/lib/constants.js';
 
 /** gameRunning(): Promise<boolean>. Returns { tick, save, test }. */
 export function createNotifier(ctx, { gameRunning, toast = showToast }) {
@@ -10,7 +12,7 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
 
   async function save() {
     const log = u().sentLog;
-    const cutoff = Date.now() - 30 * 86400000; // keys expire after 30 days
+    const cutoff = Date.now() - 30 * DAY; // keys expire after 30 days
     for (const [k, t] of Object.entries(log.sent)) if (Date.parse(t) < cutoff) delete log.sent[k];
     log.log = log.log.slice(-50);
     await u().save('sentLog');
@@ -35,8 +37,12 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
     if (!due.length && !(log.pending.length && !inQuietHours(settings.quiet))) return;
     const stamp = new Date(now).toISOString();
     for (const n of due) log.sent[n.key] = stamp;
-    // first run: record what is already due without notifying
-    if (u().notifyBaseline) { u().notifyBaseline = false; await save(); return; }
+    // On the first run, what is already due is recorded without a notification.
+    if (u().notifyBaseline) {
+      u().notifyBaseline = false;
+      await save();
+      return;
+    }
     const playing = due.length ? await gameRunning() : false;
     const deliver = due.filter((n) => !playing || settings.types[n.type]?.whenPlaying);
     if (inQuietHours(settings.quiet)) {
@@ -46,7 +52,7 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
     }
     const batch = [...log.pending, ...deliver];
     log.pending = [];
-    // more than two of one kind: combined into one notification
+    // More than two of one kind are combined into one notification.
     const byType = new Map();
     for (const n of batch) (byType.get(n.type) || byType.set(n.type, []).get(n.type)).push(n);
     for (const [type, items] of byType) {

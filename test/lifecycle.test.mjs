@@ -13,19 +13,25 @@ const until = async (fn) => { for (let i = 0; i < 100 && !fn(); i++) await new P
 
 test('download progress is reported while the zip streams in', async () => {
   const chunks = [Buffer.alloc(100), Buffer.alloc(150)];
-  const body = new ReadableStream({ start(c) { for (const x of chunks) c.enqueue(x); c.close(); } });
+  const body = new ReadableStream({ start(c) {
+    for (const x of chunks) c.enqueue(x);
+    c.close();
+  } });
   const seen = [];
   const fetchImpl = async () => ({ ok: true, status: 200, headers: new Headers({ 'content-length': '250' }), body });
-  // the bytes aren't a valid zip: progress first, then the checksum check fails
+  // The bytes aren't a valid zip, so progress comes first and then the checksum check fails.
   await assert.rejects(downloadUpdate(app, 'unused', { fetchImpl, onProgress: (d, t) => seen.push([d, t]) }), /checksum/);
   assert.deepEqual(seen, [[100, 250], [250, 250]]);
 });
 
-test('updater: downloads, then asks the launcher to install, then stops', async () => {
+test('the updater downloads, has the launcher install, then stops', async () => {
   const { ctx, cleanup } = await testContext({ standalone: true });
   Object.assign(ctx.dataPack, { newVersion: '9.9.9', latestApp: app });
   const stops = [];
-  const download = async (a, dir, { onProgress }) => { onProgress(5, 10); return path.join(dir, 'new.exe'); };
+  const download = async (a, dir, { onProgress }) => {
+    onProgress(5, 10);
+    return path.join(dir, 'new.exe');
+  };
   const start = createUpdater(ctx, { shutdown: (r) => stops.push(r), download, applyDelay: 0 });
   const installed = [];
   host.attach({ options: {}, applyUpdate: async (update) => { installed.push(update); } });
@@ -39,7 +45,7 @@ test('updater: downloads, then asks the launcher to install, then stops', async 
   await cleanup();
 });
 
-test('updater: a failed install is shown, and nothing to install is refused', async () => {
+test('the updater shows a failed install and refuses when there is nothing to install', async () => {
   const { ctx, cleanup } = await testContext({ standalone: true });
   const start = createUpdater(ctx, { shutdown: () => assert.fail('must not stop'), download: async () => 'x.exe', applyDelay: 0 });
   assert.equal((await start())[0], 409);
@@ -56,8 +62,11 @@ test('data pack checks run one at a time and announce a newer app', async () => 
   const { ctx, cleanup } = await testContext();
   ctx.dataPack.url = 'https://example.invalid/';
   let calls = 0, news = 0;
-  const update = async () => { calls++; await new Promise((r) => setTimeout(r, 30));
-    return { updated: false, reason: 'up to date', latestAppVersion: '9.9.9', latestApp: app }; };
+  const update = async () => {
+    calls++;
+    await new Promise((r) => setTimeout(r, 30));
+    return { updated: false, reason: 'up to date', latestAppVersion: '9.9.9', latestApp: app };
+  };
   const check = createPackChecker(ctx, { update, onNews: () => news++ });
   await Promise.all([check(), check(), check()]);
   assert.equal(calls, 1);

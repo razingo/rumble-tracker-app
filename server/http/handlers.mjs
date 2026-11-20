@@ -4,6 +4,7 @@ import { restoreBackup } from '../backup.mjs';
 import { BACKUP_KEYS, unitSlug } from '../userdata.mjs';
 import { manualResult } from '../game/pvp.mjs';
 import { LIMITS, cleanTags } from '../../web/scripts/lib/limits.js';
+import { APP_NAME } from '../../web/scripts/lib/constants.js';
 
 const isId = (s) => typeof s === 'string' && /^[0-9a-f]{32}$/.test(s);
 
@@ -69,7 +70,7 @@ export function createHandlers(ctx) {
       const clean = slots.map((s, i) => ({
         type: i === A.leaderSlot ? 'Leader' : String(s?.type || '').slice(0, 40),
         tier: Math.max(0, Math.min(maxTier, Number.isInteger(s?.tier) ? s.tier : 0)),
-        // only the bottom-right slot can be a Boost slot
+        // Only the bottom-right slot can be a Boost slot.
         ...(i === A.boostSlot && s?.boost === true ? { boost: true } : {}),
       }));
       (u().army[account] ??= {})[unitId] = clean;
@@ -115,7 +116,7 @@ export function createHandlers(ctx) {
     /** Restores a backup file: { backup }. */
     async restore({ backup }) {
       const restored = restoreBackup(u().backupFiles(), backup);
-      if (!restored) return [400, { error: 'This file is not a Rumble Collection Tracker backup.' }];
+      if (!restored) return [400, { error: `This file is not a ${APP_NAME} backup.` }];
       u().repair();
       for (const key of restored) await u().save(BACKUP_KEYS[key]);
       ctx.bump();

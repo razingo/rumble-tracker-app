@@ -22,7 +22,7 @@ test('names from the game data', () => {
   assert.deepEqual(currencyInfo('1'.repeat(32), { events, rules, now }), { name: 'Arc Energy' });
 });
 
-test('older game data: the rules names, else unnamed', () => {
+test('older game data uses the names in rules.json, or none', () => {
   assert.equal(currencyInfo('2'.repeat(32), { events, rules, now }).name, 'Valor');
   assert.equal(currencyInfo('3'.repeat(32), { events, rules, now }).name, null);
 });
@@ -43,7 +43,7 @@ test('an ended event still in the save loses to the scheduled one', () => {
   assert.equal(currencyInfo('a'.repeat(32), { events: e, rules, now, activeEvents: ['e4'] }).event, 'Arthas Reforged');
 });
 
-test('two scheduled events on one slot: the later start wins', () => {
+test('when two scheduled events share a slot, the later start wins', () => {
   const later = { id: 'Bling', saveId: 'e5', name: "Blingtron's Bounties", currency: 'A',
     schedule: { kind: 'once', start: new Date(now - DAY / 2).toISOString(), end: new Date(now + DAY).toISOString() } };
   const e = { ...events, events: [...events.events, later] };

@@ -13,31 +13,42 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256 } from '../server/datapack/datapack.mjs';
 import { POWERSHELL } from '../server/system.mjs';
+import { PACK_PUBLIC_KEYS } from '../server/datapack/pack_keys.mjs';
+import { APP_NAME, EXE_NAME, REPO } from '../web/scripts/lib/constants.js';
+import { megabytes } from '../web/scripts/lib/format.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DESKTOP = path.join(ROOT, 'desktop');
 const OUT = path.resolve(ROOT, process.env.RUMBLE_RELEASE_OUT || path.join('dist', 'release'));
 const BUILD = path.join(OUT, 'build');
-const ISSUES_REPO = 'razingo/rumble-tracker-app';
-const EXE = 'RumbleTracker.exe';
 
 const pkg = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
 const version = pkg.version;
-const fail = (msg) => { console.error(`build-release: ${msg}`); process.exit(1); };
+const fail = (msg) => {
+  console.error(`build-release: ${msg}`);
+  process.exit(1);
+};
 
 // Checks before building
 if (process.platform !== 'win32') fail('build on Windows (the exe is made from this Node.js binary).');
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major < 25 || (major === 25 && minor < 5)) fail(`needs Node.js 25.5 or newer for --build-sea (this is ${process.versions.node}).`);
-const keys = await readFile(path.join(ROOT, 'server', 'datapack', 'pack_keys.mjs'), 'utf8');
-if (!/BEGIN PUBLIC KEY/.test(keys)) fail('server/datapack/pack_keys.mjs has no data pack key: the release would never accept a data pack.');
-const report = await readFile(path.join(ROOT, 'server', 'report.mjs'), 'utf8');
-if (!report.includes(`'${ISSUES_REPO}'`)) fail(`ISSUES_REPO in server/report.mjs isn't ${ISSUES_REPO}.`);
+if (!PACK_PUBLIC_KEYS.some((k) => k.includes('BEGIN PUBLIC KEY'))) {
+  fail('server/datapack/pack_keys.mjs has no data pack key, so the release would never accept a data pack.');
+}
+// In GitHub Actions, players' issues and updates must point at the repository that builds the release.
+if (process.env.GITHUB_REPOSITORY && process.env.GITHUB_REPOSITORY !== REPO) {
+  fail(`REPO in web/scripts/lib/constants.js is ${REPO}, but this build runs in ${process.env.GITHUB_REPOSITORY}.`);
+}
 const nodeLicense = path.join(DESKTOP, 'node-LICENSE.txt');
-try { await stat(nodeLicense); } catch { fail('desktop/node-LICENSE.txt is missing (Node.js license, must ship with the exe).'); }
+try {
+  await stat(nodeLicense);
+} catch {
+  fail('desktop/node-LICENSE.txt is missing (Node.js license, must ship with the exe).');
+}
 
 // The app's files
-// [folder, allowed extensions]. Game data is not bundled: the exe downloads it on first start.
+// [folder, allowed extensions]. Game data isn't bundled, as the exe downloads it on first start.
 const APP_FILES = [
   ['server', ['.mjs']],
   ['web', ['.html', '.js', '.css', '.ico', '.woff2', '.txt']],
@@ -60,31 +71,37 @@ async function walk(rel, exts) {
 const files = [];
 for (const [rel, exts] of APP_FILES) for (const r of await walk(rel, exts)) files.push([r, await readFile(path.join(ROOT, r))]);
 files.sort((a, b) => a[0].localeCompare(b[0]));
-// minimal package.json (version) and the launcher's import helper
+// Minimal package.json (version) and the launcher's import helper.
 files.push(['package.json', Buffer.from(JSON.stringify({ name: pkg.name, version, private: true, type: 'module' }, null, 2) + '\n')]);
 files.push(['import.cjs', Buffer.from("// Loaded by the exe's launcher: a single executable can only import ES " +
   "modules through a file on disk.\nmodule.exports = (url) => import(url);\n")]);
 
-// one blob: [u32 index length][index JSON][file bytes]
+// One blob: [u32 index length][index JSON][file bytes]
 let offset = 0;
 const index = { version, hash: '', files: [] };
-for (const [rel, buf] of files) { index.files.push([rel, offset, buf.length, sha256(buf)]); offset += buf.length; }
+for (const [rel, buf] of files) {
+  index.files.push([rel, offset, buf.length, sha256(buf)]);
+  offset += buf.length;
+}
 const data = Buffer.concat(files.map((f) => f[1]));
 index.hash = sha256(Buffer.concat([Buffer.from(JSON.stringify(index.files)), data]));
 const indexBuf = Buffer.from(JSON.stringify(index));
-const head = Buffer.alloc(4); head.writeUInt32LE(indexBuf.length);
+const head = Buffer.alloc(4);
+head.writeUInt32LE(indexBuf.length);
 
-try { await rm(OUT, { recursive: true, force: true }); } catch (e) {
+try {
+  await rm(OUT, { recursive: true, force: true });
+} catch (e) {
   fail(e.code === 'EBUSY' || e.code === 'EPERM' ? 'dist/release is in use: quit RumbleTracker.exe (tray icon → ' +
     'Quit tracker) and build again.' : e.message);
 }
 await mkdir(BUILD, { recursive: true });
 await writeFile(path.join(BUILD, 'app.bin'), Buffer.concat([head, indexBuf, data]));
-console.log(`App files: ${files.length} (${(data.length / 1048576).toFixed(1)} MB), version ${version}`);
+console.log(`App files: ${files.length} (${megabytes(data.length)} MB), version ${version}`);
 
 // The exe
 /**
- * The exe's version information (Properties > Details): a VS_VERSIONINFO resource. Each block is
+ * The exe's version information (Properties > Details), as a VS_VERSIONINFO resource. Each block is
  * [wLength, wValueLength, wType, key (UTF-16, NUL), padding, value, padding, children], 32-bit aligned.
  */
 function versionInfo(version, strings) {
@@ -96,15 +113,20 @@ function versionInfo(version, strings) {
     const parts = children.length ? [pad4(Buffer.concat([head, value])),
       ...children.map((c, i) => (i < children.length - 1 ? pad4(c) : c))] : [head, value];
     const b = Buffer.concat(parts);
-    b.writeUInt16LE(b.length, 0); b.writeUInt16LE(valueLength, 2); b.writeUInt16LE(type, 4);
+    b.writeUInt16LE(b.length, 0);
+    b.writeUInt16LE(valueLength, 2);
+    b.writeUInt16LE(type, 4);
     return b;
   };
   const fixed = Buffer.alloc(52);
   [0xFEEF04BD, 0x00010000, (major << 16) | minor, patch << 16, (major << 16) | minor, patch << 16, 0x3F, 0, 0x40004, 1, 0, 0, 0]
-    // signature, struct version, file/product version, flags, VOS_NT_WINDOWS32, VFT_APP
+    // Signature, struct version, file/product version, flags, VOS_NT_WINDOWS32, VFT_APP.
     .forEach((v, i) => fixed.writeUInt32LE(v >>> 0, i * 4));
   const string = (k, v) => block(k, 1, utf16(v), v.length + 1);
-  const translation = Buffer.alloc(4); translation.writeUInt16LE(0x0409, 0); translation.writeUInt16LE(0x04B0, 2); // en-US, Unicode
+  // en-US, Unicode
+  const translation = Buffer.alloc(4);
+  translation.writeUInt16LE(0x0409, 0);
+  translation.writeUInt16LE(0x04B0, 2);
   return block('VS_VERSION_INFO', 0, fixed, fixed.length, [
     block('StringFileInfo', 1, undefined, 0, [block('040904B0', 1, undefined, 0, Object.entries(strings).map(([k, v]) => string(k, v)))]),
     block('VarFileInfo', 1, undefined, 0, [block('Translation', 0, translation, translation.length)]),
@@ -130,7 +152,7 @@ public static class ExeResources {
   [DllImport("kernel32", SetLastError=true)] static extern bool EndUpdateResource(IntPtr h, bool discard);
   static bool IsId(IntPtr p) { return ((long)p >> 16) == 0; }
   public static void Set(string exe, string ico, string ver) {
-    // enumerate existing icon and version resources for deletion
+    // Enumerate existing icon and version resources for deletion.
     var old = new List<Tuple<int,int,ushort>>();
     IntPtr m = LoadLibraryEx(exe, IntPtr.Zero, 0x2 | 0x20);
     if (m == IntPtr.Zero) throw new Exception("cannot read " + exe);
@@ -169,39 +191,39 @@ public static class ExeResources {
 `;
   execFileSync(POWERSHELL, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')],
-    // no inherited stdin: a nested PowerShell can block on it
+    // stdin isn't inherited, as a nested PowerShell can block on it.
     { env: { ...process.env, RT_EXE: exePath, RT_ICO: icoPath, RT_VER: versionPath }, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 await copyFile(path.join(DESKTOP, 'launcher.cjs'), path.join(BUILD, 'launcher.cjs'));
 await writeFile(path.join(BUILD, 'sea-config.json'), JSON.stringify({
   main: 'launcher.cjs',
-  output: path.join(OUT, EXE),
+  output: path.join(OUT, EXE_NAME),
   disableExperimentalSEAWarning: true,
   useCodeCache: false,
   useSnapshot: false,
   assets: { 'app.bin': 'app.bin' },
 }, null, 2));
 execFileSync(process.execPath, ['--build-sea', 'sea-config.json'], { cwd: BUILD, stdio: 'inherit' });
-// file details shown by Windows (and required for code signing): product name and version instead of Node's
+// The file details Windows shows, which code signing needs too, name the product and its version instead of Node's.
 await writeFile(path.join(BUILD, 'version.bin'), versionInfo(version, {
   CompanyName: 'razingo',
-  FileDescription: 'Rumble Collection Tracker',
+  FileDescription: APP_NAME,
   FileVersion: version,
   InternalName: 'RumbleTracker',
   LegalCopyright: '© razingo. MIT License. Not affiliated with Blizzard Entertainment.',
-  OriginalFilename: EXE,
-  ProductName: 'Rumble Collection Tracker',
+  OriginalFilename: EXE_NAME,
+  ProductName: APP_NAME,
   ProductVersion: version,
 }));
-setExeResources(path.join(OUT, EXE), path.join(DESKTOP, 'icon.ico'), path.join(BUILD, 'version.bin'));
-const exe = await readFile(path.join(OUT, EXE));
+setExeResources(path.join(OUT, EXE_NAME), path.join(DESKTOP, 'icon.ico'), path.join(BUILD, 'version.bin'));
+const exe = await readFile(path.join(OUT, EXE_NAME));
 // Mark the exe as a GUI program (no console window). Subsystem is at e_lfanew + 4 + 20 + 68.
 const pe = exe.readUInt32LE(0x3c);
 if (exe.readUInt32LE(pe) !== 0x4550 || exe.readUInt16LE(pe + 24) !== 0x20b) fail('unexpected exe header: cannot set the GUI subsystem.');
 exe.writeUInt16LE(2, pe + 24 + 68); // IMAGE_SUBSYSTEM_WINDOWS_GUI
-await writeFile(path.join(OUT, EXE), exe);
-console.log(`Built ${EXE} (${(exe.length / 1048576).toFixed(1)} MB, Node.js ${process.versions.node})`);
+await writeFile(path.join(OUT, EXE_NAME), exe);
+console.log(`Built ${EXE_NAME} (${megabytes(exe.length)} MB, Node.js ${process.versions.node})`);
 
 // The zip players download
 /** Minimal zip writer (deflate, no zip64). */
@@ -216,13 +238,29 @@ function zip(entries) {
     const comp = deflateRawSync(buf, { level: 9 });
     const crc = crc32(buf);
     const lh = Buffer.alloc(30);
-    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x0800, 6); lh.writeUInt16LE(8, 8);
-    lh.writeUInt16LE(dosTime(now), 10); lh.writeUInt16LE(dosDate(now), 12); lh.writeUInt32LE(crc, 14);
-    lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(buf.length, 22); lh.writeUInt16LE(nameBuf.length, 26); lh.writeUInt16LE(0, 28);
+    lh.writeUInt32LE(0x04034b50, 0);
+    lh.writeUInt16LE(20, 4);
+    lh.writeUInt16LE(0x0800, 6);
+    lh.writeUInt16LE(8, 8);
+    lh.writeUInt16LE(dosTime(now), 10);
+    lh.writeUInt16LE(dosDate(now), 12);
+    lh.writeUInt32LE(crc, 14);
+    lh.writeUInt32LE(comp.length, 18);
+    lh.writeUInt32LE(buf.length, 22);
+    lh.writeUInt16LE(nameBuf.length, 26);
+    lh.writeUInt16LE(0, 28);
     const ch = Buffer.alloc(46);
-    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x0800, 8); ch.writeUInt16LE(8, 10);
-    ch.writeUInt16LE(dosTime(now), 12); ch.writeUInt16LE(dosDate(now), 14); ch.writeUInt32LE(crc, 16);
-    ch.writeUInt32LE(comp.length, 20); ch.writeUInt32LE(buf.length, 24); ch.writeUInt16LE(nameBuf.length, 28);
+    ch.writeUInt32LE(0x02014b50, 0);
+    ch.writeUInt16LE(20, 4);
+    ch.writeUInt16LE(20, 6);
+    ch.writeUInt16LE(0x0800, 8);
+    ch.writeUInt16LE(8, 10);
+    ch.writeUInt16LE(dosTime(now), 12);
+    ch.writeUInt16LE(dosDate(now), 14);
+    ch.writeUInt32LE(crc, 16);
+    ch.writeUInt32LE(comp.length, 20);
+    ch.writeUInt32LE(buf.length, 24);
+    ch.writeUInt16LE(nameBuf.length, 28);
     ch.writeUInt32LE(pos, 42);
     local.push(lh, nameBuf, comp);
     central.push(ch, nameBuf);
@@ -230,14 +268,17 @@ function zip(entries) {
   }
   const cd = Buffer.concat(central);
   const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10);
-  end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(pos, 16);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(cd.length, 12);
+  end.writeUInt32LE(pos, 16);
   return Buffer.concat([...local, cd, end]);
 }
 const folder = `RumbleTracker-${version}-win-x64`;
 const zipName = `${folder}.zip`;
 const zipBuf = zip([
-  [`${folder}/${EXE}`, exe],
+  [`${folder}/${EXE_NAME}`, exe],
   [`${folder}/README.md`, await readFile(path.join(ROOT, 'README.md'))],
   [`${folder}/LICENSE.txt`, await readFile(path.join(ROOT, 'LICENSE'))],
   [`${folder}/NOTICE.md`, await readFile(path.join(ROOT, 'NOTICE.md'))],
@@ -246,8 +287,8 @@ const zipBuf = zip([
   [`${folder}/THIRD-PARTY-NOTICES/Font-Nunito-OFL.txt`, await readFile(path.join(ROOT, 'web', 'fonts', 'OFL-Nunito.txt'))],
 ]);
 await writeFile(path.join(OUT, zipName), zipBuf);
-await writeFile(path.join(OUT, 'SHA256SUMS.txt'), `${sha256(zipBuf)}  ${zipName}\n${sha256(exe)}  ${EXE}\n`);
-console.log(`Built ${zipName} (${(zipBuf.length / 1048576).toFixed(1)} MB)`);
+await writeFile(path.join(OUT, 'SHA256SUMS.txt'), `${sha256(zipBuf)}  ${zipName}\n${sha256(exe)}  ${EXE_NAME}\n`);
+console.log(`Built ${zipName} (${megabytes(zipBuf.length)} MB)`);
 
 await rm(BUILD, { recursive: true, force: true });
 console.log(`\nDone: ${path.relative(ROOT, OUT)}\\ (next: attach the zip to a GitHub Release)`);

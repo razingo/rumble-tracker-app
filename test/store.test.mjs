@@ -11,7 +11,7 @@ test('overlapping writes to one file all succeed, in order, without temp files l
   await Promise.all(Array.from({ length: 25 }, (_, i) => writeJson(p, { n: i })));
   assert.deepEqual(JSON.parse(await readFile(p, 'utf8')), { n: 24 });
   assert.deepEqual(await readdir(dir), ['army.json']);
-  // the value is taken when writeJson is called, not when the queued write runs
+  // The value is taken when writeJson is called, not when the queued write runs.
   const v = { n: 1 };
   const w = writeJson(p, v);
   v.n = 2;

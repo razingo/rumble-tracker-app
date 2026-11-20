@@ -2,7 +2,7 @@
 // the bundled gamedata/ files.
 import { stat, rename } from 'node:fs/promises';
 import path from 'node:path';
-import { readJson } from './store.mjs';
+import { readJson, fileTimestamp } from './store.mjs';
 
 export function createTables({ GAMEDATA, STATIC }) {
   const t = {
@@ -11,12 +11,24 @@ export function createTables({ GAMEDATA, STATIC }) {
     /** The file to use for a game-data path: the pack's copy if it has one. */
     async staticPath(rel) {
       const p = path.join(GAMEDATA, rel);
-      try { await stat(p); return p; } catch { return path.join(STATIC, rel); }
+      try {
+        await stat(p);
+        return p;
+      } catch {
+        return path.join(STATIC, rel);
+      }
     },
 
     /** Whether any game data is installed, from npm run fetch-gamedata or the exe's first start. */
     async hasGameData() {
-      for (const dir of [GAMEDATA, STATIC]) { try { await stat(path.join(dir, 'rules.json')); return true; } catch { /* next */ } }
+      for (const dir of [GAMEDATA, STATIC]) {
+        try {
+          await stat(path.join(dir, 'rules.json'));
+          return true;
+        } catch {
+          // next
+        }
+      }
       return false;
     },
 
@@ -32,7 +44,7 @@ export function createTables({ GAMEDATA, STATIC }) {
         pvp: await read('pvp.json', null),
         rules: await read('rules.json'),
         minis: (await read('minis.json')).minis,
-        // unit ID to mini; the player's assignments in names.json come first
+        // Unit ID to mini; the player's assignments in names.json come first.
         builtinUnits: (await read('unit_ids.json', { units: {} })).units,
         gameData: await read('gamedata.json', null), // game build and data version of the tables
       };
@@ -41,7 +53,7 @@ export function createTables({ GAMEDATA, STATIC }) {
 
     /** Moves a damaged installed pack aside (to <dir>.damaged-<time>); returns the folder name it was moved to. */
     async setPackAside() {
-      const moved = `${GAMEDATA}.damaged-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+      const moved = `${GAMEDATA}.damaged-${fileTimestamp()}`;
       await rename(GAMEDATA, moved);
       return path.basename(moved);
     },

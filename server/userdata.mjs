@@ -59,8 +59,11 @@ export async function loadUserData(ctx, { storeLog = true } = {}) {
     backupFiles: () => Object.fromEntries(Object.entries(BACKUP_KEYS).map(([k, prop]) => [k, u[prop]])),
     /** After a restore, fills in keys that older or partial backups may lack. */
     repair() {
-      u.names.accounts ??= {}; u.names.units ??= {};
-      u.learned.xpToNext ??= {}; u.learned.xpConflicts ??= []; u.learned.spending ??= [];
+      u.names.accounts ??= {};
+      u.names.units ??= {};
+      u.learned.xpToNext ??= {};
+      u.learned.xpConflicts ??= [];
+      u.learned.spending ??= [];
     },
   };
   u.repair();

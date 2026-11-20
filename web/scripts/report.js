@@ -1,8 +1,8 @@
 // Report a problem. Script errors on the page go to the server's error log, and the dialog builds a report the player
 // can open as a GitHub issue or copy. Nothing is sent until the player submits it. The page loads this module first,
 // so it also catches start-up errors.
-import { $, post, openExternal, state, ui } from './core.js';
-import { esc } from './lib/format.js';
+import { $, getJson, post, copyText, openExternal, state, ui } from './core.js';
+import { esc, plural } from './lib/format.js';
 
 (() => {
   let sent = 0;
@@ -14,7 +14,7 @@ import { esc } from './lib/format.js';
         stack: String(stack || '').slice(0, 1500) }),
     }).catch(() => { /* server not reachable: nothing to do */ });
   };
-  // a bubbling listener sees script errors but not failed image loads
+  // A bubbling listener sees script errors but not failed image loads.
   window.addEventListener('error', (e) => report(e.message, e.error?.stack));
   window.addEventListener('unhandledrejection', (e) => report(e.reason?.message || e.reason, e.reason?.stack));
 })();
@@ -27,7 +27,7 @@ export function renderReportBadge() {
   if (!b) return;
   const n = state?.problems || 0;
   b.classList.toggle('has-problems', n > 0);
-  b.title = n ? `${n} error${n > 1 ? 's' : ''} noted since the tracker started` : '';
+  b.title = n ? `${plural(n, 'error')} noted since the tracker started` : '';
 }
 
 function reportText() {
@@ -64,33 +64,34 @@ function issueUrl() {
 function renderReportDialog(msg = '') {
   const dlg = $('#reportDialog');
   const d = REPORT.data;
-  dlg.innerHTML = `<form method="dialog" class="rp-form">
-    <div class="dlg-head"><h2>Report a problem</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
+  dlg.innerHTML = `<form method="dialog" class="report-form">
+    <div class="dialog-head"><h2>Report a problem</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
     <p class="muted small">Opens a GitHub issue (free account needed). Nothing is sent until you press <b>Submit</b> there.</p>
-    <label class="rp-field">Short title <input data-rp="title" maxlength="120" value="${esc(REPORT.title)}"
+    <label class="report-field">Short title <input data-report-field="title" maxlength="120" value="${esc(REPORT.title)}"
       placeholder="e.g. Calendar shows the wrong end date for Darkmoon Faire"></label>
-    <label class="rp-field">What happened? What did you expect?
-      <textarea data-rp="what" rows="4"
+    <label class="report-field">What happened? What did you expect?
+      <textarea data-report-field="what" rows="4"
         placeholder="Please don't include account names or other personal details.">${esc(REPORT.what)}</textarea></label>
-    <label class="rp-field">How can it be repeated? <span class="muted small">(optional)</span>
-      <textarea data-rp="steps" rows="2">${esc(REPORT.steps)}</textarea></label>
-    <label class="rp-include"><input type="checkbox" data-rp="include" ${REPORT.include ? 'checked' : ''}> Add the
-      details below (helps a lot)</label>
-    <details class="rp-details"${d?.errors ? ' open' : ''}><summary>Details that would be
-      added${d ? ` · ${d.errors ? `${d.errors} recent error${d.errors > 1 ? 's' : ''}` : 'no errors noted'}` : ''}</summary>
+    <label class="report-field">How can it be repeated? <span class="muted small">(optional)</span>
+      <textarea data-report-field="steps" rows="2">${esc(REPORT.steps)}</textarea></label>
+    <label class="report-include"><input type="checkbox" data-report-field="include" ${REPORT.include ? 'checked' : ''}>
+      Add the details below (helps a lot)</label>
+    <details class="report-details"${d?.errors ? ' open' : ''}><summary>Details that would be added${d
+      ? ` · ${d.errors ? `${plural(d.errors, 'recent error')}` : 'no errors noted'}` : ''}</summary>
       <pre>${d ? esc(d.diagnostics) : 'Loading…'}</pre>
       <p class="muted small">Versions, game-data status and recent errors, with names, account IDs and other personal details
         removed. Your collection is never included.</p>
     </details>
-    <p class="small rp-shot">${state?.standalone
-    ? '<button type="button" class="chip" data-rp-shot>Take a screenshot</button> Select an area; it is copied, so ' +
+    <p class="small">${state?.standalone
+    ? '<button type="button" class="chip" data-report-screenshot>Take a screenshot</button> Select an area; it is copied, so ' +
       'paste it into the issue on GitHub with <b>Ctrl+V</b>.'
     : 'For a screenshot, press <b>Win+Shift+S</b>, select an area, then paste it into the issue on GitHub with <b>Ctrl+V</b>.'}</p>
-    <div class="rp-actions">
-      <button type="button" class="btn" data-rp-open ${d ? '' : 'disabled'}>Open on GitHub</button>
-      <button type="button" class="chip" data-rp-copy ${d ? '' : 'disabled'}>Copy report</button>
-      ${d?.errors ? '<button type="button" class="chip" data-rp-clear title="Forget the errors noted so far">Clear errors</button>' : ''}
-      <span class="dlg-msg small">${esc(msg)}</span>
+    <div class="report-actions">
+      <button type="button" class="btn" data-report-open ${d ? '' : 'disabled'}>Open on GitHub</button>
+      <button type="button" class="chip" data-report-copy ${d ? '' : 'disabled'}>Copy report</button>
+      ${d?.errors ? '<button type="button" class="chip" data-report-clear title="Forget the errors noted so ' +
+        'far">Clear errors</button>' : ''}
+      <span class="dialog-msg small">${esc(msg)}</span>
     </div>
   </form>`;
 }
@@ -101,51 +102,61 @@ async function openReportDialog() {
   renderReportDialog();
   dlg.showModal();
   try {
-    REPORT.data = await fetch(`/api/report?page=${encodeURIComponent(ui.tab || '')}`).then((r) => r.json());
+    REPORT.data = await getJson(`/api/report?page=${encodeURIComponent(ui.tab || '')}`, 'the report details');
     renderReportDialog();
-  } catch { renderReportDialog('The tracker server is not reachable.'); }
+  } catch (err) {
+    renderReportDialog(err.message);
+  }
 }
 
 export function bindReport() {
   const dlg = $('#reportDialog');
   $('#reportBtn').addEventListener('click', openReportDialog);
   dlg.addEventListener('input', (e) => {
-    const k = e.target.dataset.rp;
+    const k = e.target.dataset.reportField;
     if (k) REPORT[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
   });
   dlg.addEventListener('click', async (e) => {
-    if (e.target === dlg) { dlg.close(); return; }
+    if (e.target === dlg) {
+      dlg.close();
+      return;
+    }
     const msg = (t, ok) => {
-      const m = dlg.querySelector('.dlg-msg');
+      const m = dlg.querySelector('.dialog-msg');
       m.textContent = t;
-      m.className = `dlg-msg small ${ok ? 'cost-ok' : 'cost-no'}`;
+      m.className = `dialog-msg small ${ok ? 'cost-ok' : 'cost-no'}`;
     };
-    if (e.target.closest('[data-rp-open]')) {
+    if (e.target.closest('[data-report-open]')) {
       if (!REPORT.what.trim()) {
         msg('Please describe what happened first.', false);
-        dlg.querySelector('[data-rp="what"]').focus();
+        dlg.querySelector('[data-report-field="what"]').focus();
         return;
       }
       openExternal(issueUrl());
       msg('The issue opened in your browser. Check it and press Submit there.', true);
-    } else if (e.target.closest('[data-rp-shot]')) {
+    } else if (e.target.closest('[data-report-screenshot]')) {
       // The dialog closes for Windows' snipping overlay and comes back once the window has the focus again.
       dlg.close();
-      try { await post('/api/screenshot', {}); } catch (err) { dlg.showModal(); msg(err.message, false); return; }
-      REPORT.screenshot = true;
-      const back = () => { if (!dlg.open) { dlg.showModal(); msg('Screenshot copied. Paste it into the issue with Ctrl+V.', true); } };
-      setTimeout(() => window.addEventListener('focus', back, { once: true }), 500);
-    } else if (e.target.closest('[data-rp-copy]')) {
-      const { title, body } = reportText();
       try {
-        await navigator.clipboard.writeText(`${title}\n\n${body}`);
-        msg('Copied.', true);
-      } catch {
-        msg('Copying was blocked by the browser.', false);
+        await post('/api/screenshot', {});
+      } catch (err) {
+        dlg.showModal();
+        msg(err.message, false);
+        return;
       }
-    } else if (e.target.closest('[data-rp-clear]')) {
+      REPORT.screenshot = true;
+      const back = () => { if (!dlg.open) {
+        dlg.showModal();
+        msg('Screenshot copied. Paste it into the issue with Ctrl+V.', true);
+      } };
+      setTimeout(() => window.addEventListener('focus', back, { once: true }), 500);
+    } else if (e.target.closest('[data-report-copy]')) {
+      const { title, body } = reportText();
+      if (await copyText(`${title}\n\n${body}`)) msg('Copied.', true);
+      else msg('Copying was blocked by the browser.', false);
+    } else if (e.target.closest('[data-report-clear]')) {
       await post('/api/report/clear', {});
-      REPORT.data = await fetch('/api/report').then((r) => r.json());
+      REPORT.data = await getJson('/api/report', 'the report details');
       if (state) state.problems = 0;
       renderReportBadge();
       renderReportDialog('Cleared.');

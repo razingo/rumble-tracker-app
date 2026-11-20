@@ -3,14 +3,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { occurrences, rotationAt, rotationName } from '../web/scripts/lib/schedule.js';
-import { DAY, HOUR, MINUTE, fmt, esc, span, spanWords, localDay, when, dayOnly, titleCase } from '../web/scripts/lib/format.js';
+import { DAY, HOUR, MINUTE } from '../web/scripts/lib/constants.js';
+import { fmt, esc, span, spanWords, localDay, when, dayOnly, titleCase, plural, megabytes } from '../web/scripts/lib/format.js';
 import { seasonAt, rankOf, nextRank, setAt, record, streak, matchesWithMods, modifierStats, withModifiers,
   winRateSeries } from '../web/scripts/lib/pvp-season.js';
 import { setTables, setState } from '../web/scripts/core.js';
 import { nextUpgrade, xpToMax, armyOf, totalLevel, armyTotals, remainingToLegendary, effectivePicks,
   unitName } from '../web/scripts/units.js';
 
-test('schedules: monthly n-th weekday, fixed days and one-off events', () => {
+test('schedules handle the n-th weekday of a month, fixed days and one-off events', () => {
   // 2nd Wednesday of every month, 18:00 UTC, 7 days
   const ev = { schedule: { kind: 'nthWeekday', every: 'month', nth: 2, weekday: 3, hourUtc: 18, days: 7, fromYear: 2026, month: 1 } };
   const runs = occurrences(ev, Date.UTC(2026, 10, 1), Date.UTC(2026, 11, 31));
@@ -40,7 +41,7 @@ const PVP = {
 };
 const at = (day) => new Date(Date.UTC(2026, 0, day, 12)).toISOString();
 
-test('PvP: season, rank and modifier set at a time', () => {
+test('finds the PvP season, rank and modifiers at a given time', () => {
   assert.equal(seasonAt(PVP, Date.UTC(2026, 0, 5)).id, 's1');
   assert.equal(seasonAt(PVP, Date.UTC(2026, 1, 5)), null);
   assert.equal(rankOf(PVP, 1500).id, 'r1');
@@ -52,7 +53,7 @@ test('PvP: season, rank and modifier set at a time', () => {
   assert.equal(setAt(PVP, Date.UTC(2026, 1, 5)), null);
 });
 
-test('PvP: records, streaks and win rates by modifier', () => {
+test('counts PvP records, streaks and win rates by modifier', () => {
   const log = [
     { t: at(1), start: true },
     { t: at(2), wins: 1, losses: 0 },               // m1 m2
@@ -92,7 +93,7 @@ setTables(RULES, MINIS);
 const unit = (o) => ({ id: 'abcdef0123456789', slug: 'grunt', level: 5, rarity: 0, stars: 0, talents: 0,
   talentPicks: [], xp: 0, xpNeeded: 10, xpLevel: 1, ...o });
 
-test('rarity upgrades: stars, Arc Energy and cores', () => {
+test('rarity upgrades need stars, Arc Energy and cores', () => {
   setState({ currencies: [{ id: 'arc', balance: 150 }] });
   assert.equal(nextUpgrade(unit({ stars: 5 })).ready, true);
   assert.equal(nextUpgrade(unit({ stars: 4 })).starsOk, false);
@@ -111,7 +112,7 @@ test('XP to the top level, talents, names', () => {
   assert.equal(unitName(unit({ slug: null })), 'New mini abcdef01');
 });
 
-test('leader army slots: fixed slots, bottom-row rules, Boost and level bonus', () => {
+test('leader army slots follow the fixed slots, bottom-row rules, Boost and level bonus', () => {
   const leader = unit({ slug: 'boss', level: 10, army: [
     { type: 'Leader', tier: 2 }, { type: 'Spell', tier: 3 }, { type: 'x', tier: 1 }, { type: 'Spell' },
     { type: 'Wildcard', tier: 1 }, { type: 'Tank', tier: 3 }, { type: 'Tank', tier: 3, boost: true },
@@ -126,7 +127,7 @@ test('leader army slots: fixed slots, bottom-row rules, Boost and level bonus', 
   assert.deepEqual([t.leaders, t.slots, t.diamonds, t.goldReady], [1, 7, 3, 1]);
 });
 
-test('formatting: en-US numbers and dates, durations, day keys', () => {
+test('formats numbers, dates, durations and day keys in en-US', () => {
   assert.equal(fmt(1234567), '1,234,567');
   assert.equal(fmt('x'), 'x');
   assert.equal(esc(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
@@ -143,7 +144,7 @@ test('formatting: en-US numbers and dates, durations, day keys', () => {
   assert.equal(titleCase('Major tome'), 'Major tome');
 });
 
-test('tags: cleaned, unique ignoring case, at most 20; known spelling kept', async () => {
+test('cleans tags, keeps them unique ignoring case and keeps the known spelling', async () => {
   const { cleanTag, cleanTags, withTag, LIMITS } = await import('../web/scripts/lib/limits.js');
   assert.equal(cleanTag('  rush   down '), 'rush down');
   assert.equal(cleanTag('x'.repeat(50)).length, LIMITS.tag);
@@ -155,7 +156,7 @@ test('tags: cleaned, unique ignoring case, at most 20; known spelling kept', asy
   assert.equal(withTag(Array.from({ length: 20 }, (_, i) => `t${i}`), 'new'), null);
 });
 
-test('reward tree: cheapest path, shared requirements paid once, requireAll', async () => {
+test('the reward tree finds the cheapest path and pays shared requirements once', async () => {
   const { rewardPlanner, rewardKey } = await import('../web/scripts/lib/reward-tree.js');
   //   row 0:  A(10)        B(5)
   //   row 1:  C(20, needs A or B)   D(30, needs A and B)

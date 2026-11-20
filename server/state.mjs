@@ -79,7 +79,7 @@ export function buildState(ctx, account) {
     ownedAvatars: acc?.ownedAvatars || [],
     plans: (account && u.plans[account]) || {},
     progress: (account && u.progress[account]) || null,
-    // game build of the tables vs. the build that wrote the save
+    // Game build of the tables vs. the build that wrote the save.
     dataStatus: {
       dataBuild: t.gameData?.gameBuild || null,
       dataVersion: t.gameData?.dataVersion || null,
@@ -88,7 +88,7 @@ export function buildState(ctx, account) {
       pack: { configured: !!dataPack.url, lastCheck: dataPack.lastCheck, result: dataPack.result,
         error: dataPack.error, needsAppUpdate: dataPack.needsAppUpdate, newVersion: dataPack.newVersion },
     },
-    // shop with unit IDs resolved to slugs (null if unknown), plus G.R.I.D. history
+    // Shop with unit IDs resolved to slugs (null if unknown), plus G.R.I.D. history.
     shop: acc?.shop ? withSlugs(acc.shop) : null,
     gridHistory: ((account && u.gridHistory[account]) || []).slice(-120).map((g) =>
       ({ ...g, items: g.items.map((x) => ({ ...x, slug: x.mini ? slug(x.mini) : null })) })),

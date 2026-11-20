@@ -6,9 +6,10 @@ import { mkdir, readFile, writeFile, rm, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { PACK_PUBLIC_KEYS } from './pack_keys.mjs';
+import { SECOND, MB } from '../../web/scripts/lib/constants.js';
 
-const MAX_FILE = 8 * 1024 * 1024;   // per file
-const MAX_TOTAL = 64 * 1024 * 1024; // per pack
+const MAX_FILE = 8 * MB; // per file
+const MAX_TOTAL = 64 * MB; // per pack
 const PARALLEL = 8; // concurrent downloads
 const SAFE_PATH = /^[A-Za-z0-9_][\w./ '-]*\.(json|webp|png)$/;
 
@@ -19,7 +20,9 @@ export function allowedUrl(base) {
   try {
     const u = new URL(base);
     return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname));
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /** True if version a (x.y.z) is newer than b. */
@@ -30,11 +33,124 @@ export function newerVersion(a, b) {
 }
 
 async function fetchBuf(url, limit) {
-  const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000) });
+  const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30 * SECOND) });
   if (!r.ok) throw new Error(`The game data server answered HTTP ${r.status} for ${url}.`);
   const buf = Buffer.from(await r.arrayBuffer());
   if (buf.length > limit) throw new Error(`A game data file is larger than allowed: ${url}.`);
   return buf;
+}
+
+/** The usable public keys; a malformed one is skipped. */
+function publicKeyObjects(pems) {
+  return pems.map((pem) => {
+    try {
+      return createPublicKey(pem);
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+/**
+ * Downloads manifest.json and checks its signature over the exact bytes before anything in it is trusted. Its
+ * checksums then cover every file.
+ */
+async function signedManifest(root, keys) {
+  const body = await fetchBuf(new URL('manifest.json', root), MB);
+  const sig = Buffer.from((await fetchBuf(new URL('manifest.sig', root), 4096)).toString('utf8').trim(), 'base64');
+  const valid = (key) => {
+    try {
+      return verify(null, body, key, sig);
+    } catch {
+      return false;
+    }
+  };
+  if (!keys.some(valid)) {
+    throw Object.assign(new Error('The game data signature is not valid, so the update was not installed.'), { code: 'BAD_SIGNATURE' });
+  }
+  const manifest = JSON.parse(body.toString('utf8'));
+  if (manifest.format !== 1 || !manifest.files || !manifest.dataVersion) {
+    throw new Error('The game data list is not in the expected format.');
+  }
+  return manifest;
+}
+
+/** The latest released app version the manifest announces, with its download checksums when it has them. */
+function announcedApp(manifest) {
+  const latestAppVersion = /^\d+\.\d+\.\d+$/.test(manifest.latestAppVersion || '') ? manifest.latestAppVersion : null;
+  const latestApp = manifest.latestApp?.version === latestAppVersion ? manifest.latestApp : null;
+  return { latestAppVersion, latestApp };
+}
+
+/** Throws on an entry with an unsafe path or a malformed checksum, or when the pack is too large. */
+function checkEntries(entries) {
+  let total = 0;
+  for (const [rel, file] of entries) {
+    if (!SAFE_PATH.test(rel) || rel.includes('..') || !/^[0-9a-f]{64}$/.test(file.sha256 || '')) {
+      throw new Error(`The game data list has an invalid entry: ${rel}.`);
+    }
+    total += file.size || 0;
+  }
+  if (total > MAX_TOTAL) throw new Error('The game data is larger than allowed.');
+}
+
+/** An identical copy of a file in one of `dirs`, so it needn't be downloaded again, or null. */
+async function localCopy(rel, sha, dirs) {
+  for (const d of dirs) {
+    try {
+      const buf = await readFile(path.join(d, ...rel.split('/')));
+      if (sha256(buf) === sha) return buf;
+    } catch {
+      // not there
+    }
+  }
+  return null;
+}
+
+/**
+ * Writes every file of the pack into `staging`, from a local copy or downloaded and checked. PARALLEL workers take
+ * files in turn, and the first error stops them all. Returns the number of files downloaded.
+ */
+async function fillStaging(entries, { root, staging, reuseFrom, onProgress }) {
+  let downloaded = 0, done = 0, next = 0, failed = null;
+  const installOne = async ([rel, file]) => {
+    const target = path.join(staging, ...rel.split('/'));
+    await mkdir(path.dirname(target), { recursive: true });
+    let buf = await localCopy(rel, file.sha256, reuseFrom);
+    if (!buf) {
+      buf = await fetchBuf(new URL(rel.split('/').map(encodeURIComponent).join('/'), root), MAX_FILE);
+      if (sha256(buf) !== file.sha256) throw new Error(`A game data file does not match its checksum: ${rel}.`);
+      downloaded++;
+    }
+    await writeFile(target, buf);
+    onProgress?.(++done, entries.length);
+  };
+  const worker = async () => {
+    while (!failed && next < entries.length) {
+      try {
+        await installOne(entries[next++]);
+      } catch (e) {
+        failed ??= e;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: PARALLEL }, worker));
+  if (failed) throw failed;
+  return downloaded;
+}
+
+/** Puts the staged pack in place of the installed one, removing the old pack only once the new one is there. */
+async function swapIn(staging, dir) {
+  const old = `${dir}.old`;
+  await rm(old, { recursive: true, force: true });
+  try {
+    await stat(dir);
+    await rename(dir, old);
+  } catch {
+    // no pack installed yet
+  }
+  await rename(staging, dir);
+  await rm(old, { recursive: true, force: true });
 }
 
 /**
@@ -43,73 +159,23 @@ async function fetchBuf(url, limit) {
  * Returns { updated, manifest, downloaded, reason }.
  */
 export async function updateDataPack({ base, current, dir, staticDir, publicKeys = PACK_PUBLIC_KEYS, onProgress }) {
-  const keys = publicKeys.map((pem) => { try { return createPublicKey(pem); } catch { return null; } }).filter(Boolean);
   if (!base) return { updated: false, reason: 'no data pack address configured' };
   if (!allowedUrl(base)) return { updated: false, reason: 'data pack address must be https' };
-  const root = base.endsWith('/') ? base : `${base}/`;
+  const keys = publicKeyObjects(publicKeys);
   if (!keys.length) return { updated: false, reason: 'this build has no data pack key, so packs are not accepted' };
-  const body = await fetchBuf(new URL('manifest.json', root), 1024 * 1024);
-  // verify the signature over the manifest's exact bytes before trusting its contents; its checksums cover the files
-  const sig = Buffer.from((await fetchBuf(new URL('manifest.sig', root), 4096)).toString('utf8').trim(), 'base64');
-  if (!keys.some((k) => { try { return verify(null, body, k, sig); } catch { return false; } })) {
-    throw Object.assign(new Error('The game data signature is not valid, so the update was not installed.'), { code: 'BAD_SIGNATURE' });
+  const root = base.endsWith('/') ? base : `${base}/`;
+  const remote = await signedManifest(root, keys);
+  const app = announcedApp(remote);
+  if (current?.dataVersion && remote.dataVersion <= current.dataVersion) {
+    return { updated: false, manifest: current, ...app, reason: 'up to date' };
   }
-  const remote = JSON.parse(body.toString('utf8'));
-  if (remote.format !== 1 || !remote.files || !remote.dataVersion) throw new Error('The game data list is not in the expected format.');
-  // latest released app version, announced in the signed manifest
-  const latestAppVersion = /^\d+\.\d+\.\d+$/.test(remote.latestAppVersion || '') ? remote.latestAppVersion : null;
-  // and the checksums for downloading it, when the manifest has them
-  const latestApp = remote.latestApp && remote.latestApp.version === latestAppVersion ? remote.latestApp : null;
-  if (current?.dataVersion && remote.dataVersion <= current.dataVersion) return { updated: false, manifest: current,
-    latestAppVersion, latestApp, reason: 'up to date' };
-
   const entries = Object.entries(remote.files);
-  let total = 0;
-  for (const [rel, f] of entries) {
-    if (!SAFE_PATH.test(rel) || rel.includes('..') || !/^[0-9a-f]{64}$/.test(f.sha256
-      || '')) throw new Error(`The game data list has an invalid entry: ${rel}.`);
-    total += f.size || 0;
-  }
-  if (total > MAX_TOTAL) throw new Error('The game data is larger than allowed.');
-
+  checkEntries(entries);
   const staging = `${dir}.new`;
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
-  let downloaded = 0;
-  let done = 0;
-  let next = 0;
-  let failed = null;
-  const installOne = async ([rel, f]) => {
-    const target = path.join(staging, ...rel.split('/'));
-    await mkdir(path.dirname(target), { recursive: true });
-    // reuse an identical local file instead of downloading it
-    let buf = null;
-    for (const have of [path.join(dir, ...rel.split('/')), path.join(staticDir, ...rel.split('/'))]) {
-      try { const b = await readFile(have); if (sha256(b) === f.sha256) { buf = b; break; } } catch { /* not there */ }
-    }
-    if (!buf) {
-      buf = await fetchBuf(new URL(rel.split('/').map(encodeURIComponent).join('/'), root), MAX_FILE);
-      if (sha256(buf) !== f.sha256) throw new Error(`A game data file does not match its checksum: ${rel}.`);
-      downloaded++;
-    }
-    await writeFile(target, buf);
-    onProgress?.(++done, entries.length);
-  };
-  // PARALLEL workers take files in turn; the first error stops them all
-  const worker = async () => {
-    while (!failed && next < entries.length) {
-      try { await installOne(entries[next++]); } catch (e) { failed ??= e; }
-    }
-  };
-  await Promise.all(Array.from({ length: PARALLEL }, worker));
-  if (failed) throw failed;
+  const downloaded = await fillStaging(entries, { root, staging, reuseFrom: [dir, staticDir], onProgress });
   await writeFile(path.join(staging, 'gamedata.json'), JSON.stringify(remote, null, 1));
-  // swap directories; remove the old pack only once the new one is in place
-  const old = `${dir}.old`;
-  await rm(old, { recursive: true, force: true });
-  try { await stat(dir); await rename(dir, old); } catch { /* no pack installed yet */ }
-  await rename(staging, dir);
-  await rm(old, { recursive: true, force: true });
-  return { updated: true, manifest: remote, downloaded, latestAppVersion, latestApp,
-    reason: `installed data for game build ${remote.gameBuild}` };
+  await swapIn(staging, dir);
+  return { updated: true, manifest: remote, downloaded, ...app, reason: `installed data for game build ${remote.gameBuild}` };
 }

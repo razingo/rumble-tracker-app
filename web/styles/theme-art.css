@@ -45,7 +45,7 @@ body {
     linear-gradient(90deg, transparent, rgb(255 214 150 / 30%) 3%, rgb(255 214 150 / 30%) 97%,
       transparent) left bottom / 100% 1px no-repeat;
 }
-.panel > h2:not(:only-child), .cal-head, .planner-head { padding-bottom: 9px; background: var(--section-line); }
+.panel > h2:not(:only-child), .section-head, .planner-head { padding-bottom: 9px; background: var(--section-line); }
 .panel.grid-head > h2, .panel.armory-toolbar > h2 { padding-bottom: 0; background: none; }
 .planner h3 { color: #ffe3a8; }
 .plan-row:hover { background: rgb(255 220 160 / 8%); }
@@ -165,7 +165,7 @@ body {
 }
 
 /* Armory: a tome on each saved army */
-.am-card { position: relative; }
+.armory-card { position: relative; }
 
 @media (max-width: 700px) {
   body { background-attachment: scroll; }

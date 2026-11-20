@@ -1,11 +1,13 @@
 // Army tab: the army builder, a leader and six minis, with the level each mini plays at in its slot.
 import { poll } from './app.js';
 import { FAMILIES, allTraits, toggleIn } from './collection.js';
-import { $, store, post, RULES, BY_SLUG, TAG_ICONS, state, onTablesReload } from './core.js';
+import { $, store, getJson, post, copyText, RULES, BY_SLUG, TAG_ICONS, state, onTablesReload } from './core.js';
 import { confirmDialog, alertDialog } from './dialogs.js';
 import { ico, openDrawer } from './drawer.js';
+import { SECOND } from './lib/constants.js';
 import { esc } from './lib/format.js';
 import { LIMITS, withTag } from './lib/limits.js';
+import { traitPicker, bindTraitPicker } from './trait-picker.js';
 import { rarityColor, miniOf, effectivePicks, armyOf, totalLevel } from './units.js';
 
 // The army builder: the draft being edited and the state of its pickers and pop-ups.
@@ -33,7 +35,7 @@ const ownedUnit = (slug) => state.units.find((u) => u.slug === slug) || null;
 
 // Faction pennant
 const FAMILY_NAMES = ['Alliance', 'Horde', 'Undead', 'Beast', 'Blackrock', 'Cenarion'];
-// faction pairs with a combined icon (static/icons/fam)
+// Faction pairs with a combined icon (static/icons/fam).
 const FAMILY_COMBOS = ['AllianceHorde', 'AllianceUndead', 'BeastAlliance', 'BeastBlackrock', 'BlackrockAlliance',
   'BlackrockUndead', 'HordeBeast', 'HordeBlackrock', 'UndeadBeast', 'UndeadHorde'];
 
@@ -83,19 +85,29 @@ let CODE_TABLE = null;
 onTablesReload(() => { CODE_TABLE = null; });
 async function codeTable() {
   if (!CODE_TABLE) {
-    const t = await fetch('/static/army_code_minis.json').then((r) => r.json());
+    const t = await getJson('/static/army_code_minis.json', 'the army code table');
     const toSlug = new Map(Object.entries(t.shortIds).map(([id, slug]) => [Number(id), slug]));
     const toId = new Map([...toSlug].map(([id, slug]) => [slug, id]));
-    // codes list talents in the game's order; talentOrder[slug][gameIndex] gives the tracker's index
+    // Codes list talents in the game's order; talentOrder[slug][gameIndex] gives the tracker's index.
     const order = t.talentOrder || {};
     const toApp = (slug, gameIdx) => order[slug]?.[gameIdx] ?? gameIdx;
-    const toGame = (slug, appIdx) => { const k = order[slug]?.indexOf(appIdx) ?? -1; return k >= 0 ? k : appIdx; };
+    const toGame = (slug, appIdx) => {
+      const k = order[slug]?.indexOf(appIdx) ?? -1;
+      return k >= 0 ? k : appIdx;
+    };
     CODE_TABLE = { prefix: t.prefix || 'rumblo:', toSlug, toId, toApp, toGame };
   }
   return CODE_TABLE;
 }
 
-function pbVarint(n, out) { do { let b = n & 0x7f; n >>>= 7; if (n) b |= 0x80; out.push(b); } while (n); }
+function pbVarint(n, out) {
+  do {
+    let b = n & 0x7f;
+    n >>>= 7;
+    if (n) b |= 0x80;
+    out.push(b);
+  } while (n);
+}
 
 export async function encodeArmyCode(d) {
   const table = await codeTable();
@@ -103,12 +115,19 @@ export async function encodeArmyCode(d) {
   const talentOf = (slug) => table.toGame(slug, talentIndex(d, BY_SLUG.get(slug), ownedUnit(slug)) ?? 0);
   if (idx(d.leader) < 0) throw new Error('Choose a leader first.');
   const out = [];
-  out.push(0x08); pbVarint(idx(d.leader), out);
-  out.push(0x10); pbVarint(talentOf(d.leader), out);
+  out.push(0x08);
+  pbVarint(idx(d.leader), out);
+  out.push(0x10);
+  pbVarint(talentOf(d.leader), out);
   for (const slug of d.minis) {
     if (!slug || idx(slug) < 0) continue;
-    const inner = [0x08]; pbVarint(idx(slug), inner); inner.push(0x10); pbVarint(talentOf(slug), inner);
-    out.push(0x1a); pbVarint(inner.length, out); out.push(...inner);
+    const inner = [0x08];
+    pbVarint(idx(slug), inner);
+    inner.push(0x10);
+    pbVarint(talentOf(slug), inner);
+    out.push(0x1a);
+    pbVarint(inner.length, out);
+    out.push(...inner);
   }
   return `${table.prefix}${btoa(String.fromCharCode(...out))}`;
 }
@@ -117,20 +136,43 @@ async function decodeArmyCode(code) {
   const table = await codeTable();
   const raw = atob(code.trim().replace(/^rumblo:/i, ''));
   const b = Uint8Array.from(raw, (c) => c.charCodeAt(0));
-  const varint = (p) => { let r = 0, s = 0, x; do { x = b[p++]; r |= (x & 0x7f) << s; s += 7; } while (x & 0x80); return [r, p]; };
+  const varint = (p) => {
+    let r = 0, s = 0, x;
+    do {
+      x = b[p++];
+      r |= (x & 0x7f) << s;
+      s += 7;
+    } while (x & 0x80);
+    return [r, p];
+  };
   const fields = (s, e) => {
-    const res = []; let p = s;
+    const res = [];
+    let p = s;
     while (p < e) {
-      let t; [t, p] = varint(p);
+      let t;
+      [t, p] = varint(p);
       const fn = t >> 3, wt = t & 7;
-      if (wt === 0) { let v; [v, p] = varint(p); res.push({ fn, v }); }
-      else if (wt === 2) { let l; [l, p] = varint(p); res.push({ fn, sub: fields(p, p + l) }); p += l; }
+      if (wt === 0) {
+        let v;
+        [v, p] = varint(p);
+        res.push({ fn, v });
+      }
+      else if (wt === 2) {
+        let l;
+        [l, p] = varint(p);
+        res.push({ fn, sub: fields(p, p + l) });
+        p += l;
+      }
       else throw new Error('Not a Warcraft Rumble army code.');
     }
     return res;
   };
   const top = fields(0, b.length);
-  const slugAt = (i) => { const s = table.toSlug.get(i); if (!s) throw new Error(`Unknown mini number ${i} in code.`); return s; };
+  const slugAt = (i) => {
+    const s = table.toSlug.get(i);
+    if (!s) throw new Error(`Unknown mini number ${i} in code.`);
+    return s;
+  };
   const leader = slugAt(top.find((f) => f.fn === 1)?.v ?? -1);
   const talents = { [leader]: table.toApp(leader, top.find((f) => f.fn === 2)?.v ?? 0) };
   const minis = top.filter((f) => f.fn === 3).map((f) => {
@@ -183,12 +225,20 @@ function tagsInUse() {
   return [...used, ...(builder.draft?.tags || []).filter((t) => !used.some((x) => x.toLowerCase() === t.toLowerCase()))];
 }
 
-function addTag(raw) {
-  const next = withTag(builder.draft.tags || [], raw, tagsInUse());
-  if (!next) return false;
-  builder.draft.tags = next;
-  saveDraftLocal();
-  return true;
+/**
+ * A key in a tag box: Enter or a comma adds the typed tag, Backspace in an empty box removes the last one. Returns the
+ * new tags, or null when the key changes nothing.
+ */
+export function tagKey(e, tags, known) {
+  const input = e.target;
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const next = withTag(tags, input.value, known);
+    input.value = '';
+    return next;
+  }
+  if (e.key === 'Backspace' && !input.value && tags.length) return tags.slice(0, -1);
+  return null;
 }
 // The server keeps the draft (drafts.json, one per account). Saves wait a moment, so typing makes one save.
 function loadDraft() {
@@ -209,9 +259,14 @@ async function flushDraft() {
   const job = draftPending;
   draftPending = null;
   if (!job) return;
-  try { await post('/api/draft', job); } catch { draftPending = draftPending || job; draftTimer = setTimeout(flushDraft, 3000); }
+  try {
+    await post('/api/draft', job);
+  } catch {
+    draftPending = draftPending || job;
+    draftTimer = setTimeout(flushDraft, 3 * SECOND);
+  }
 }
-// save the last edit when the page closes
+// Save the last edit when the page closes.
 window.addEventListener('pagehide', () => {
   if (!draftPending) return;
   navigator.sendBeacon?.('/api/draft', new Blob([JSON.stringify(draftPending)], { type: 'application/json' }));
@@ -263,20 +318,20 @@ function armyToolbar(d) {
   return `<div class="army-toolbar panel">
     <label>Saved armies <select id="armySaved"><option value="">(unsaved)</option>${options}</select></label>
     ${nameField({ id: 'armyName' }, builder.nameText, d.id ? `Rename "${d.name}"` : 'Name this army')}
-    <button class="btn" data-army-act="save">${d.id ? 'Save' : 'Save as new'}</button>
-    ${d.id ? '<button class="chip" data-army-act="saveas">Save as copy</button>' : ''}
-    <button class="chip" data-army-act="new">New</button>
-    ${d.id ? '<button class="chip danger" data-army-act="delete">Delete</button>' : ''}
+    <button class="btn" data-army-action="save">${d.id ? 'Save' : 'Save as new'}</button>
+    ${d.id ? '<button class="chip" data-army-action="saveas">Save as copy</button>' : ''}
+    <button class="chip" data-army-action="new">New</button>
+    ${d.id ? '<button class="chip danger" data-army-action="delete">Delete</button>' : ''}
     <div class="army-meta">
       ${descriptionField({ id: 'armyDesc' }, d.description)}
-      ${tagEditor(d.tags || [], { attrs: { id: 'armyTagInput' }, removeAttr: 'data-tag-remove', listId: 'armyTagList',
+      ${tagEditor(d.tags || [], { attrs: { id: 'armyTagInput' }, removeAttr: 'data-army-tag-remove', listId: 'armyTagList',
         suggestions: tagsInUse() })}
     </div>
     <span class="code-box">
       <input id="armyCode" class="keep mono" placeholder="Paste a rumblo: army code" aria-label="Army code"
         value="${esc(builder.codeText || '')}">
-      <button class="chip" data-army-act="import">Import code</button>
-      <button class="chip" data-army-act="export">Copy code</button>
+      <button class="chip" data-army-action="import">Import code</button>
+      <button class="chip" data-army-action="export">Copy code</button>
     </span>
     ${builder.codeMsg ? `<span class="small ${builder.codeMsg.ok ? 'cost-ok' : 'cost-no'}">${esc(builder.codeMsg.text)}</span>` : ''}
   </div>`;
@@ -284,31 +339,31 @@ function armyToolbar(d) {
 
 /** One board slot, with its type and tier from the leader's army board and the mini in it. */
 function armySlot(i, s, leader) {
-  // without a leader the slots have no type yet
+  // Without a leader the slots have no type yet.
   const slot = leader ? armyOf(leader)[i] : { type: i === 0 ? 'Leader' : '', tier: 0, boost: false };
   const tier = RULES.armySlots.tiers[slot.tier];
   const { m, u, lv, ti, talent } = s;
   const typeLabel = i === 0 ? 'Leader' : slot.type || (leader ? 'Type not set' : '–');
   const typeIcon = TAG_ICONS[typeLabel];
   const noSynergy = u && i > 0 && leader && !lv.match;
-  const cls = `aslot tier-${slot.tier}${i === 0 ? ' aslot-leader' : ''}${u ? '' : ' empty'}${lv.match
+  const cls = `army-slot tier-${slot.tier}${i === 0 ? ' army-slot-leader' : ''}${u ? '' : ' empty'}${lv.match
     ? ' matched' : ''}${noSynergy ? ' no-synergy' : ''}`;
   const empty = i === 0 ? 'Drop or pick a leader' : leader ? 'Drop or pick a mini' : 'Pick a leader first';
   const level = u && lv.level != null
     ? `<b>${lv.level}</b>${lv.xpMax ? '<span class="max">MAX</span>' : ''}${lv.boosted ? '<span class="max boost">BOOST</span>' : ''}`
     : u ? '<span class="muted">–</span>' : '';
   const talentButton = u && talent
-    ? `<button class="atalent${effectivePicks(u).includes(ti) ? '' : ' locked'}" data-atalent="${i}"
+    ? `<button class="army-talent${effectivePicks(u).includes(ti) ? '' : ' locked'}" data-army-talent="${i}"
       title="Talent: ${esc(talent.name)}. Click to choose another.">${ico(talent.icon,
       talent.name).replace('class="ico"', 'class="ico talent-ico"')}</button>`
     : '';
-  return `<div class="${cls}" data-drop-slot="${i}" style="--tc:${tier.color};--rc:${u ? rarityColor(u.rarity) : 'var(--line)'}">
-    <div class="aslot-head${typeIcon ? ' has-icon' : ''}" title="${esc(typeLabel)} · ${tier.name}${tier.bonus
+  return `<div class="${cls}" data-army-drop-slot="${i}" style="--tc:${tier.color};--rc:${u ? rarityColor(u.rarity) : 'var(--line)'}">
+    <div class="army-slot-head${typeIcon ? ' has-icon' : ''}" title="${esc(typeLabel)} · ${tier.name}${tier.bonus
       ? ` +${tier.bonus}` : ''}${slot.boost ? ' · Boost' : ''}">
       ${typeIcon ? `<span class="medal">${ico(typeIcon, typeLabel)}</span>` : ''}<span
-        class="aslot-label">${esc(typeLabel)}</span>${slot.boost ? '<span class="boost-mark">⚡</span>' : ''}
+        class="army-slot-label">${esc(typeLabel)}</span>${slot.boost ? '<span class="boost-mark">⚡</span>' : ''}
     </div>
-    <button class="aslot-body" data-aslot="${i}" ${u && i > 0 ? `draggable="true" data-drag-slot="${i}"` : ''}
+    <button class="army-slot-body" data-army-slot="${i}" ${u && i > 0 ? `draggable="true" data-army-drag-slot="${i}"` : ''}
       aria-label="${u ? `Remove ${esc(m.name)}` : 'Empty slot'}" title="${u ? 'Click to remove it, right-click for details' : ''}">
       ${m ? famFlag(m) : ''}
       ${m ? `<img class="portrait" src="/static/${m.art}" alt="" draggable="false">` : '<span class="add">+</span>'}
@@ -316,7 +371,7 @@ function armySlot(i, s, leader) {
       ${lv.match && lv.bonus ? `<span class="up" title="Slot bonus +${lv.bonus}">▲${lv.bonus}</span>` : ''}
       ${m ? `<span class="aname">${esc(m.name)}</span>` : `<span class="aname muted">${empty}</span>`}
     </button>
-    <div class="aslot-foot">${level}${talentButton}</div>
+    <div class="army-slot-foot">${level}${talentButton}</div>
     ${builder.talentPop === i && u && talent ? talentPopup(i, u) : ''}
   </div>`;
 }
@@ -356,7 +411,7 @@ export function renderArmy() {
         <h2 class="army-title">${leader ? `${esc(miniOf(leader).name)}'s Army` : 'New army'}</h2>
         <div class="army-head-right">
           <div class="army-stat" title="Average gold cost"><span class="gold">●</span>${stats.avgCost}</div>
-          <button class="chip danger" data-army-act="clear" title="Remove the leader and all minis">Clear army</button>
+          <button class="chip danger" data-army-action="clear" title="Remove the leader and all minis">Clear army</button>
         </div>
       </div>
       <div class="army-board">${stats.slots.map((s, i) => armySlot(i, s, leader)).join('')}</div>
@@ -365,7 +420,7 @@ export function renderArmy() {
         A mini's level in a slot is its XP level + rarity + talents, plus the slot's tier bonus if it matches the slot
         type (Wildcard matches all). A Boost slot counts as XP level 20.</div>
     </div>
-    <div class="army-pools" data-drop-remove>
+    <div class="army-pools" data-army-drop-remove>
       <section class="panel pool" id="pool-leaders"></section>
       <section class="panel pool" id="pool-units"></section>
     </div>`;
@@ -373,7 +428,7 @@ export function renderArmy() {
   renderPool('units');
 }
 
-// The Leaders and Units & Spells pools
+// The Leaders and Units & Spells pools.
 const POOL_DEFAULT = { leaders: { q: '', fam: [], traits: [], traitMode: 'all', sort: 'level' },
   units: { q: '', fam: [], type: [], traits: [], traitMode: 'all', sort: 'level' } };
 function pools() {
@@ -435,7 +490,7 @@ function renderPool(kind) {
   if (!el) return;
   const p = pools()[kind];
   const famChips = FAMILIES.map((f) => `<button class="chip small-chip" aria-pressed="${p.fam.includes(f)}"
-    data-pool-fam="${f}" data-pool="${kind}" title="${f}">${ico(TAG_ICONS[f], f)}</button>`);
+    data-pool-family="${f}" data-pool="${kind}" title="${f}">${ico(TAG_ICONS[f], f)}</button>`);
   const typeChips = kind === 'units' ? [['Unit', 'Units'], ['Spell', 'Spells']].map(([k, l]) =>
     `<button class="chip small-chip" aria-pressed="${p.type.includes(k)}" data-pool-type="${k}"
     data-pool="${kind}">${l}</button>`).join('') : '';
@@ -444,46 +499,25 @@ function renderPool(kind) {
   const inPane = new Set(state.units.map(miniOf).filter((m) => m
     && (kind === 'leaders' ? m.category === 'Leader' : m.category !== 'Leader')).flatMap((m) => m.traits.map((t) => t.name)));
   const traits = allTraits().filter((t) => inPane.has(t.name));
-  const open = builder.poolTraitOpen === kind;
-  // the trait picker lists the match mode first, then the chosen traits, then the rest from A to Z
-  const tq = builder.poolTraitQ[kind] || '';
-  const opt = (t) => `<label class="trait-opt" data-trait-name="${esc(t.name.toLowerCase())}"${tq
-    && !t.name.toLowerCase().includes(tq) ? ' hidden' : ''}>
-        <input type="checkbox" data-pool-trait-box="${esc(t.name)}" data-pool="${kind}" ${p.traits.includes(t.name) ? 'checked' : ''}>
-        ${ico(t.icon, t.name)}<span>${esc(t.name)}</span></label>`;
-  const ticked = traits.filter((t) => p.traits.includes(t.name));
-  const rest = traits.filter((t) => !p.traits.includes(t.name));
-  const any = p.traitMode === 'any';
-  const popup = open ? `<div class="trait-pop pool-traits" role="dialog" aria-label="Traits">
-      <div class="trait-pop-head">
-        <span class="seg"><button class="chip small-chip" aria-pressed="${!any}" data-pool-mode="all"
-          data-pool="${kind}" title="Minis with every selected trait">Match all</button><button
-          class="chip small-chip" aria-pressed="${any}" data-pool-mode="any" data-pool="${kind}"
-          title="Minis with any selected trait">Match any</button></span>
-        ${p.traits.length ? `<button class="chip small-chip" data-pool-clear-traits="${kind}">Clear</button>` : ''}
-      </div>
-      <input class="trait-search keep" type="search" data-pool-trait-search="${kind}" placeholder="Search traits…" value="${esc(tq)}">
-      <div class="trait-list">${ticked.map(opt).join('')}${ticked.length && rest.length
-        ? '<hr class="trait-sep">' : ''}${rest.map(opt).join('')}</div>
-    </div>` : '';
+  const picker = traitPicker({
+    scope: kind, traits, filter: p, open: builder.poolTraitOpen === kind, query: builder.poolTraitQ[kind] || '',
+    label: `Traits${p.traits.length ? ` (${p.traits.length})` : ''}`, buttonClass: 'chip small-chip',
+  });
   el.innerHTML = `<div class="pool-head">
       <h2>${kind === 'leaders' ? 'Leaders' : 'Units & Spells'}</h2>
       <input class="pool-search keep" type="search" data-pool-search="${kind}" placeholder="Search…" value="${esc(p.q)}">
     </div>
     ${(() => {
-      const traitsBtn = `<span class="trait-anchor"><button class="chip small-chip" aria-expanded="${open}"
-        aria-pressed="${p.traits.length > 0}" data-pool-traits="${kind}">Traits${p.traits.length
-        ? ` (${p.traits.length})` : ''} ▾</button>${popup}</span>`;
       const sortSel = `<select data-pool-sort="${kind}" aria-label="Sort">${sorts.map(([k, l]) =>
         `<option value="${k}" ${p.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
       const active = !!(p.q || p.fam.length || p.type?.length || p.traits.length);
       const clearBtn = `<button class="chip small-chip clear-filters" data-pool-clear="${kind}"
         ${active ? '' : 'disabled'}>✕ Clear filters</button>`;
-      if (kind !== 'leaders') return `<div class="pool-filters">${typeChips}${famChips.join('')}${traitsBtn}${clearBtn}${sortSel}</div>`;
-      // the Leaders pool shows the factions in two rows of three
+      if (kind !== 'leaders') return `<div class="pool-filters">${typeChips}${famChips.join('')}${picker}${clearBtn}${sortSel}</div>`;
+      // The Leaders pool shows the factions in two rows of three.
       return `<div class="pool-filters pool-filters-rows">
-        <div class="pf-row">${famChips.slice(0, 3).join('')}${traitsBtn}</div>
-        <div class="pf-row">${famChips.slice(3).join('')}${clearBtn}${sortSel}</div>
+        <div class="pool-filter-row">${famChips.slice(0, 3).join('')}${picker}</div>
+        <div class="pool-filter-row">${famChips.slice(3).join('')}${clearBtn}${sortSel}</div>
       </div>`;
     })()}
     <div class="pool-well"><div class="pool-grid" id="pool-grid-${kind}"></div></div>`;
@@ -498,7 +532,7 @@ function renderPoolGrid(kind) {
   if (!grid.dataset.fadeBound) {
     grid.dataset.fadeBound = '1';
     grid.addEventListener('scroll', () => poolFade(grid), { passive: true });
-    // also on first display and on resize
+    // Also on first display and on resize.
     if (window.ResizeObserver) new ResizeObserver(() => poolFade(grid)).observe(grid);
   }
   poolFade(grid);
@@ -534,11 +568,17 @@ function placeMini(slug, i) {
 function addFromPool(slug, kind) {
   const d = builder.draft;
   if (kind === 'leaders') return placeLeader(slug);
-  if (d.minis.includes(slug)) { d.minis[d.minis.indexOf(slug)] = null; saveDraftLocal(); return renderArmy(); }
+  if (d.minis.includes(slug)) {
+    d.minis[d.minis.indexOf(slug)] = null;
+    saveDraftLocal();
+    return renderArmy();
+  }
   const empty = d.minis.map((s, k) => (s ? null : k + 1)).filter((x) => x != null);
-  if (!empty.length) { builder.codeMsg = { ok: false, text: 'The army is full - drag a mini onto a slot to replace it.' };
-    return renderArmy(); }
-  // matching slot first, then Wildcard, then any empty slot
+  if (!empty.length) {
+    builder.codeMsg = { ok: false, text: 'The army is full. Drag a mini onto a slot to replace it.' };
+    return renderArmy();
+  }
+  // Matching slot first, then Wildcard, then any empty slot.
   const m = miniOf(ownedUnit(slug));
   const fits = matchingSlots(m).filter((i) => empty.includes(i));
   const wild = matchingSlots(m, true).filter((i) => empty.includes(i));
@@ -566,7 +606,7 @@ function talentPopup(i, u) {
   return `<div class="talent-pop" role="dialog" aria-label="Choose a talent for ${esc(m.name)}">
     <div class="talent-pop-title">${esc(m.name)}: talent</div>
     ${m.talents.map((t, k) => `<button class="talent-opt${k === current ? ' on' : ''}${owned.has(k) ? '' : ' locked'}"
-      data-pick-talent="${k}">
+      data-army-talent-pick="${k}">
       <img src="/static/${t.icon}" alt="">
       <span><b>${esc(t.name)}</b>${owned.has(k) ? '' : ' <small class="muted">(not unlocked)</small>'}<span
         class="small desc">${esc(t.description)}</span></span>
@@ -585,7 +625,7 @@ async function armyAction(act) {
   const list = [...(state.savedArmies || [])];
   if (act === 'new') { builder.draft = emptyDraft(); builder.nameText = ''; saveDraftLocal(); renderArmy(); return; }
   if (act === 'clear') {
-    // empties the board but keeps the name and the saved army
+    // Empties the board but keeps the name and the saved army.
     builder.draft = { ...d, leader: null, minis: [null, null, null, null, null, null], talents: {} };
     builder.talentPop = null;
     saveDraftLocal(); renderArmy(); return;
@@ -606,9 +646,7 @@ async function armyAction(act) {
     try {
       const code = await encodeArmyCode(d);
       builder.codeText = code;
-      let copied = false;
-      try { await navigator.clipboard.writeText(code); copied = true; } catch { /* clipboard blocked */ }
-      builder.codeMsg = { ok: true, text: copied ? 'Code copied to clipboard.' : 'Code ready - copy it from the box.' };
+      builder.codeMsg = { ok: true, text: (await copyText(code)) ? 'Code copied.' : 'Code ready. Copy it from the box.' };
     } catch (err) { builder.codeMsg = { ok: false, text: err.message }; }
     renderArmy(); return;
   }
@@ -621,20 +659,21 @@ async function armyAction(act) {
   }
   if (act === 'save' || act === 'saveas') {
     const id = act === 'save' && d.id ? d.id : `a${Date.now().toString(36)}`;
-    // typed name, else the saved name, else a generated one
+    // Typed name, else the saved name, else a generated one.
     const typed = ($('#armyName')?.value || '').trim();
     const leaderName = d.leader ? BY_SLUG.get(d.leader)?.name : null;
     const fallback = act === 'save' && d.id ? d.name : `${leaderName ? `${leaderName} army` : 'Army'} ${list.length + 1}`;
     const name = typed || fallback;
-    const pendingTag = ($('#armyTagInput')?.value || '').trim();
-    if (pendingTag) addTag(pendingTag); // keep an unconfirmed tag
+    // A tag typed but not confirmed with Enter is kept too.
+    d.tags = withTag(d.tags || [], $('#armyTagInput')?.value || '', tagsInUse()) || d.tags || [];
     const entry = { id, name, leader: d.leader, minis: d.minis, talents: d.talents, description: d.description || '', tags: d.tags || [] };
     const idx = list.findIndex((a) => a.id === id);
-    if (idx >= 0) list[idx] = entry; else list.push(entry);
+    if (idx >= 0) list[idx] = entry;
+    else list.push(entry);
     await persistArmies(list);
     builder.draft = { ...d, id, name };
     builder.nameText = '';
-    builder.codeMsg = { ok: true, text: `Saved “${name}”.` };
+    builder.codeMsg = { ok: true, text: `Saved "${name}".` };
     saveDraftLocal(); renderArmy();
   }
 }
@@ -648,56 +687,47 @@ function updatePool(kind, change) {
 
 function closePopups() {
   if (builder.talentPop != null) { builder.talentPop = null; renderArmy(); }
-  if (builder.poolTraitOpen) { const k = builder.poolTraitOpen; builder.poolTraitOpen = null; renderPool(k); }
 }
 
 /** Clicks on a pool's filters and tiles. Returns false when the click wasn't one of them. */
 function poolClick(t) {
   const kind = t.dataset.pool;
   if (t.dataset.poolSlug) addFromPool(t.dataset.poolSlug, t.dataset.poolKind);
-  else if (t.dataset.poolFam) updatePool(kind, (p) => toggleIn(p.fam, t.dataset.poolFam));
+  else if (t.dataset.poolFamily) updatePool(kind, (p) => toggleIn(p.fam, t.dataset.poolFamily));
   else if (t.dataset.poolType) updatePool(kind, (p) => toggleIn(p.type, t.dataset.poolType));
   else if (t.dataset.poolTrait) updatePool(kind, (p) => toggleIn(p.traits, t.dataset.poolTrait));
-  else if (t.dataset.poolMode) updatePool(kind, (p) => { p.traitMode = t.dataset.poolMode; });
-  else if (t.dataset.poolClearTraits) updatePool(t.dataset.poolClearTraits, (p) => { p.traits = []; });
-  // Clear filters keeps the sort and the trait match mode
+  // Clear filters keeps the sort and the trait match mode.
   else if (t.dataset.poolClear) updatePool(t.dataset.poolClear,
     (p) => Object.assign(p, { q: '', fam: [], traits: [], ...(p.type ? { type: [] } : {}) }));
-  else if (t.dataset.poolTraits) {
-    builder.poolTraitOpen = builder.poolTraitOpen === t.dataset.poolTraits ? null : t.dataset.poolTraits;
-    builder.poolTraitQ[t.dataset.poolTraits] = '';
-    renderPool('leaders');
-    renderPool('units');
-    $(`#pool-${t.dataset.poolTraits} .trait-search`)?.focus();
-  } else return false;
+  else return false;
   return true;
 }
 
 /** Clicks on the board: slots, talents, tags and the action buttons. */
 function boardClick(t) {
-  if (t.dataset.tagRemove != null) {
-    builder.draft.tags = (builder.draft.tags || []).filter((x) => x !== t.dataset.tagRemove);
+  if (t.dataset.armyTagRemove != null) {
+    builder.draft.tags = (builder.draft.tags || []).filter((x) => x !== t.dataset.armyTagRemove);
     saveDraftLocal();
     renderArmy();
-  } else if (t.dataset.pickTalent != null) {
-    builder.draft.talents[draftUnit(builder.talentPop).slug] = Number(t.dataset.pickTalent);
+  } else if (t.dataset.armyTalentPick != null) {
+    builder.draft.talents[draftUnit(builder.talentPop).slug] = Number(t.dataset.armyTalentPick);
     builder.talentPop = null;
     saveDraftLocal();
     renderArmy();
-  } else if (t.dataset.atalent != null) {
-    const i = Number(t.dataset.atalent);
+  } else if (t.dataset.armyTalent != null) {
+    const i = Number(t.dataset.armyTalent);
     builder.talentPop = builder.talentPop === i ? null : i;
     renderArmy();
-  } else if (t.dataset.aslot != null) {
-    // clicking a filled slot empties it
-    const i = Number(t.dataset.aslot);
+  } else if (t.dataset.armySlot != null) {
+    // Clicking a filled slot empties it.
+    const i = Number(t.dataset.armySlot);
     if (!draftUnit(i)) return;
     if (i > 0) return removeSlot(i);
     builder.draft.leader = null;
     saveDraftLocal();
     renderArmy();
-  } else if (t.dataset.armyAct) {
-    armyAction(t.dataset.armyAct).catch((err) => alertDialog(err.message, { title: 'Something went wrong' }));
+  } else if (t.dataset.armyAction) {
+    armyAction(t.dataset.armyAction).catch((err) => alertDialog(err.message, { title: 'Something went wrong' }));
   }
 }
 
@@ -705,16 +735,12 @@ function boardClick(t) {
 function bindTyping(page) {
   page.addEventListener('keydown', (e) => {
     if (e.target.id !== 'armyTagInput') return;
-    const input = e.target;
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      if (addTag(input.value)) { renderArmy(); $('#armyTagInput')?.focus(); } else input.value = '';
-    } else if (e.key === 'Backspace' && !input.value && builder.draft.tags?.length) {
-      builder.draft.tags = builder.draft.tags.slice(0, -1);
-      saveDraftLocal();
-      renderArmy();
-      $('#armyTagInput')?.focus();
-    }
+    const next = tagKey(e, builder.draft.tags || [], tagsInUse());
+    if (!next) return;
+    builder.draft.tags = next;
+    saveDraftLocal();
+    renderArmy();
+    $('#armyTagInput')?.focus();
   });
   page.addEventListener('input', (e) => {
     if (e.target.id === 'armyDesc') {
@@ -722,18 +748,11 @@ function bindTyping(page) {
       saveDraftLocal(); // saved without a redraw, so typing isn't interrupted
       return;
     }
-    const traitPane = e.target.dataset?.poolTraitSearch;
-    if (traitPane) {
-      const q = e.target.value.trim().toLowerCase();
-      builder.poolTraitQ[traitPane] = q;
-      for (const o of $(`#pool-${traitPane}`).querySelectorAll('.trait-opt')) o.hidden = !!q && !o.dataset.traitName.includes(q);
-      return;
-    }
     const kind = e.target.dataset?.poolSearch;
     if (!kind) return;
     const p = pools()[kind];
     p.q = e.target.value;
-    // only the tiles are redrawn while typing, so Clear filters is updated here
+    // Only the tiles are redrawn while typing, so Clear filters is updated here.
     renderPoolGrid(kind);
     const clear = $(`#pool-${kind} [data-pool-clear]`);
     if (clear) clear.disabled = !(p.q || p.fam.length || p.type?.length || p.traits.length);
@@ -751,14 +770,14 @@ function bindDragAndDrop(page) {
   };
   page.addEventListener('dragstart', (e) => {
     const card = e.target.closest('[data-pool-slug]');
-    const fromBoard = e.target.closest('[data-drag-slot]');
+    const fromBoard = e.target.closest('[data-army-drag-slot]');
     if (card) drag = { slug: card.dataset.poolSlug, kind: card.dataset.poolKind };
-    else if (fromBoard) drag = { fromSlot: Number(fromBoard.dataset.dragSlot) };
+    else if (fromBoard) drag = { fromSlot: Number(fromBoard.dataset.armyDragSlot) };
     else return;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', drag.slug || `slot:${drag.fromSlot}`);
     page.classList.add('dragging');
-    for (const s of page.querySelectorAll('[data-drop-slot]')) s.classList.toggle('drop-ok', canDrop(Number(s.dataset.dropSlot)));
+    for (const s of page.querySelectorAll('[data-army-drop-slot]')) s.classList.toggle('drop-ok', canDrop(Number(s.dataset.armyDropSlot)));
   });
   page.addEventListener('dragend', () => {
     drag = null;
@@ -766,9 +785,9 @@ function bindDragAndDrop(page) {
     for (const s of page.querySelectorAll('.drop-ok,.drop-hover')) s.classList.remove('drop-ok', 'drop-hover');
   });
   page.addEventListener('dragover', (e) => {
-    const slot = e.target.closest('[data-drop-slot]');
-    const remove = !slot && drag?.fromSlot != null && e.target.closest('[data-drop-remove]');
-    if (!(slot && canDrop(Number(slot.dataset.dropSlot))) && !remove) return;
+    const slot = e.target.closest('[data-army-drop-slot]');
+    const remove = !slot && drag?.fromSlot != null && e.target.closest('[data-army-drop-remove]');
+    if (!(slot && canDrop(Number(slot.dataset.armyDropSlot))) && !remove) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     for (const s of page.querySelectorAll('.drop-hover')) if (s !== slot) s.classList.remove('drop-hover');
@@ -777,11 +796,11 @@ function bindDragAndDrop(page) {
   page.addEventListener('drop', (e) => {
     if (!drag) return;
     e.preventDefault();
-    const slot = e.target.closest('[data-drop-slot]');
+    const slot = e.target.closest('[data-army-drop-slot]');
     const d = drag;
     drag = null;
     if (slot) {
-      const i = Number(slot.dataset.dropSlot);
+      const i = Number(slot.dataset.armyDropSlot);
       if (d.fromSlot != null) swapSlots(d.fromSlot, i);
       else if (d.kind === 'leaders') placeLeader(d.slug);
       else placeMini(d.slug, i);
@@ -789,45 +808,52 @@ function bindDragAndDrop(page) {
   });
 }
 
-// what a click on the Army tab can act on: the board, the talent pop-up, the pools and the tags
+// What a click on the Army tab can act on: the board, the talent pop-up, the pools and the tags.
 const CLICKABLE = [
-  'data-aslot', 'data-atalent', 'data-pick-talent', 'data-army-act', 'data-pool-slug', 'data-pool-fam', 'data-pool-type',
-  'data-pool-traits', 'data-pool-trait', 'data-pool-mode', 'data-pool-clear-traits', 'data-pool-clear', 'data-tag-remove',
+  'data-army-slot', 'data-army-talent', 'data-army-talent-pick', 'data-army-action', 'data-pool-slug', 'data-pool-family', 'data-pool-type',
+  'data-pool-trait', 'data-pool-clear', 'data-army-tag-remove',
 ].map((a) => `[${a}]`).join(',');
 
 export function bindArmy() {
   const page = $('#tab-army');
   bindTyping(page);
   bindDragAndDrop(page);
+  for (const kind of ['leaders', 'units']) {
+    // Opening one pool's picker closes the other's.
+    const show = (open) => {
+      builder.poolTraitOpen = open ? kind : null;
+      builder.poolTraitQ[kind] = '';
+      renderPool('leaders');
+      renderPool('units');
+    };
+    bindTraitPicker(page, kind, {
+      isOpen: () => builder.poolTraitOpen === kind,
+      toggle: () => show(builder.poolTraitOpen !== kind),
+      close: () => show(false),
+      mode: (mode) => updatePool(kind, (p) => { p.traitMode = mode; }),
+      clear: () => updatePool(kind, (p) => { p.traits = []; }),
+      tick: (name) => updatePool(kind, (p) => toggleIn(p.traits, name)),
+      search: (text) => { builder.poolTraitQ[kind] = text; },
+    });
+  }
   // right-click opens the mini's details
   page.addEventListener('contextmenu', (e) => {
     const card = e.target.closest('[data-pool-slug]');
-    const slot = e.target.closest('[data-aslot]');
-    const u = card ? ownedUnit(card.dataset.poolSlug) : slot ? draftUnit(Number(slot.dataset.aslot)) : null;
+    const slot = e.target.closest('[data-army-slot]');
+    const u = card ? ownedUnit(card.dataset.poolSlug) : slot ? draftUnit(Number(slot.dataset.armySlot)) : null;
     if (!u) return;
     e.preventDefault();
     openDrawer({ kind: 'unit', id: u.id });
   });
   page.addEventListener('click', (e) => {
-    // a click outside an open pop-up closes it
-    if (builder.talentPop != null && !e.target.closest('.talent-pop,[data-atalent]')) { builder.talentPop = null; renderArmy(); }
-    if (builder.poolTraitOpen && !e.target.closest('.pool-traits,[data-pool-traits]')) {
-      const k = builder.poolTraitOpen;
-      builder.poolTraitOpen = null;
-      renderPool(k);
-    }
+    // A click outside an open pop-up closes it.
+    if (builder.talentPop != null && !e.target.closest('.talent-pop,[data-army-talent]')) { builder.talentPop = null; renderArmy(); }
     const t = e.target.closest(CLICKABLE);
     if (t && !poolClick(t)) boardClick(t);
   });
   page.addEventListener('change', (e) => {
     const d = e.target.dataset || {};
-    if (d.poolTraitBox) {
-      // ticking a trait keeps the list where it was scrolled to
-      const scroll = $(`#pool-${d.pool} .trait-list`)?.scrollTop;
-      updatePool(d.pool, (p) => toggleIn(p.traits, d.poolTraitBox));
-      const list = $(`#pool-${d.pool} .trait-list`);
-      if (list) list.scrollTop = scroll || 0;
-    } else if (d.poolSort) {
+    if (d.poolSort) {
       pools()[d.poolSort].sort = e.target.value;
       savePools();
       renderPoolGrid(d.poolSort);

@@ -29,7 +29,10 @@ export function createScanner(ctx, { readPrefs }) {
   }
   function noteSuccess(key) {
     failures.delete(key);
-    if (![...failures.values()].some((n) => n >= FAILS_BEFORE_ERROR)) { status.lastError = null; status.lastErrorLog = null; }
+    if (![...failures.values()].some((n) => n >= FAILS_BEFORE_ERROR)) {
+      status.lastError = null;
+      status.lastErrorLog = null;
+    }
   }
 
   /** The account's state, loaded from state/<id>.json on first use (and moved from older formats). */
@@ -39,7 +42,10 @@ export function createScanner(ctx, { readPrefs }) {
     acc = await ctx.readUserJson(path.join(ctx.paths.STATE, `${id}.json`), { snapshot: null, events: [] });
     ctx.accounts.set(id, acc);
     if (acc.pvpLog) { // versions before 0.4.0 kept the PvP log here
-      if (!ctx.user.pvpHistory[id]) { ctx.user.pvpHistory[id] = acc.pvpLog; dirty.add('pvpHistory'); }
+      if (!ctx.user.pvpHistory[id]) {
+        ctx.user.pvpHistory[id] = acc.pvpLog;
+        dirty.add('pvpHistory');
+      }
       delete acc.pvpLog;
     }
     return acc;
@@ -73,9 +79,16 @@ export function createScanner(ctx, { readPrefs }) {
     try {
       const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
       const active = parseActiveEvents(entries.store);
-      if (entries.store && !same(active, acc.activeEvents || [])) { acc.activeEvents = active; acc.activeEventsAt = now; changed = true; }
+      if (entries.store && !same(active, acc.activeEvents || [])) {
+        acc.activeEvents = active;
+        acc.activeEventsAt = now;
+        changed = true;
+      }
       const avatars = parseOwnedAvatars(entries.profile);
-      if (entries.profile && !same(avatars, acc.ownedAvatars || [])) { acc.ownedAvatars = avatars; changed = true; }
+      if (entries.profile && !same(avatars, acc.ownedAvatars || [])) {
+        acc.ownedAvatars = avatars;
+        changed = true;
+      }
       if (storeLog && storeLog(id, storeFieldsForLog(entries.store), now,
         (offer) => storeTable?.offers?.[offer]?.name)) dirty.add('storeChanges');
       const shop = parseStore(entries.store);
@@ -85,12 +98,21 @@ export function createScanner(ctx, { readPrefs }) {
         if (logGrid(u.gridHistory, id, shop.grid, now)) dirty.add('gridHistory');
       }
       const bonuses = parseIncomeBonuses(entries.store);
-      if (entries.store && !same(bonuses, acc.incomeBonuses || [])) { acc.incomeBonuses = bonuses; changed = true; }
-    } catch { /* caught mid-save */ }
+      if (entries.store && !same(bonuses, acc.incomeBonuses || [])) {
+        acc.incomeBonuses = bonuses;
+        changed = true;
+      }
+    } catch {
+      // caught mid-save
+    }
     try {
-      if (recordPvp(u.pvpHistory, id, acc, parsePvp(entries.pvp), now, pvpTable?.victoryPoints)) { changed = true;
-        dirty.add('pvpHistory'); }
-    } catch { /* caught mid-save */ }
+      if (recordPvp(u.pvpHistory, id, acc, parsePvp(entries.pvp), now, pvpTable?.victoryPoints)) {
+        changed = true;
+        dirty.add('pvpHistory');
+      }
+    } catch {
+      // caught mid-save
+    }
     if (changed) await writeJson(path.join(ctx.paths.STATE, `${id}.json`), acc);
     return changed;
   }
@@ -111,7 +133,12 @@ export function createScanner(ctx, { readPrefs }) {
       const now = new Date().toISOString();
       status.lastScan = now;
       for (const entries of Object.values(prefs)) {
-        try { const b = parseGameBuild(entries.commerce); if (b) status.gameBuild = b; } catch { /* caught mid-save */ }
+        try {
+          const b = parseGameBuild(entries.commerce);
+          if (b) status.gameBuild = b;
+        } catch {
+          // caught mid-save
+        }
       }
       const dirty = new Set(); // user-data files to save
       let changed = false;

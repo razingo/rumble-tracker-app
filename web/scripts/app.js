@@ -6,11 +6,12 @@ import { bindBackupMenu } from './backup.js';
 import { renderCalendar, bindCalendar } from './calendar.js';
 import { renderCurrencies, renderSummary, renderNeeds, renderPlanner, renderFilters, renderGrid, renderEvents,
   bindCollection } from './collection.js';
-import { $, store, post, openExternal, RULES, ALWAYS_OWNED, state, dirty, setTables, setState, setDirty,
+import { $, store, getJson, post, openExternal, RULES, ALWAYS_OWNED, state, dirty, setTables, setState, setDirty,
   resetTableCaches, ui } from './core.js';
 import { confirmDialog, alertDialog } from './dialogs.js';
 import { panel, renderDrawer, bindDrawer } from './drawer.js';
 import { renderGridTab, bindGridTab } from './grid.js';
+import { SECOND, MINUTE } from './lib/constants.js';
 import { esc, ago } from './lib/format.js';
 import { LIMITS } from './lib/limits.js';
 import { renderProgress } from './progress.js';
@@ -22,7 +23,11 @@ import { renderDataBanner, renderUpdate, bindUpdate } from './update.js';
 async function quitTracker() {
   if (!(await confirmDialog('The tracker stops reading your game and sending notifications until you start ' +
     'RumbleTracker.exe again.', { title: 'Quit the tracker?', ok: 'Quit', danger: true }))) return;
-  try { await post('/api/quit', {}); } catch { /* already gone */ }
+  try {
+    await post('/api/quit', {});
+  } catch {
+    // already gone
+  }
   document.body.innerHTML = '<main class="quit-page"><h1>The tracker has stopped</h1>'
     + '<p>You can close this window. Start RumbleTracker.exe to open it again.</p></main>';
   setTimeout(() => window.close(), 300);
@@ -30,8 +35,8 @@ async function quitTracker() {
 
 async function loadTables() {
   const [rules, minis] = await Promise.all([
-    fetch('/static/rules.json').then((r) => r.json()),
-    fetch('/static/minis.json').then((r) => r.json()),
+    getJson('/static/rules.json', 'the game rules'),
+    getJson('/static/minis.json', 'the list of minis'),
   ]);
   setTables(rules, minis);
 }
@@ -41,7 +46,9 @@ async function reloadTables() {
   try {
     await loadTables();
     resetTableCaches();
-  } catch { /* keep the old tables; tried again at the next change */ }
+  } catch {
+    // Keep the old tables; tried again at the next change.
+  }
 }
 
 async function boot() {
@@ -63,32 +70,40 @@ async function boot() {
   setTab(ui.tab);
   await poll();
   schedulePoll();
-  // back in view: refresh at once instead of waiting for the slow poll
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); schedulePoll(); } });
-  setInterval(renderStatus, 1000);
+  // Back in view, so refresh at once instead of waiting for the slow poll.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) {
+    poll();
+    schedulePoll();
+  } });
+  setInterval(renderStatus, SECOND);
 }
 
 // The page asks for the state every 5 seconds, every 60 seconds while its window is minimized or hidden, and every
 // second while an update downloads, so the progress bar moves.
-const POLL_MS = 5000, POLL_HIDDEN_MS = 60000, POLL_UPDATE_MS = 1000;
+const POLL_MS = 5 * SECOND, POLL_HIDDEN_MS = MINUTE, POLL_UPDATE_MS = SECOND;
 let pollTimer = null;
 export function schedulePoll() {
   clearTimeout(pollTimer);
   const ms = state?.update?.state === 'downloading' ? POLL_UPDATE_MS : document.hidden ? POLL_HIDDEN_MS : POLL_MS;
-  pollTimer = setTimeout(async () => { await poll(); schedulePoll(); }, ms);
+  pollTimer = setTimeout(async () => {
+    await poll();
+    schedulePoll();
+  }, ms);
 }
 
-// state that changes without a new revision (the server's liveState)
+// State that changes without a new revision (the server's liveState).
 const LIVE_FIELDS = ['lastScan', 'lastError', 'problems', 'gameRunning', 'update'];
 
 export async function poll() {
   try {
     const q = new URLSearchParams();
     if (ui.account) q.set('account', ui.account);
-    // given the revision the page has, the server answers an unchanged state with the live fields only
-    if (state && !state.connError) { q.set('rev', String(state.rev)); q.set('for', String(state.account)); }
-    const r = await fetch(`/api/state?${q}`);
-    const s = await r.json();
+    // Given the revision the page has, the server answers an unchanged state with the live fields only.
+    if (state && !state.connError) {
+      q.set('rev', String(state.rev));
+      q.set('for', String(state.account));
+    }
+    const s = await getJson(`/api/state?${q}`, 'the tracker\'s state');
     if (s.unchanged && state) {
       for (const k of LIVE_FIELDS) state[k] = s[k];
       state.connError = null;
@@ -97,9 +112,12 @@ export async function poll() {
       renderReportBadge();
       return;
     }
-    // after an update the tracker is a new version, so load its page
-    if (state?.appVersion && s.appVersion && s.appVersion !== state.appVersion) { location.reload(); return; }
-    // a data pack brought new game data, so reload the tables before drawing
+    // After an update the tracker is a new version, so load its page.
+    if (state?.appVersion && s.appVersion && s.appVersion !== state.appVersion) {
+      location.reload();
+      return;
+    }
+    // A data pack brought new game data, so reload the tables before drawing.
     const dataVersion = s.dataStatus?.dataVersion || null;
     if (state && dataVersion !== state.dataStatus?.dataVersion) await reloadTables();
     for (const m of ALWAYS_OWNED) {
@@ -113,11 +131,14 @@ export async function poll() {
     ui.account = s.account;
     state.connError = null;
     $('#quitBtn').hidden = !s.standalone;
-    if (s.appVersion) { $('#appVersion').textContent = `v${s.appVersion}`; $('#appVersion').hidden = false; }
+    if (s.appVersion) {
+      $('#appVersion').textContent = `v${s.appVersion}`;
+      $('#appVersion').hidden = false;
+    }
     if (changed) requestRender();
     renderUpdate();
   } catch (e) {
-    if (state) state.connError = 'Tracker server not reachable';
+    if (state) state.connError = e.message;
   }
   renderStatus();
   renderReportBadge();
@@ -232,7 +253,7 @@ function bindHeader() {
     clearTimeout(sizeTimer);
     sizeTimer = setTimeout(keepMinWidth, 250);
   });
-  // in the exe, outside links open in the default browser
+  // In the exe, outside links open in the default browser.
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[target="_blank"][href^="https://"]');
     if (!a || !state?.standalone) return;

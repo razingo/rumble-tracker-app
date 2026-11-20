@@ -19,7 +19,7 @@ export const host = {
   get attached() { return !!launcher; },
   get options() { return launcher?.options || {}; },
 
-  // Quit, from the tray or because Windows is signing out or shutting down
+  // Quit, from the tray or because Windows is signing out or shutting down.
   onQuit(fn) { quitHandler = fn; },
   /** Returns false when the server isn't running yet, so there is nothing to save. */
   quit(reason) {
@@ -28,7 +28,7 @@ export const host = {
     return true;
   },
 
-  // Whether Warcraft Rumble runs, as reported by the tray icon's process
+  // Whether Warcraft Rumble runs, as reported by the tray icon's process.
   reportGame(running) {
     if (running === game.running) return;
     game.running = running;
@@ -46,11 +46,11 @@ export const host = {
     else if (game.running !== null) change(game.running);
   },
 
-  // The app ID notifications are sent under and the link a click opens, once the launcher has registered them
+  // The app ID notifications are sent under and the link a click opens, once the launcher has registered them.
   setNotificationIdentity(next) { identity = { ...identity, ...next }; },
   notificationIdentity() { return identity; },
 
-  // What only the launcher can do
+  // What only the launcher can do.
   /** Installs the exe at `exe` and restarts the tracker; rejects with a message for the player. */
   async applyUpdate(update) {
     if (!launcher) throw new Error('This copy of the tracker can\'t install updates by itself.');

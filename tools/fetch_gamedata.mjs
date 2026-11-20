@@ -1,7 +1,7 @@
 // Downloads the game data into gamedata/: npm run fetch-gamedata [-- --force] [-- <pack address>]
 //
 // The game data is published as a signed data pack in razingo/rumble-tracker-data. It is installed with the app's
-// own installer (server/datapack/datapack.mjs): Ed25519 signature, then each file's SHA-256. Matching local files are
+// own installer (server/datapack/datapack.mjs), which checks the Ed25519 signature and then each file's SHA-256. Matching local files are
 // reused. Run before `npm start` or `npm run build-release`. An older pack never replaces newer local data;
 // --force reinstalls the published pack.
 import { readFile } from 'node:fs/promises';

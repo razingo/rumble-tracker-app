@@ -9,7 +9,7 @@ export function rewardPlanner(rewards) {
   const byKey = new Map(rewards.map((r) => [rewardKey(r), r]));
   const requirements = (r) => (r.requires || []).map((k) => byKey.get(k)).filter(Boolean);
 
-  // every reward after the ones it requires (they can share a row)
+  // Every reward after the ones it requires (they can share a row).
   const order = [];
   const placed = new Set();
   const visit = (r, path = new Set()) => {
@@ -23,8 +23,8 @@ export function rewardPlanner(rewards) {
   const position = new Map(order.map((r, i) => [rewardKey(r), i]));
   const normalize = (keys) => [...new Set(keys)].sort((a, b) => position.get(a) - position.get(b));
 
-  // The cost of claiming every reward in `keys` (in order): take the last one; with no requirements it is paid
-  // alone, with requireAll its requirements join the set, otherwise each requirement is tried in turn.
+  // The cost of claiming every reward in `keys`, in order. It takes the last one. Without requirements that one is paid
+  // alone; with requireAll its requirements join the set, and otherwise each requirement is tried in turn.
   const memo = new Map();
   function cheapest(keys) {
     if (!keys.length) return { cost: 0, take: [] };

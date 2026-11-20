@@ -1,6 +1,6 @@
 // The Settings dialog: Start with Windows and the notifications. The server keeps the settings and sends the
 // notifications, also while the page is closed.
-import { $, post, state } from './core.js';
+import { $, getJson, post, state } from './core.js';
 import { esc, dateTime } from './lib/format.js';
 
 let notify = null; // { settings, types, log, pending, playing }
@@ -8,14 +8,17 @@ let general = null; // { startWithWindows }, null when running from source
 
 async function loadSettings() {
   [notify, general] = await Promise.all([
-    fetch('/api/notifications').then((r) => r.json()),
-    fetch('/api/settings').then((r) => r.json()),
+    getJson('/api/notifications', 'the notification settings'),
+    getJson('/api/settings', 'the settings'),
   ]);
 }
 
 function renderSettings() {
   const dlg = $('#settingsDialog');
-  if (!notify) { dlg.innerHTML = '<p>Loading…</p>'; return; }
+  if (!notify) {
+    dlg.innerHTML = '<p>Loading…</p>';
+    return;
+  }
   const s = notify.settings;
   const accounts = state?.accounts || [];
   const row = (t) => {
@@ -29,19 +32,20 @@ function renderSettings() {
         ${v.whenPlaying ? 'checked' : ''} ${v.on ? '' : 'disabled'} aria-label="Also while the game is running: ${esc(t.label)}"></td>
     </tr>`;
   };
-  dlg.innerHTML = `<form method="dialog" class="dlg-form">
-    <div class="dlg-head"><h2>Settings</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
+  dlg.innerHTML = `<form method="dialog" class="dialog-form">
+    <div class="dialog-head"><h2>Settings</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
     <h3>General</h3>
     ${general?.startWithWindows == null
     ? '<p class="muted small">Start with Windows is available in RumbleTracker.exe.</p>'
-    : `<label class="dlg-toggle"><input type="checkbox" data-general="startWithWindows"
+    : `<label class="dialog-toggle"><input type="checkbox" data-setting="startWithWindows"
       ${general.startWithWindows ? 'checked' : ''}> Start with Windows</label>
       <p class="muted small">Starts in the tray when you sign in to Windows (no window), so notifications arrive
         without opening the tracker.</p>`}
-    <span class="dlg-msg small" data-general-msg></span>
+    <span class="dialog-msg small" data-setting-message></span>
     <h3>Notifications</h3>
     <p class="muted small">They keep coming while the tracker runs, even with this window closed.</p>
-    <label class="dlg-toggle"><input type="checkbox" data-notify-field="enabled" ${s.enabled ? 'checked' : ''}> Send notifications</label>
+    <label class="dialog-toggle"><input type="checkbox" data-notify-field="enabled"
+      ${s.enabled ? 'checked' : ''}> Send notifications</label>
     <label class="notify-acc">For <select data-notify-field="account">
       <option value="">all accounts</option>
       ${accounts.map((a) => `<option value="${a.id}" ${s.account === a.id ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
@@ -50,16 +54,16 @@ function renderSettings() {
       <thead><tr><th></th><th title="When unticked, this isn't sent while the game is running">Also while<br>playing</th></tr></thead>
       <tbody>${notify.types.map(row).join('')}</tbody>
     </table>
-    <p class="muted small">Types left unticked under "Also while playing" wait until the game is
-      closed${notify.playing ? ' (it is running now)' : ''}. Reward goals are set in an event's reward tree on the Calendar.</p>
+    <p class="muted small">Types left unticked under "Also while playing" are skipped while the game is
+      running${notify.playing ? ' (it is running now)' : ''}. Reward goals are set in an event's reward tree on the Calendar.</p>
     <div class="notify-quiet">
       <label><input type="checkbox" data-notify-field="quiet.on" ${s.quiet.on ? 'checked' : ''}> Quiet hours</label>
       <input type="time" data-notify-field="quiet.from" value="${esc(s.quiet.from)}"> – <input type="time"
         data-notify-field="quiet.to" value="${esc(s.quiet.to)}">
       <span class="muted small">held until they end${notify.pending ? ` · ${notify.pending} waiting` : ''}</span>
     </div>
-    <div class="dlg-actions"><button type="button" class="btn" data-notify-test>Send a test notification</button><span
-      class="dlg-msg small"></span></div>
+    <div class="dialog-actions"><button type="button" class="btn" data-notify-test>Send a test notification</button><span
+      class="dialog-msg small"></span></div>
     <h3>Recent</h3>
     ${notify.log.length ? `<ul class="notify-log">${notify.log.map((n) =>
       `<li><span class="muted small">${esc(dateTime(n.t))}</span> <b>${esc(n.title)}</b> <span
@@ -72,8 +76,8 @@ async function saveNotifications(msg) {
   try {
     const r = await post('/api/notifications', { settings: notify.settings });
     notify.settings = r.settings;
-    if (msg) { msg.textContent = 'Saved.'; msg.className = 'dlg-msg small cost-ok'; }
-  } catch (e) { if (msg) { msg.textContent = `Not saved. ${e.message}`; msg.className = 'dlg-msg small cost-no'; } }
+    if (msg) { msg.textContent = 'Saved.'; msg.className = 'dialog-msg small cost-ok'; }
+  } catch (e) { if (msg) { msg.textContent = `Not saved. ${e.message}`; msg.className = 'dialog-msg small cost-no'; } }
 }
 
 export function bindSettings() {
@@ -81,17 +85,23 @@ export function bindSettings() {
   $('#settingsBtn').addEventListener('click', async () => {
     dlg.showModal();
     renderSettings();
-    await loadSettings();
-    renderSettings();
+    try {
+      await loadSettings();
+      renderSettings();
+    } catch (err) {
+      dlg.innerHTML = `<form method="dialog" class="dialog-form">
+        <div class="dialog-head"><h2>Settings</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
+        <p class="dialog-msg small cost-no">${esc(err.message)}</p></form>`;
+    }
   });
   dlg.addEventListener('change', async (e) => {
     const el = e.target;
-    if (el.dataset.general) {
-      const msg = dlg.querySelector('[data-general-msg]');
+    if (el.dataset.setting) {
+      const msg = dlg.querySelector('[data-setting-message]');
       try {
-        general = await post('/api/settings', { [el.dataset.general]: el.checked });
-        msg.textContent = 'Saved.'; msg.className = 'dlg-msg small cost-ok';
-      } catch (err) { el.checked = !el.checked; msg.textContent = `Not saved. ${err.message}`; msg.className = 'dlg-msg small cost-no'; }
+        general = await post('/api/settings', { [el.dataset.setting]: el.checked });
+        msg.textContent = 'Saved.'; msg.className = 'dialog-msg small cost-ok';
+      } catch (err) { el.checked = !el.checked; msg.textContent = `Not saved. ${err.message}`; msg.className = 'dialog-msg small cost-no'; }
       return;
     }
     const field = el.dataset.notifyField;
@@ -102,19 +112,19 @@ export function bindSettings() {
     else if (field.startsWith('quiet.')) s.quiet[field.slice(6)] = value;
     else if (field === 'account') s.account = value || null;
     else s[field] = value;
-    await saveNotifications(dlg.querySelector('.dlg-msg:not([data-general-msg])'));
+    await saveNotifications(dlg.querySelector('.dialog-msg:not([data-setting-message])'));
     renderSettings();
   });
   dlg.addEventListener('click', async (e) => {
     if (e.target === dlg) { dlg.close(); return; } // backdrop click
     if (!e.target.closest('[data-notify-test]')) return;
-    const msg = dlg.querySelector('.dlg-msg:not([data-general-msg])');
-    msg.textContent = 'Sending…'; msg.className = 'dlg-msg small';
-    let text = 'Sent. Check the corner of your screen.', cls = 'dlg-msg small cost-ok';
-    try { await post('/api/notifications/test', {}); } catch (err) { text = err.message; cls = 'dlg-msg small cost-no'; }
+    const msg = dlg.querySelector('.dialog-msg:not([data-setting-message])');
+    msg.textContent = 'Sending…'; msg.className = 'dialog-msg small';
+    let text = 'Sent. Check the corner of your screen.', cls = 'dialog-msg small cost-ok';
+    try { await post('/api/notifications/test', {}); } catch (err) { text = err.message; cls = 'dialog-msg small cost-no'; }
     await loadSettings();
     renderSettings();
-    const shown = dlg.querySelector('.dlg-msg:not([data-general-msg])');
+    const shown = dlg.querySelector('.dialog-msg:not([data-setting-message])');
     shown.textContent = text; shown.className = cls;
   });
 }

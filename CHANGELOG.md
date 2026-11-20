@@ -3,6 +3,20 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.8.0
+
+- The Settings note and the guide now say correctly that notifications left unticked under *Also while playing* are
+  skipped while the game runs, not held back.
+- When the tracker has stopped, the page says so in plain words ("The tracker isn't responding. Is it still running?"),
+  and a tab that can't load its data says which data it was.
+- The Settings dialog shows an error instead of staying on *Loading…* when the settings can't be read.
+- An exported backup is named after your local date, like the automatic ones.
+- The trait picker works the same way on the Collection and Army tabs. Searching traits in an Army pool no longer
+  changes the Collection's search.
+- The G.R.I.D. cooldown note names the special leaders from the game data.
+- The Progress tab's heading is now just *Progress*.
+- For developers: running from source needs Node.js 22 or newer, and the tests also run on that version on GitHub.
+
 ## 0.7.0
 
 - Dates, times and numbers use one format everywhere (US English), whatever the Windows language.

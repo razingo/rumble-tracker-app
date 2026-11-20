@@ -3,6 +3,7 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createContext } from './context.mjs';
 import { host } from './host.mjs';
 import { createTables } from './tables.mjs';
@@ -21,13 +22,14 @@ import { createNotifier } from './notifications/runner.mjs';
 import { writeDailyBackup } from './backup.mjs';
 import { readAutostart, setAutostart, refreshAutostart, autostartCommand } from './autostart.mjs';
 import { createHttpServer } from './http/server.mjs';
+import { DEFAULT_PORT, SECOND, HOUR, DAY } from '../web/scripts/lib/constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SCAN_MS = 5000;           // while the game runs
-const SCANS_AFTER_EXIT = 6;     // the game may still write its save while closing
-const NOTIFY_MS = 30000;
-const PACK_CHECK_MS = 6 * 60 * 60 * 1000;
-const BACKUP_MS = 24 * 60 * 60 * 1000;
+const SCAN_MS = 5 * SECOND; // while the game runs
+const SCANS_AFTER_EXIT = 6; // the game may still write its save while closing
+const NOTIFY_MS = 30 * SECOND;
+const PACK_CHECK_MS = 6 * HOUR;
+const BACKUP_MS = DAY;
 // In RumbleTracker.exe the launcher has already attached to host.mjs with its options. From source, environment
 // variables and defaults apply.
 const STANDALONE = host.attached;
@@ -35,7 +37,7 @@ const STANDALONE = host.attached;
 const ctx = createContext({
   root: ROOT,
   data: path.resolve(host.options.dataDir || process.env.RUMBLE_DATA_DIR || path.join(ROOT, 'data')),
-  port: Number(host.options.port || process.env.PORT || 8765),
+  port: Number(host.options.port || process.env.PORT || DEFAULT_PORT),
   standalone: STANDALONE,
   appVersion: await readJson(path.join(ROOT, 'package.json'), {}).then((p) => p.version || null, () => null),
 });
@@ -122,15 +124,15 @@ async function autoBackup() {
   }
 }
 
-// Stopping, for Quit on the page or in the tray, Windows shutting down, or an app update
+// Stopping, for Quit on the page or in the tray, Windows shutting down, or an app update.
 /** Stops once a running scan and every queued write are done, after writing today's backup (at most 15 s). */
 async function shutdown(reason, code = 0) {
   if (stopping) return;
   stopping = true;
   console.log(reason);
-  const deadline = Date.now() + 15000;
-  const left = () => new Promise((r) => setTimeout(r, Math.max(0, deadline - Date.now())));
-  while (ctx.scan.scanning && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
+  const deadline = Date.now() + 15 * SECOND;
+  const left = () => sleep(Math.max(0, deadline - Date.now()));
+  while (ctx.scan.scanning && Date.now() < deadline) await sleep(100);
   await Promise.race([autoBackup(), left()]);
   await Promise.race([flushWrites(), left()]);
   process.exit(code);
@@ -153,7 +155,12 @@ const autostart = STANDALONE ? {
   get: async () => (await readAutostart()) === autostartCommand(process.execPath),
   set: (on) => setAutostart(on, process.execPath),
 } : null;
-if (STANDALONE) refreshAutostart(process.execPath).catch(() => {});
+if (STANDALONE) {
+  refreshAutostart(process.execPath).catch((e) => {
+    console.log(`Start with Windows: ${e.message}`);
+    ctx.errorLog.add('start with Windows', e.message);
+  });
+}
 
 // Start
 await scan();
@@ -176,6 +183,6 @@ const server = createHttpServer(ctx, { scan, shutdown, startUpdate, notifier, ga
 server.listen(ctx.port, '127.0.0.1', () => {
   console.log(`Rumble tracker running at http://localhost:${ctx.port}`);
   console.log(`Data folder: ${ctx.paths.DATA}`);
-  // only the count, as account names are chosen by the player and the log may be attached to bug reports
+  // Only the count, as account names are chosen by the player and the log may be attached to bug reports.
   console.log(`Accounts found: ${ctx.accounts.size}${ctx.scan.lastErrorLog ? `  (error: ${ctx.scan.lastErrorLog})` : ''}`);
 });

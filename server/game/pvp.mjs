@@ -1,7 +1,7 @@
 // PvP from the save (PvpPlayerRankState) and the matches the tracker infers from changes between scans.
-// The save has no match history or win/loss counts. Each finished match adds Victory Points (VP: loss = base x loss,
-// win = base x win, more on a win streak) and wins add honor, losses usually take some. So a VP change tells
-// how many wins and losses happened since the last scan; honor breaks ties (two losses = one win in VP).
+// The save has no match history or win/loss counts. Each finished match adds Victory Points (VP), base x loss for a
+// loss and base x win for a win, more on a win streak. Wins add honor and losses usually take some. So a VP change tells
+// how many wins and losses happened since the last scan, and honor breaks ties, as two losses can equal one win in VP.
 import { parseMessage, sub, first, num, readId } from './protobuf.mjs';
 
 /** { season: save id, honor, honor2, vp } from PvpPlayerRankState, or null. honor2 is a second honor value
@@ -46,7 +46,7 @@ export function inferMatches(prev, cur, rules, maxMatches = 12) {
     return null;
   }
   const { loss, wins } = vpValues(rules);
-  // every (losses, wins per band) with total VP = dv, fewest matches first
+  // Every (losses, wins per band) with total VP = dv, fewest matches first.
   const found = [];
   const search = (left, i, counts) => {
     if (counts.reduce((a, b) => a + b, 0) > maxMatches) return;
@@ -65,7 +65,7 @@ export function inferMatches(prev, cur, rules, maxMatches = 12) {
   const fewest = Math.min(...pool.map((o) => o.wins + o.losses));
   const best = pool.filter((o) => o.wins + o.losses === fewest);
   const pick = best.sort((a, b) => (dh >= 0 ? b.wins - a.wins : b.losses - a.losses))[0];
-  // certain only when honor leaves one combination
+  // Certain only when honor leaves one combination.
   return { wins: pick.wins, losses: pick.losses, estimated: pool.length > 1 || !fits.length, honorOnly: false };
 }
 
@@ -83,7 +83,7 @@ export function pvpReading(prev, cur, now, rules) {
   entry.dv = cur.vp - prev.vp;
   const m = inferMatches(prev, cur, rules);
   if (m) return { ...entry, ...m };
-  // only the second honor value moved, which isn't a match
+  // Only the second honor value moved, which isn't a match.
   if (!entry.dh && !entry.dv) return entry;
   return { ...entry, unexplained: true };
 }
@@ -91,7 +91,9 @@ export function pvpReading(prev, cur, now, rules) {
 /** Sets ('win' | 'loss') or clears (null) the player's own result for an unexplained entry. Returns false if not allowed. */
 export function manualResult(entry, result) {
   if (!entry || !entry.unexplained || ![null, 'win', 'loss'].includes(result)) return false;
-  delete entry.wins; delete entry.losses; delete entry.manual;
+  delete entry.wins;
+  delete entry.losses;
+  delete entry.manual;
   if (result) Object.assign(entry, { manual: result, wins: result === 'win' ? 1 : 0, losses: result === 'loss' ? 1 : 0 });
   return true;
 }

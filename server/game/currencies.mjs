@@ -1,4 +1,4 @@
-// Currency display names, from the game data: events.json currencyNames (rules.json names for older game data).
+// Currency names come from the game data: events.json's currencyNames, or rules.json's for older game data.
 // The three event ticket slots (A, B, C) are shared by many events and reset between them, so each is named after the
 // event using it now.
 import { occurrences } from '../../web/scripts/lib/schedule.js';

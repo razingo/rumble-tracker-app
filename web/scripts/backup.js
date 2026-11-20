@@ -1,7 +1,7 @@
 // The Backup menu: exporting, importing a file, and the automatic backups the tracker writes.
 import { poll } from './app.js';
 import { forgetDraft } from './army.js';
-import { $, post, setState } from './core.js';
+import { $, getJson, post, setState } from './core.js';
 import { confirmDialog, alertDialog } from './dialogs.js';
 import { esc, dateTime, shortDay, localDay } from './lib/format.js';
 /** Asks first, then restores a backup by calling restore(). `what` names it, as in "the backup from …". */
@@ -29,14 +29,16 @@ async function restoreBackup(what, restore) {
 async function renderBackupList() {
   const el = $('#backupList');
   try {
-    const { backups } = await fetch('/api/backups').then((r) => r.json());
+    const { backups } = await getJson('/api/backups', 'the automatic backups');
     const today = localDay();
     const label = (day) => (day === today ? 'today' : shortDay(`${day}T12:00:00`));
     el.innerHTML = backups.length
-      ? backups.map((b) => `<button role="menuitem" data-backup-day="${esc(b.day)}" data-label="${esc(label(b.day))}"
+      ? backups.map((b) => `<button role="menuitem" data-backup-day="${esc(b.day)}" data-backup-label="${esc(label(b.day))}"
         title="Saved ${esc(dateTime(b.created))}">Restore ${esc(label(b.day))}</button>`).join('')
       : '<p class="small muted">None yet. The tracker saves one when it starts, every 24 hours and when it stops.</p>';
-  } catch { el.innerHTML = '<p class="small muted">Not available.</p>'; }
+  } catch (err) {
+    el.innerHTML = `<p class="small muted">${esc(err.message)}</p>`;
+  }
 }
 
 export function bindBackupMenu() {
@@ -46,7 +48,10 @@ export function bindBackupMenu() {
     $('#backupBtn').setAttribute('aria-expanded', String(open));
     if (open) renderBackupList();
   };
-  $('#backupBtn').addEventListener('click', (e) => { e.stopPropagation(); setMenu(menu.hidden); });
+  $('#backupBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu(menu.hidden);
+  });
   document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('.backup')) setMenu(false); });
   menu.querySelector('a').addEventListener('click', () => setTimeout(() => setMenu(false), 0));
   $('#backupImport').addEventListener('click', () => $('#backupFile').click());
@@ -54,7 +59,8 @@ export function bindBackupMenu() {
     const b = e.target.closest('[data-backup-day]');
     if (!b) return;
     setMenu(false);
-    await restoreBackup(`the automatic backup from ${b.dataset.label}`, () => post('/api/backups/restore', { day: b.dataset.backupDay }));
+    await restoreBackup(`the automatic backup from ${b.dataset.backupLabel}`,
+      () => post('/api/backups/restore', { day: b.dataset.backupDay }));
   });
   $('#backupFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];

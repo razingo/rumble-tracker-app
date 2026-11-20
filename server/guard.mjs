@@ -8,13 +8,14 @@ export function createGuard(port) {
   const hosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]);
   const origins = new Set([...hosts].map((h) => `http://${h}`));
   return function refusal(req, p) {
-    if (!hosts.has(String(req.headers.host || '').toLowerCase())) return 'unknown host';
+    if (!hosts.has(String(req.headers.host || '').toLowerCase())) return 'The tracker only answers requests for its own address.';
     const origin = req.headers.origin;
-    if (origin && !origins.has(origin)) return 'cross-site request';
+    if (origin && !origins.has(origin)) return 'The tracker only answers its own page, not other websites.';
     if (p.startsWith('/api/')) {
       const site = req.headers['sec-fetch-site'];
-      if (site && site !== 'same-origin' && site !== 'none') return 'cross-site request';
-      if (req.method !== 'GET' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return 'JSON requests only';
+      if (site && site !== 'same-origin' && site !== 'none') return 'The tracker only answers its own page, not other websites.';
+      const json = /^application\/json\b/i.test(req.headers['content-type'] || '');
+      if (req.method !== 'GET' && !json) return 'The tracker only accepts JSON here.';
     }
     return null;
   };
@@ -22,5 +23,9 @@ export function createGuard(port) {
 
 /** The decoded path of a request URL, or null if it is malformed (a bad % escape). */
 export function requestPath(rawUrl) {
-  try { return decodeURIComponent(new URL(rawUrl, 'http://localhost').pathname); } catch { return null; }
+  try {
+    return decodeURIComponent(new URL(rawUrl, 'http://localhost').pathname);
+  } catch {
+    return null;
+  }
 }

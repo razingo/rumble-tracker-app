@@ -1,6 +1,6 @@
 // PvP seasons, ranks, modifier rotations, records and win rates, from gamedata/pvp.json and the server's PvP log.
 // The page's PvP tab and the server's notifications both use them.
-import { DAY } from './format.js';
+import { DAY } from './constants.js';
 
 /** The season running at time t, or null. */
 export const seasonAt = (pvp, t) => pvp.seasons.find((s) => Date.parse(s.start) <= t && t < Date.parse(s.end)) || null;
@@ -40,7 +40,10 @@ export function streak(log) {
   for (const e of [...log].reverse()) {
     if (!isMatch(e)) continue;
     const k = e.wins && !e.losses ? 'win' : e.losses && !e.wins ? 'loss' : null;
-    if (!k || (kind && k !== kind)) { if (!kind && !k) return null; break; }
+    if (!k || (kind && k !== kind)) {
+      if (!kind && !k) return null;
+      break;
+    }
     kind = k;
     n += e.wins || e.losses;
   }

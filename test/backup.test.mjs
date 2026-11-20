@@ -27,13 +27,13 @@ test('not a backup', () => {
   assert.equal(restoreBackup({}, null), null);
   assert.equal(restoreBackup({}, { format: 'other', data: {} }), null);
   assert.equal(restoreBackup({}, { format: BACKUP_FORMAT }), null);
-  // arrays and non-objects are never restored over an object
+  // Arrays and non-objects are never restored over an object.
   const files = { names: { accounts: {} } };
   assert.deepEqual(restoreBackup(files, { format: BACKUP_FORMAT, data: { names: [1, 2] } }), []);
   assert.deepEqual(files.names, { accounts: {} });
 });
 
-test('daily backups: one per day, none older than 7 days', async () => {
+test('keeps one backup a day for 7 days', async () => {
   const os = await import('node:os');
   const path = await import('node:path');
   const { mkdtemp, readdir, readFile, writeFile, rm } = await import('node:fs/promises');
@@ -42,7 +42,7 @@ test('daily backups: one per day, none older than 7 days', async () => {
   await writeFile(path.join(dir, 'keep-me.txt'), 'other files are left alone');
   const files = { names: { accounts: { a: 'Main' } } };
   for (let d = 1; d <= 9; d++) await writeDailyBackup(dir, files, { now: new Date(2026, 0, d, 12) });
-  // the same day again: replaced, not added
+  // The same day again replaces the backup instead of adding one.
   files.names.accounts.a = 'Renamed';
   const last = await writeDailyBackup(dir, files, { now: new Date(2026, 0, 9, 18) });
   const names = (await readdir(dir)).sort();

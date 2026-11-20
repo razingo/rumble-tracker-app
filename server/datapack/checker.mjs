@@ -17,12 +17,22 @@ export function createPackChecker(ctx, { onUpdated = () => {}, onNews = () => {}
     try {
       const r = await update({ base: dp.url, current: ctx.tables.gameData, dir: ctx.paths.GAMEDATA, staticDir: ctx.paths.STATIC });
       Object.assign(dp, { result: r.reason, error: null, badSignatures: 0 });
-      if (dp.needsAppUpdate) { dp.needsAppUpdate = false; ctx.bump(); }
+      if (dp.needsAppUpdate) {
+        dp.needsAppUpdate = false;
+        ctx.bump();
+      }
       const newVersion = r.latestAppVersion && ctx.appVersion && newerVersion(r.latestAppVersion, ctx.appVersion)
         ? r.latestAppVersion : null;
-      if (newVersion !== dp.newVersion) { dp.newVersion = newVersion; ctx.bump(); if (newVersion) onNews(); }
+      if (newVersion !== dp.newVersion) {
+        dp.newVersion = newVersion;
+        ctx.bump();
+        if (newVersion) onNews();
+      }
       const latestApp = newVersion ? latestAppOf({ latestApp: r.latestApp }) : null;
-      if (JSON.stringify(latestApp) !== JSON.stringify(dp.latestApp)) { dp.latestApp = latestApp; ctx.bump(); }
+      if (JSON.stringify(latestApp) !== JSON.stringify(dp.latestApp)) {
+        dp.latestApp = latestApp;
+        ctx.bump();
+      }
       if (r.updated) {
         await ctx.tables.load();
         ctx.bump();
@@ -36,7 +46,11 @@ export function createPackChecker(ctx, { onUpdated = () => {}, onNews = () => {}
       if (e.code === 'BAD_SIGNATURE') {
         dp.badSignatures++;
         if (dp.badSignatures === 1) setTimeout(check, RECHECK_MS).unref?.();
-        else if (!dp.needsAppUpdate) { dp.needsAppUpdate = true; ctx.bump(); onNews(); }
+        else if (!dp.needsAppUpdate) {
+          dp.needsAppUpdate = true;
+          ctx.bump();
+          onNews();
+        }
       }
     }
   }

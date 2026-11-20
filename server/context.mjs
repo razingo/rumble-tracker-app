@@ -2,12 +2,13 @@
 import path from 'node:path';
 import { createErrorLog } from './report.mjs';
 import { readJson } from './store.mjs';
+import { DEFAULT_PORT } from '../web/scripts/lib/constants.js';
 
 /**
- * root: the app folder (server/, web/, gamedata/); data: the user's data folder. Returns the context; tables and
- * user data are attached by tables.mjs and userdata.mjs.
+ * `root` is the app folder (server/, web/, gamedata/) and `data` the user's data folder. Returns the context, to which
+ * tables.mjs and userdata.mjs attach the tables and the user's data.
  */
-export function createContext({ root, data, port = 8765, standalone = false, appVersion = null }) {
+export function createContext({ root, data, port = DEFAULT_PORT, standalone = false, appVersion = null }) {
   const errorLog = createErrorLog();
   const ctx = {
     paths: {
@@ -21,7 +22,7 @@ export function createContext({ root, data, port = 8765, standalone = false, app
       BACKUPS: path.join(data, 'backups'),     // automatic backups
     },
     port, standalone, appVersion,
-    // recent errors for Report a problem, without personal details and kept in memory only
+    // Recent errors for Report a problem, without personal details and kept in memory only.
     errorLog,
     // The revision of what the page shows. It starts from the clock, so a restarted server never repeats one.
     rev: Date.now(),
@@ -35,7 +36,7 @@ export function createContext({ root, data, port = 8765, standalone = false, app
       newVersion: null, latestApp: null },
     // An app update in progress. Its state is null, 'downloading', 'restarting' or 'failed'.
     appUpdate: { state: null, error: null, later: null, done: 0, total: 0 },
-    // whether Warcraft Rumble runs, or null while that isn't known
+    // Whether Warcraft Rumble runs, or null while that isn't known.
     game: { running: () => null },
     /** Reads one of the player's files. A damaged file is moved aside and reported instead of stopping the tracker. */
     readUserJson: (p, fallback) => readJson(p, fallback, {

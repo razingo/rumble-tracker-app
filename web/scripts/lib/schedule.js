@@ -1,6 +1,6 @@
 // Event schedules and dungeon and raid rotations from gamedata/events.json. The Calendar and the server's
 // notifications and currency names all use these, so they follow the same rules.
-import { DAY } from './format.js';
+import { DAY } from './constants.js';
 
 /** UTC time of the n-th weekday of a month at the given hour. */
 function nthWeekdayUtc(y, m0, nth, weekday, hour) {

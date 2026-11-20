@@ -3,15 +3,22 @@
 // login tokens, e-mail addresses and long encoded values.
 import os from 'node:os';
 import { host } from './host.mjs';
+import { REPO } from '../web/scripts/lib/constants.js';
 
-// Repository where issues are filed.
-export const ISSUES_REPO = process.env.RUMBLE_ISSUES_REPO || 'razingo/rumble-tracker-app';
+// Repository where issues are filed. RUMBLE_ISSUES_REPO points tests of the report flow at another repository.
+export const ISSUES_REPO = process.env.RUMBLE_ISSUES_REPO || REPO;
 
 const MAX_ERRORS = 30;
 const MAX_MESSAGE = 500;
 
 const home = os.homedir();
-const userName = (() => { try { return os.userInfo().username; } catch { return ''; } })();
+const userName = (() => {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return '';
+  }
+})();
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Removes personal details from text. */
@@ -38,7 +45,11 @@ export function createErrorLog() {
       const src = clean(source).slice(0, 40);
       const t = new Date().toISOString();
       const same = list.find((e) => e.source === src && e.message === msg);
-      if (same) { same.count++; same.last = t; return; }
+      if (same) {
+        same.count++;
+        same.last = t;
+        return;
+      }
       list.push({ source: src, message: msg, first: t, last: t, count: 1 });
       if (list.length > MAX_ERRORS) list.shift();
     },

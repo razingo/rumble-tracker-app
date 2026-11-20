@@ -5,7 +5,7 @@ export function readVarint(buf, pos) {
   let shift = 0n;
   let byte;
   do {
-    if (pos >= buf.length) throw new Error('varint runs past end of buffer');
+    if (pos >= buf.length) throw new Error('A number runs past the end of the data.');
     byte = buf[pos++];
     result |= BigInt(byte & 0x7f) << shift;
     shift += 7n;
@@ -22,7 +22,7 @@ export function parseMessage(buf, start = 0, end = buf.length) {
     [tag, pos] = readVarint(buf, pos);
     const fn = Number(tag >> 3n);
     const wt = Number(tag & 7n);
-    if (fn === 0) throw new Error(`invalid field number at byte ${pos}`);
+    if (fn === 0) throw new Error(`The data has an invalid field number at byte ${pos}.`);
     switch (wt) {
       case 0: {
         let v;
@@ -47,10 +47,10 @@ export function parseMessage(buf, start = 0, end = buf.length) {
         break;
       }
       default:
-        throw new Error(`unsupported wire type ${wt} at byte ${pos}`);
+        throw new Error(`The data has an unsupported wire type ${wt} at byte ${pos}.`);
     }
   }
-  if (pos !== end) throw new Error('message overran its bounds');
+  if (pos !== end) throw new Error('A message runs past its own length.');
   return fields;
 }
 

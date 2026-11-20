@@ -39,7 +39,7 @@ test('several matches between scans', () => {
   assert.deepEqual(match(at(5000, 0), at(5020, 240)), { wins: 1, losses: 1, estimated: false, honorOnly: false });
 });
 
-test('Victory Points unchanged: honor alone, one match', () => {
+test('with Victory Points unchanged, honor alone tells one match', () => {
   assert.deepEqual(match(at(5000, 6000), at(5090, 6000)), { wins: 1, losses: 0, estimated: true, honorOnly: true });
   assert.deepEqual(match(at(5000, 6000), at(4930, 6000)), { wins: 0, losses: 1, estimated: true, honorOnly: true });
   assert.equal(match(at(5000, 6000), at(5000, 6000)), null);
@@ -51,7 +51,7 @@ test('no matches across seasons, or for impossible changes', () => {
   assert.equal(match(at(5000, 0), at(5000, 120)), null);
 });
 
-test('readings: a season start, matches, and changes no combination explains', () => {
+test('readings log a season start, matches and changes no combination explains', () => {
   const t = '2026-11-19T10:00:00.000Z';
   assert.equal(pvpReading(at(100, 0), at(100, 0), t, RULES), null);
   assert.deepEqual(pvpReading(null, at(100, 0), t, RULES), { t, season: 's27', honor: 100, vp: 0, start: true });
@@ -62,7 +62,7 @@ test('readings: a season start, matches, and changes no combination explains', (
   // 50 VP fits no match; VP going down neither
   assert.equal(pvpReading(at(100, 160), at(120, 210), t, RULES).unexplained, true);
   assert.equal(pvpReading(at(100, 160), at(100, 80), t, RULES).unexplained, true);
-  // only the second honor value moved: logged, but not a match
+  // Only the second honor value moved, which is logged but isn't a match.
   const other = pvpReading({ ...at(100, 0), honor2: 1 }, { ...at(100, 0), honor2: 2 }, t, RULES);
   assert.equal(other.unexplained, undefined);
   assert.equal(other.wins, undefined);

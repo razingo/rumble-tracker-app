@@ -16,6 +16,7 @@ const net = require('node:net');
 const crypto = require('node:crypto');
 const { execFile, spawn } = require('node:child_process');
 const { createRequire } = require('node:module');
+const { setTimeout: sleep } = require('node:timers/promises');
 const { pathToFileURL } = require('node:url');
 const sea = require('node:sea');
 
@@ -25,9 +26,12 @@ const FIRST_PORT = Number(process.env.RUMBLE_FIRST_PORT || 8765);
 const PORTS = process.env.PORT ? [Number(process.env.PORT)] : Array.from({ length: 20 }, (_, i) => FIRST_PORT + i);
 let PORT = PORTS[0];
 let PAGE = `http://localhost:${PORT}/`;
-const usePort = (p) => { PORT = p; PAGE = `http://localhost:${p}/`; };
+const usePort = (p) => {
+  PORT = p;
+  PAGE = `http://localhost:${p}/`;
+};
 const args = new Set(process.argv.slice(2));
-// --background (Start with Windows): tray icon only, no window; --no-browser: the same, for testing
+// --background (used by Start with Windows) starts with the tray icon and no window. --no-browser does the same, for tests.
 const NO_WINDOW = args.has('--background') || args.has('--no-browser');
 // --after-update=<pid>:<port>: started by an app update; waits for the old instance (pid) to stop
 const afterUpdate = (() => {
@@ -46,10 +50,17 @@ process.title = TITLE;
 // Logging
 fs.mkdirSync(DATA, { recursive: true });
 const LOG = path.join(DATA, 'tracker.log');
-// called only by the instance that runs (not when handing over to a running one)
-const rotateLog = () => { try { fs.renameSync(LOG, path.join(DATA, 'tracker.previous.log')); } catch { /* first start */ } logBytes = 0; };
-// size cap while running (the tracker can run for weeks in the tray): past MAX_LOG the log is rotated, so at most
-// two files of about MAX_LOG each are kept
+// Called only by the instance that runs (not when handing over to a running one).
+const rotateLog = () => {
+  try {
+    fs.renameSync(LOG, path.join(DATA, 'tracker.previous.log'));
+  } catch {
+    // first start
+  }
+  logBytes = 0;
+};
+// The tracker can run for weeks in the tray, so the log is rotated once it passes MAX_LOG. At most two files of about
+// MAX_LOG each are kept.
 const MAX_LOG = Number(process.env.RUMBLE_MAX_LOG) || 2 * 1024 * 1024; // env override for testing
 const MAX_LINE = 4000;
 let logBytes = null; // bytes in the current log; read from disk on the first write
@@ -59,11 +70,19 @@ for (const level of ['log', 'info', 'warn', 'error']) {
     if (line.length > MAX_LINE) line = `${line.slice(0, MAX_LINE)}… (${line.length - MAX_LINE} more characters)`;
     const text = `${new Date().toISOString()} ${line}\n`;
     try {
-      if (logBytes === null) { try { logBytes = fs.statSync(LOG).size; } catch { logBytes = 0; } }
+      if (logBytes === null) {
+        try {
+          logBytes = fs.statSync(LOG).size;
+        } catch {
+          logBytes = 0;
+        }
+      }
       if (logBytes + text.length > MAX_LOG) rotateLog();
       fs.appendFileSync(LOG, text);
       logBytes += Buffer.byteLength(text);
-    } catch { /* nowhere to write */ }
+    } catch {
+      // nowhere to write
+    }
   };
 }
 
@@ -74,8 +93,8 @@ const psArgs = (script) => ['-NoProfile', '-NonInteractive', '-Sta', '-Execution
   Buffer.from(script, 'utf16le').toString('base64')];
 
 /**
- * Shows a start-up error in a message box, then exits. rollback: right after an app update, the new version failed to
- * start, so the previous exe is put back and started instead.
+ * Shows a start-up error in a message box, then exits. With `rollback`, the new version failed to start right after an
+ * app update, so the previous exe is put back and started instead.
  */
 function fatal(message, { rollback = false } = {}) {
   console.log(`Stopped: ${message}`);
@@ -138,7 +157,10 @@ async function browserPath(b) {
     const p = await regValue(`${hive}\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\${b.exe}`);
     if (p && fs.existsSync(p)) return p;
   }
-  for (const d of b.dirs) { const p = path.join(d, b.exe); if (fs.existsSync(p)) return p; }
+  for (const d of b.dirs) {
+    const p = path.join(d, b.exe);
+    if (fs.existsSync(p)) return p;
+  }
   return null;
 }
 
@@ -148,7 +170,13 @@ function chooseBrowser() {
     const prog = await defaultProgId();
     const order = [...BROWSERS].sort((a, b) => (b.progId.test(prog || '') ? 1 : 0) - (a.progId.test(prog || '') ? 1 : 0));
     let choice = null;
-    for (const b of order) { const exe = await browserPath(b); if (exe) { choice = { id: b.id, exe }; break; } }
+    for (const b of order) {
+      const exe = await browserPath(b);
+      if (exe) {
+        choice = { id: b.id, exe };
+        break;
+      }
+    }
     console.log(`Window: ${choice ? `${choice.id} app mode (${choice.exe})`
       : 'no app-mode browser found, using a browser tab'}; default browser ${prog || 'unknown'}`);
     return choice;
@@ -169,7 +197,10 @@ async function openWindow() {
   const child = spawn(b.exe, [
     `--app=${PAGE}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--window-size=1440,900',
   ], { detached: true, stdio: 'ignore' });
-  child.on('error', (e) => { console.log(`Could not start ${b.id}: ${e.message}`); openInDefaultBrowser(PAGE); });
+  child.on('error', (e) => {
+    console.log(`Could not start ${b.id}: ${e.message}`);
+    openInDefaultBrowser(PAGE);
+  });
   child.unref();
 }
 
@@ -196,15 +227,24 @@ function startTray(onQuit) {
       if (cmd === 'open') openWindow();
       else if (cmd === 'quit') onQuit('Quit from the tray');
       else if (cmd === 'shutdown') onQuit('Windows is signing out or shutting down');
-      // whether the game runs, for the server (server/game/watch.mjs)
+      // Whether the game runs, for the server (server/game/watch.mjs).
       else if (cmd === 'game 1' || cmd === 'game 0') host.reportGame(cmd === 'game 1');
-      else if (cmd === 'ready' && hint) { try { fs.writeFileSync(hintFile, ''); } catch { /* shown again next time */ } }
+      else if (cmd === 'ready' && hint) {
+        try {
+          fs.writeFileSync(hintFile, '');
+        } catch {
+          // shown again next time
+        }
+      }
     }
   });
   tray.stderr.setEncoding('utf8');
   tray.stderr.on('data', (c) => { if (err.length < 4000) err += c; });
-  // without the tray the server watches the game itself
-  tray.on('error', (e) => { console.log(`Tray icon could not start: ${e.message}`); host.gameWatchFailed(); });
+  // Without the tray the server watches the game itself.
+  tray.on('error', (e) => {
+    console.log(`Tray icon could not start: ${e.message}`);
+    host.gameWatchFailed();
+  });
   tray.on('exit', (code) => {
     // PowerShell starts redirected error output with an empty "#< CLIXML" header
     const msg = err.replace(/^#< CLIXML\s*/, '').trim();
@@ -221,7 +261,13 @@ function probe(port = PORT) {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (c) => { if (body.length < 65536) body += c; });
-      res.on('end', () => { try { resolve(JSON.parse(body).repo ? 'tracker' : 'other'); } catch { resolve('other'); } });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body).repo ? 'tracker' : 'other');
+        } catch {
+          resolve('other');
+        }
+      });
     });
     req.on('timeout', () => req.destroy(new Error('timeout')));
     req.on('error', (e) => resolve(e.code === 'ECONNREFUSED' ? 'free' : 'other'));
@@ -249,7 +295,7 @@ async function findPort() {
 async function waitForServer() {
   for (let i = 0; i < 100; i++) {
     if (await probe() === 'tracker') return true;
-    await new Promise((r) => setTimeout(r, 200));
+    await sleep(200);
   }
   return false;
 }
@@ -285,9 +331,15 @@ function unpack() {
   fs.writeFileSync(path.join(tmp, '.complete'), `${index.version} ${index.hash}\n`);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.renameSync(tmp, dir);
-  // remove older versions (best effort: one may still be running)
+  // Remove older versions. One may still be running, so this is best effort.
   for (const name of fs.readdirSync(base)) {
-    if (name !== path.basename(dir)) { try { fs.rmSync(path.join(base, name), { recursive: true, force: true }); } catch { /* in use */ } }
+    if (name !== path.basename(dir)) {
+      try {
+        fs.rmSync(path.join(base, name), { recursive: true, force: true });
+      } catch {
+        // in use
+      }
+    }
   }
   return { dir, index };
 }
@@ -295,15 +347,19 @@ function unpack() {
 /** Waits up to 30 s for a process to stop. */
 async function waitForExit(pid) {
   for (let i = 0; i < 150; i++) {
-    try { process.kill(pid, 0); } catch { return; }
-    await new Promise((r) => setTimeout(r, 200));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+    await sleep(200);
   }
 }
 
 // App updates
-// The server downloads and verifies the new exe (server/update/appupdate.mjs). It is swapped in here: a running exe
-// can be renamed but not overwritten, so this one becomes RumbleTracker.exe.old (removed at the next start), the new
-// one is copied to its place and started; it waits for this instance to stop.
+// The server downloads and verifies the new exe (server/update/appupdate.mjs), and it is swapped in here. A running exe
+// can be renamed but not overwritten, so this one becomes RumbleTracker.exe.old, which the next start removes. The new
+// one is copied to its place and started, and it waits for this instance to stop.
 const OLD_EXE = `${process.execPath}.old`;
 const FAILED_EXE = `${process.execPath}.failed`; // a new version that failed to start, rolled back (see fatal)
 function applyUpdate({ exe, version }) {
@@ -311,7 +367,12 @@ function applyUpdate({ exe, version }) {
   try {
     fs.rmSync(OLD_EXE, { force: true });
     fs.renameSync(target, OLD_EXE);
-    try { fs.copyFileSync(exe, target); } catch (e) { fs.renameSync(OLD_EXE, target); throw e; }
+    try {
+      fs.copyFileSync(exe, target);
+    } catch (e) {
+      fs.renameSync(OLD_EXE, target);
+      throw e;
+    }
   } catch (e) {
     console.log(`App update: could not replace ${target}: ${e.message}`);
     return Promise.reject(new Error(`The program file could not be replaced (${e.code
@@ -319,10 +380,19 @@ function applyUpdate({ exe, version }) {
   }
   return new Promise((resolve, reject) => {
     const child = spawn(target, [`--after-update=${process.pid}:${PORT}`], { detached: true, stdio: 'ignore' });
-    child.once('spawn', () => { child.unref(); console.log(`App update: started ${version}`); resolve(); });
+    child.once('spawn', () => {
+      child.unref();
+      console.log(`App update: started ${version}`);
+      resolve();
+    });
     child.once('error', (e) => {
       console.log(`App update: could not start the new version: ${e.message}`);
-      try { fs.rmSync(target, { force: true }); fs.renameSync(OLD_EXE, target); } catch { /* keep what is there */ }
+      try {
+        fs.rmSync(target, { force: true });
+        fs.renameSync(OLD_EXE, target);
+      } catch {
+        // keep what is there
+      }
       reject(new Error(`The new version could not be started (${e.message}). Download it from GitHub Releases instead.`));
     });
   });
@@ -332,7 +402,10 @@ function applyUpdate({ exe, version }) {
 let quitting = false;
 function quitFromTray(reason) {
   quitting = true;
-  if (!host?.quit(reason)) { console.log(reason); process.exit(0); }
+  if (!host?.quit(reason)) {
+    console.log(reason);
+    process.exit(0);
+  }
   setTimeout(() => process.exit(0), 20000).unref(); // in case the server can't finish
 }
 
@@ -340,7 +413,10 @@ async function main() {
   if (process.platform !== 'win32') return fatal(`${TITLE} runs on Windows only.`);
   if (afterUpdate) await waitForExit(afterUpdate.pid);
   const found = await findPort();
-  if (found.running) { usePort(found.port); return handOver(); }
+  if (found.running) {
+    usePort(found.port);
+    return handOver();
+  }
   if (!found.port) {
     return fatal(PORTS.length === 1
       ? `Port ${PORTS[0]} (set with PORT) is already in use, so the tracker can't start.`
@@ -350,22 +426,29 @@ async function main() {
 
   rotateLog();
   let app;
-  try { app = unpack(); } catch (e) { return fatal(`Could not unpack the tracker's files: ${e.message}`, { rollback: true }); }
+  try {
+    app = unpack();
+  } catch (e) {
+    return fatal(`Could not unpack the tracker's files: ${e.message}`, { rollback: true });
+  }
   APP_DIR = app.dir;
 
   console.log(`${TITLE} ${app.index.version}, unpacked in ${app.dir}`);
 
   process.on('uncaughtException', async (e) => {
     if (e && e.code === 'EADDRINUSE') {
-      // another instance started at the same time and won the port
+      // Another instance started at the same time and won the port.
       const again = await findPort();
-      if (again.running) { usePort(again.port); return handOver(); }
+      if (again.running) {
+        usePort(again.port);
+        return handOver();
+      }
       return fatal(`Port ${PORT} is already in use, so the tracker can't start.`);
     }
     console.log(`Unexpected error: ${e && e.stack || e}`);
   });
 
-  // resolve the browser while the server starts
+  // Resolve the browser while the server starts.
   if (!NO_WINDOW && !args.has('--tab')) chooseBrowser().catch(() => {});
 
   const load = createRequire(path.join(app.dir, 'launcher-helper.cjs'))(path.join(app.dir, 'import.cjs'));
@@ -380,27 +463,36 @@ async function main() {
     openLink: openInDefaultBrowser,
     takeScreenshot: () => openInDefaultBrowser('ms-screenclip:'),
   });
-  // not awaited: on first start the server downloads the game data before it finishes loading, serving a progress
-  // page meanwhile, so the window opens as soon as the port answers
+  // Not awaited. On the first start the server downloads the game data before it finishes loading and serves a
+  // progress page meanwhile, so the window opens as soon as the port answers.
   let failed = false;
   load(pathToFileURL(path.join(app.dir, 'server', 'main.mjs')).href)
-    .catch((e) => { failed = true; fatal(`The tracker could not start: ${e && e.message || e}`, { rollback: true }); });
+    .catch((e) => {
+      failed = true;
+      fatal(`The tracker could not start: ${e && e.message || e}`, { rollback: true });
+    });
   if (!await waitForServer() || failed) {
     if (!failed) fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`, { rollback: true });
     return;
   }
-  // it works: the previous exe (kept since an update) and a rolled-back one are no longer needed
-  for (const f of [OLD_EXE, FAILED_EXE]) { try { fs.rmSync(f, { force: true }); } catch { /* in use: removed next time */ } }
+  // It works, so the previous exe (kept since an update) and a rolled-back one are no longer needed.
+  for (const f of [OLD_EXE, FAILED_EXE]) {
+    try {
+      fs.rmSync(f, { force: true });
+    } catch {
+      // still in use, so it is removed next time
+    }
+  }
   startTray(quitFromTray);
   integrate();
-  // after an update on the same port, the open window reconnects and reloads by itself
+  // After an update on the same port, the open window reconnects and reloads by itself.
   if (afterUpdate && afterUpdate.port === PORT) return;
   await openWindow();
 }
 
 // Windows integration
-// The Start menu shortcut gives notifications the tracker's name and icon (app ID AUMID); clicking one opens a
-// rumble-tracker: link, which starts this exe (--open): a running tracker then shows its window.
+// The Start menu shortcut gives notifications the tracker's name and icon (app ID AUMID). Clicking one opens a
+// rumble-tracker: link, which starts this exe with --open, and a running tracker then shows its window.
 const AUMID = 'razingo.RumbleCollectionTracker';
 function integrate() {
   const env = { ...process.env, RT_EXE: process.execPath, RT_AUMID: AUMID, RT_TITLE: TITLE, RT_REFRESH: afterUpdate ? '1' : '' };
