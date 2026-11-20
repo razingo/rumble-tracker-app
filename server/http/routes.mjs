@@ -8,6 +8,7 @@ import { createHandlers } from './handlers.mjs';
 import { host } from '../host.mjs';
 import { MINUTE, MB } from '../../web/scripts/lib/constants.js';
 import { localDay } from '../../web/scripts/lib/format.js';
+import { CLOSE_CHOICES } from '../window.mjs';
 
 // Links the exe's window may open in the default browser.
 const EXTERNAL_LINKS = [`https://github.com/${ISSUES_REPO}`, 'https://buymeacoffee.com/razingo'];
@@ -41,7 +42,8 @@ const rateLimit = (n, ms) => ({
 });
 
 /**
- * deps: { scan, shutdown(reason), startUpdate(), notifier: { save, test }, gameRunning(), autostart: { get(), set(on) } | null }.
+ * deps: { scan, shutdown(reason), startUpdate(), notifier: { save, test }, gameRunning(), autostart: { get(), set(on) } | null,
+ *   window: { seen(page), closed(page) } | null }.
  * Returns a Map of "METHOD /path" to handler(req, url).
  */
 export function createRoutes(ctx, deps) {
@@ -49,11 +51,17 @@ export function createRoutes(ctx, deps) {
   // at most 20 page error reports a minute
   const clientErrors = rateLimit(20, MINUTE);
   const json = (handler, limit) => async (req) => handler(await readBody(req, limit));
+  // Start with Windows and what closing the window does; null where they don't apply (running from source)
+  const settings = async () => ({
+    startWithWindows: deps.autostart ? await deps.autostart.get() : null,
+    closeWindow: ctx.standalone ? ctx.user.appSettings.closeWindow : null,
+  });
 
   // "METHOD /path" to a handler(req, url) that returns [status, body]
   const routes = new Map(Object.entries({
     // The page sends the revision it has. If nothing changed, only the values that change on their own are sent.
     'GET /api/state': async (req, url) => {
+      deps.window?.seen(url.searchParams.get('page'));
       const account = resolveAccount(ctx, url.searchParams.get('account'));
       if (url.searchParams.get('rev') === String(ctx.rev) && url.searchParams.get('for') === String(account)) {
         return [200, { unchanged: true, rev: ctx.rev, ...liveState(ctx) }];
@@ -96,14 +104,20 @@ export function createRoutes(ctx, deps) {
       return ok ? [200, { ok: true }] : [500, { error: 'Windows did not accept the notification.' }];
     },
     // Start with Windows, null where it isn't available.
-    'GET /api/settings': async () => [200, { startWithWindows: deps.autostart ? await deps.autostart.get() : null }],
+    'GET /api/settings': async () => [200, await settings()],
     'POST /api/settings': async (req) => {
       const b = await readBody(req);
       if (typeof b.startWithWindows === 'boolean') {
         if (!deps.autostart) return [400, { error: 'Only the RumbleTracker.exe version can start with Windows.' }];
         if (!(await deps.autostart.set(b.startWithWindows))) return [500, { error: 'Windows did not accept the change.' }];
       }
-      return [200, { ok: true, startWithWindows: deps.autostart ? await deps.autostart.get() : null }];
+      if (b.closeWindow !== undefined) {
+        if (!ctx.standalone) return [400, { error: 'Closing the window only matters in the RumbleTracker.exe version.' }];
+        if (!CLOSE_CHOICES.includes(b.closeWindow)) return [400, { error: 'That is not a choice for closing the window.' }];
+        ctx.user.appSettings.closeWindow = b.closeWindow;
+        await ctx.user.save('appSettings');
+      }
+      return [200, { ok: true, ...(await settings()) }];
     },
     // Script errors reported by the page, for "Report a problem".
     'POST /api/client-error': async (req) => {
@@ -156,6 +170,11 @@ export function createRoutes(ctx, deps) {
       return [200, { ok: true }];
     });
     routes.set('POST /api/update', async () => deps.startUpdate());
+    // the page's window is closing (or reloading); window.mjs works out which
+    routes.set('POST /api/window-closed', async (req) => {
+      deps.window?.closed(String((await readBody(req)).page || ''));
+      return [200, { ok: true }];
+    });
   }
   return routes;
 }

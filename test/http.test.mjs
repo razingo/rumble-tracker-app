@@ -11,7 +11,7 @@ import { testContext, hexId } from './helpers.mjs';
 
 const ACC = hexId(1, 1), UNIT = hexId(0xa, 0xb), OTHER = hexId(0xc, 0xd);
 let ctx, cleanup, server, base;
-const calls = { scan: 0, quit: [], update: 0, autostart: false };
+const calls = { scan: 0, quit: [], update: 0, autostart: false, seen: [], closed: [] };
 
 const freePort = () => new Promise((resolve) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => {
@@ -43,6 +43,7 @@ before(async () => {
       calls.autostart = on;
       return true;
     } },
+    window: { seen: (page) => calls.seen.push(page), closed: (page) => calls.closed.push(page) },
   });
   await new Promise((r) => server.listen(ctx.port, '127.0.0.1', r));
   base = `http://localhost:${ctx.port}`;
@@ -136,6 +137,17 @@ test('turns Start with Windows on and off', async () => {
   assert.equal((await api('GET', '/api/settings')).body.startWithWindows, false);
   assert.equal((await api('POST', '/api/settings', { startWithWindows: true })).body.startWithWindows, true);
   assert.equal(calls.autostart, true);
+});
+
+test('saves what closing the window does, and passes on page polls and closed windows', async () => {
+  assert.equal((await api('GET', '/api/settings')).body.closeWindow, 'ask');
+  assert.equal((await api('POST', '/api/settings', { closeWindow: 'tray' })).body.closeWindow, 'tray');
+  assert.equal(ctx.user.appSettings.closeWindow, 'tray');
+  assert.equal((await api('POST', '/api/settings', { closeWindow: 'later' })).status, 400);
+  await api('GET', '/api/state?page=p1');
+  await api('POST', '/api/window-closed', { page: 'p1' });
+  assert.ok(calls.seen.includes('p1'));
+  assert.deepEqual(calls.closed, ['p1']);
 });
 
 test('quit, update and Later work only in the exe', async () => {

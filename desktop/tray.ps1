@@ -2,8 +2,8 @@
 # Talks to the launcher through standard output, one line each: "ready" (icon shown), "open" (open the window),
 # "quit" (Quit tracker), "shutdown" (Windows is signing out or shutting down), "game 1" / "game 0" (whether
 # Warcraft Rumble runs; sent when it changes). Exits when the tracker process ends.
-# Environment: RT_TITLE, RT_DATA (data folder), RT_EXE (icon), RT_PARENT (tracker process id), RT_HINT (first-start
-# balloon text, or empty), RT_GAME (the game's process name).
+# Environment: RT_TITLE, RT_DATA (data folder), RT_EXE (icon), RT_PARENT (tracker process id), RT_GAME (the game's
+# process name).
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
@@ -68,7 +68,6 @@ $timer.add_Tick({
   if ($game -ne $global:lastGame) { $global:lastGame = $game; Say $game }
 })
 $timer.Start()
-if ($env:RT_HINT) { $tray.ShowBalloonTip(8000, $env:RT_TITLE, $env:RT_HINT, 'Info') }
 Say 'ready'
 [System.Windows.Forms.Application]::Run()
 $tray.Dispose()

@@ -4,7 +4,7 @@ import { $, getJson, post, showMessage, state } from './core.js';
 import { esc, dateTime } from './lib/format.js';
 
 let notify = null; // { settings, types, log, pending, playing }
-let general = null; // { startWithWindows }, null when running from source
+let general = null; // { startWithWindows, closeWindow }, each null when running from source
 
 async function loadSettings() {
   [notify, general] = await Promise.all([
@@ -41,12 +41,16 @@ function renderSettings() {
       ${general.startWithWindows ? 'checked' : ''}> Start with Windows</label>
       <p class="muted small">Starts in the tray when you sign in to Windows (no window), so notifications arrive
         without opening the tracker.</p>`}
+    ${general?.closeWindow == null ? '' : `<label class="close-window">When I close the window
+      <select data-setting="closeWindow">${[['ask', 'Ask me'], ['tray', 'Keep running in the tray'], ['quit', 'Quit the tracker']]
+        .map(([v, l]) => `<option value="${v}" ${general.closeWindow === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <p class="muted small">In the tray, notifications still arrive. "Ask me" asks once, and your answer is kept here.</p>`}
     <span class="dialog-message small" data-setting-message></span>
     <h3>Notifications</h3>
     <p class="muted small">They keep coming while the tracker runs, even with this window closed.</p>
     <label class="dialog-toggle"><input type="checkbox" data-notify-field="enabled"
       ${s.enabled ? 'checked' : ''}> Send notifications</label>
-    <label class="notify-acc">For <select data-notify-field="account">
+    <label class="notify-account">For <select data-notify-field="account">
       <option value="">all accounts</option>
       ${accounts.map((a) => `<option value="${a.id}" ${s.account === a.id ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
     </select></label>
@@ -101,10 +105,13 @@ export function bindSettings() {
     if (el.dataset.setting) {
       const msg = dlg.querySelector('[data-setting-message]');
       try {
-        general = await post('/api/settings', { [el.dataset.setting]: el.checked });
+        const value = el.type === 'checkbox' ? el.checked : el.value;
+        general = await post('/api/settings', { [el.dataset.setting]: value });
         showMessage(msg, 'Saved.', 'good');
       } catch (err) {
-        el.checked = !el.checked;
+        // show what is still saved
+        if (el.type === 'checkbox') el.checked = !el.checked;
+        else el.value = general[el.dataset.setting];
         showMessage(msg, `Not saved. ${err.message}`, 'warn');
       }
       return;

@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { writeJson } from './store.mjs';
 import { cleanSettings } from './notifications/notify.mjs';
+import { CLOSE_CHOICES } from './window.mjs';
 
 // property -> file name
 const FILES = {
@@ -15,6 +16,7 @@ const FILES = {
   pvpHistory: 'pvp_history.json',   // PvP readings and inferred matches: { [account]: [entry] } (game/pvp.mjs)
   progress: 'progress.json',        // daily samples: { [account]: { first, days: [...] } }
   notifySettings: 'notifications.json',
+  appSettings: 'settings.json',      // { closeWindow: 'ask' | 'tray' | 'quit' } (the exe only)
   plans: 'plans.json',              // reward goals: { [account]: { [eventId]: { cost, label, set } } }
   sentLog: 'notified.json',         // { sent: { key: time }, log, pending }; pending ones wait for quiet hours to end
   storeChanges: 'store_changes.json', // research log of shop record changes (from source only)
@@ -25,7 +27,11 @@ const FILES = {
 export const BACKUP_KEYS = {
   names: 'names', talents: 'talents', army: 'army', armies: 'armies', drafts: 'drafts', learned: 'learned',
   grid_history: 'gridHistory', pvp_history: 'pvpHistory', notifications: 'notifySettings', plans: 'plans', progress: 'progress',
+  settings: 'appSettings',
 };
+
+/** App settings with unknown or missing values replaced by the defaults. */
+export const cleanAppSettings = (s) => ({ closeWindow: CLOSE_CHOICES.includes(s?.closeWindow) ? s.closeWindow : 'ask' });
 
 /** The name the user gave an account, else a short form of its ID. */
 export const accountLabel = (ctx, id) => ctx.user.names.accounts[id] || `Account …${id.slice(16, 24)}`;
@@ -49,6 +55,7 @@ export async function loadUserData(ctx, { storeLog = true } = {}) {
     pvpHistory: await read('pvpHistory', {}),
     progress: await read('progress', {}),
     notifySettings: cleanSettings(await read('notifySettings', {})),
+    appSettings: cleanAppSettings(await read('appSettings', {})),
     plans: await read('plans', {}),
     sentLog: notified || { sent: {}, log: [], pending: [] },
     notifyBaseline: !notified, // first run: record what is already due without notifying
@@ -64,6 +71,7 @@ export async function loadUserData(ctx, { storeLog = true } = {}) {
       u.learned.xpToNext ??= {};
       u.learned.xpConflicts ??= [];
       u.learned.spending ??= [];
+      Object.assign(u.appSettings, cleanAppSettings(u.appSettings));
     },
   };
   u.repair();

@@ -22,6 +22,7 @@ import { createNotifier } from './notifications/runner.mjs';
 import { writeDailyBackup } from './backup.mjs';
 import { readAutostart, setAutostart, refreshAutostart, autostartCommand } from './autostart.mjs';
 import { createHttpServer } from './http/server.mjs';
+import { createWindowWatch } from './window.mjs';
 import { DEFAULT_PORT, SECOND, HOUR, DAY } from '../web/scripts/lib/constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -179,7 +180,10 @@ notify();
 checkDataPack();
 setInterval(checkDataPack, PACK_CHECK_MS);
 
-const server = createHttpServer(ctx, { scan, shutdown, startUpdate, notifier, gameRunning, autostart });
+// What closing the app window does, in the exe only.
+const windowWatch = STANDALONE ? createWindowWatch(ctx, { ask: () => host.askOnClose(), quit: shutdown }) : null;
+
+const server = createHttpServer(ctx, { scan, shutdown, startUpdate, notifier, gameRunning, autostart, window: windowWatch });
 server.listen(ctx.port, '127.0.0.1', () => {
   console.log(`Rumble tracker running at http://localhost:${ctx.port}`);
   console.log(`Data folder: ${ctx.paths.DATA}`);

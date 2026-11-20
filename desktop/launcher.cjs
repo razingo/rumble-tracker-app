@@ -204,16 +204,27 @@ async function openWindow() {
   child.unref();
 }
 
+// Closing the window
+
+/** Asks, in desktop/close-dialog.ps1, whether to keep running in the tray or quit. Resolves to 'tray', 'quit' or null. */
+function askOnClose() {
+  return new Promise((resolve) => {
+    execFile(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'close-dialog.ps1'), 'utf8')),
+      { windowsHide: true, env: { ...process.env, RT_TITLE: TITLE, RT_EXE: process.execPath } }, (err, out) => {
+      if (err) console.log(`The close dialog could not open: ${err.message}`);
+      const answer = String(out || '').trim();
+      resolve(answer === 'tray' || answer === 'quit' ? answer : null);
+    });
+  });
+}
+
 // Tray icon
 
 function startTray(onQuit) {
-  const hintFile = path.join(DATA, '.tray-hint-shown');
-  const hint = fs.existsSync(hintFile) ? '' : 'The tracker keeps running here when you close its window, so ' +
-    'notifications still arrive. Right-click this icon to quit.';
   const tray = spawn(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'tray.ps1'), 'utf8')), {
     windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, RT_TITLE: TITLE, RT_DATA: DATA, RT_EXE: process.execPath, RT_PARENT: String(process.pid),
-      RT_HINT: hint, RT_GAME: 'WarcraftRumble' },
+      RT_GAME: 'WarcraftRumble' },
   });
   let buf = '';
   let err = '';
@@ -229,13 +240,6 @@ function startTray(onQuit) {
       else if (cmd === 'shutdown') onQuit('Windows is signing out or shutting down');
       // Whether the game runs, for the server (server/game/watch.mjs).
       else if (cmd === 'game 1' || cmd === 'game 0') host.reportGame(cmd === 'game 1');
-      else if (cmd === 'ready' && hint) {
-        try {
-          fs.writeFileSync(hintFile, '');
-        } catch {
-          // shown again next time
-        }
-      }
     }
   });
   tray.stderr.setEncoding('utf8');
@@ -462,6 +466,7 @@ async function main() {
     applyUpdate,
     openLink: openInDefaultBrowser,
     takeScreenshot: () => openInDefaultBrowser('ms-screenclip:'),
+    askOnClose,
   });
   // Not awaited. On the first start the server downloads the game data before it finishes loading and serves a
   // progress page meanwhile, so the window opens as soon as the port answers.

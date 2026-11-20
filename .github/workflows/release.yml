@@ -22,6 +22,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+      actions: read         # the Test workflow's result for this commit
       id-token: write       # build attestation
       attestations: write
     steps:
@@ -41,8 +42,23 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME does not match package.json version $version" }
 
-      - name: Test
-        run: npm test
+      # The Test workflow ran for this commit when it was pushed. The release waits for that run and needs it to pass.
+      - name: Tests passed for this commit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for ($i = 0; $i -lt 60; $i++) {
+            $run = gh run list --repo $env:GITHUB_REPOSITORY --workflow test.yml --commit $env:GITHUB_SHA --limit 1 `
+              --json status,conclusion | ConvertFrom-Json
+            if ($run -and $run[0].status -eq 'completed') {
+              if ($run[0].conclusion -eq 'success') { exit 0 }
+              throw "The Test workflow ended with '$($run[0].conclusion)' for this commit, so it is not released."
+            }
+            if (!$run -and $i -ge 10) { throw 'The Test workflow has not run for this commit. Push it to a branch before tagging it.' }
+            Start-Sleep -Seconds 20
+          }
+          throw 'The Test workflow did not finish within 20 minutes.'
 
       - name: Build
         run: npm run build-release

@@ -240,10 +240,9 @@ test('an army code reads back as the army it was made from', async () => {
   }
 });
 
-test('a leader belongs to every faction among its fixed army slots', () => {
-  assert.deepEqual(familiesOf({ family: 'Horde', category: 'Leader', fixedArmySlots: ['Horde', 'Alliance', 'Melee'] }),
-    ['Horde', 'Alliance']);
-  assert.deepEqual(familiesOf({ family: 'Horde', category: 'Leader', fixedArmySlots: ['Horde', 'Melee'] }), ['Horde']);
+test('a dual-faction mini has both families from the game data, others their one family', () => {
   assert.deepEqual(familiesOf({ family: 'Beast', families: ['Beast', 'Undead'] }), ['Beast', 'Undead']);
+  // fixed army slots no longer count: the game data names a dual faction itself
+  assert.deepEqual(familiesOf({ family: 'Horde', category: 'Leader', fixedArmySlots: ['Horde', 'Alliance', 'Melee'] }), ['Horde']);
   assert.deepEqual(familiesOf({ family: 'Undead', category: 'Unit' }), ['Undead']);
 });

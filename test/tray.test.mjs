@@ -18,7 +18,7 @@ test('the tray icon reports ready, then the game state', { skip: !windows && 'Wi
     windowsHide: true,
     // A game name that never runs, so the answer is known.
     env: { ...process.env, RT_TITLE: 'Tray test', RT_DATA: process.cwd(), RT_EXE: process.execPath,
-      RT_PARENT: String(process.pid), RT_HINT: '', RT_GAME: 'NoSuchGameForTrayTest' },
+      RT_PARENT: String(process.pid), RT_GAME: 'NoSuchGameForTrayTest' },
   });
   let out = '', err = '';
   child.stdout.on('data', (c) => { out += c; });
@@ -30,6 +30,16 @@ test('the tray icon reports ready, then the game state', { skip: !windows && 'Wi
   } finally {
     child.kill();
   }
+});
+
+test('the close dialog builds', { skip: !windows && 'Windows only', timeout: 60000 }, async () => {
+  const out = await new Promise((resolve, reject) => {
+    execFile(POWERSHELL, ['-NoProfile', '-NonInteractive', '-Sta', '-ExecutionPolicy', 'Bypass', '-EncodedCommand',
+      encoded(readFileSync(path.join(DESKTOP, 'close-dialog.ps1'), 'utf8'))],
+    { windowsHide: true, env: { ...process.env, RT_TITLE: 'Test', RT_EXE: process.execPath, RT_CHECK: '1' } },
+    (e, stdout, stderr) => (e ? reject(new Error(stderr || e.message)) : resolve(stdout)));
+  });
+  assert.match(out, /built/);
 });
 
 test('integration script compiles', { skip: !windows && 'Windows only', timeout: 60000 }, async () => {

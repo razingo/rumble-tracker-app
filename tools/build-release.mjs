@@ -52,9 +52,10 @@ try {
 const APP_FILES = [
   ['server', ['.mjs']],
   ['web', ['.html', '.js', '.css', '.ico', '.woff2', '.txt']],
-  // PowerShell scripts the launcher runs: the tray icon and Windows integration
+  // PowerShell scripts the launcher runs: the tray icon, Windows integration and the close dialog
   ['desktop/tray.ps1', []],
   ['desktop/integration.ps1', []],
+  ['desktop/close-dialog.ps1', []],
 ];
 async function walk(rel, exts) {
   const abs = path.join(ROOT, rel);

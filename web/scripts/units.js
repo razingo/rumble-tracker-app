@@ -132,15 +132,8 @@ export function slotMatches(type, m) {
   return miniTags(m).has(type);
 }
 
-/** A mini's families. For a leader, every faction among its fixed board slots. */
-export function familiesOf(m) {
-  if (m.families?.length > 1) return m.families; // multi-faction minis
-  if (m.category === 'Leader') {
-    const fams = [...new Set((m.fixedArmySlots || []).filter((t) => FAMILIES.includes(t)))];
-    if (fams.length > 1) return fams;
-  }
-  return [m.family];
-}
+/** A mini's families: both of a dual-faction mini's (from the game data), else its one family. */
+export const familiesOf = (m) => (m.families?.length > 1 ? m.families : [m.family]);
 
 /** The level unit u plays at in slot i of leader L's army. */
 export function levelInSlot(u, L, i) {

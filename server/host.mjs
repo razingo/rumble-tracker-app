@@ -6,7 +6,7 @@
 // app ID notifications are sent under. It installs downloaded updates, opens links in the default browser and opens
 // Windows' snipping overlay for the server.
 
-let launcher = null; // { options, applyUpdate, openLink, takeScreenshot }
+let launcher = null; // { options, applyUpdate, openLink, takeScreenshot, askOnClose }
 let quitHandler = null;
 const game = { running: null, failed: false, listeners: [] };
 let identity = { appId: null, launch: null };
@@ -57,5 +57,7 @@ export const host = {
     return launcher.applyUpdate(update);
   },
   openLink(url) { launcher?.openLink(url); },
+  /** Asks what closing the window should do: 'tray', 'quit', or null when the question was dismissed. */
+  async askOnClose() { return launcher ? launcher.askOnClose() : 'tray'; },
   takeScreenshot() { launcher?.takeScreenshot(); },
 };

@@ -3,6 +3,14 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.8.2
+
+- The first time you close the window, the tracker asks whether to keep running in the tray or quit, and remembers
+  your answer. **⚙ Settings → When I close the window** changes it later (exe only).
+- Dual-faction leaders are recognized from the game data alone.
+- For developers: a release no longer runs the tests a second time; it waits for the Test workflow's run of the same
+  commit and is only built when that passed.
+
 ## 0.8.1
 
 - Times in sentences are written out ("5 minutes ago", "ends in 3 hours", "every 24 hours"); countdowns keep their

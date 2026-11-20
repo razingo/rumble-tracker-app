@@ -51,6 +51,17 @@ async function reloadTables() {
   }
 }
 
+// This page's ID, so the tracker can tell a closed window from a reload (server/window.mjs).
+const PAGE_ID = crypto.randomUUID();
+
+/** In the exe, closing the window keeps the tracker in the tray, quits it or asks; the tracker decides which. */
+function reportWindowClosing() {
+  if (!state?.standalone) return;
+  // keepalive lets the request finish after the page is gone
+  fetch('/api/window-closed', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ page: PAGE_ID }) }).catch(() => {});
+}
+
 async function boot() {
   await loadTables();
   $('#accountLabel').maxLength = LIMITS.accountName;
@@ -71,10 +82,12 @@ async function boot() {
   await poll();
   schedulePoll();
   // Back in view, so refresh at once instead of waiting for the slow poll.
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
     poll();
     schedulePoll();
-  } });
+  });
+  window.addEventListener('pagehide', reportWindowClosing);
   setInterval(renderStatus, SECOND);
 }
 
@@ -97,6 +110,7 @@ const LIVE_FIELDS = ['lastScan', 'lastError', 'problems', 'gameRunning', 'update
 export async function poll() {
   try {
     const q = new URLSearchParams();
+    q.set('page', PAGE_ID);
     if (ui.account) q.set('account', ui.account);
     // Given the revision the page has, the server answers an unchanged state with the live fields only.
     if (state && !state.connError) {

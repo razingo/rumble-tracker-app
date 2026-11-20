@@ -5,7 +5,7 @@ How to use the Rumble Collection Tracker: what each tab shows and what you can d
 
 While the game runs, the tracker reads your progress from the game's saved data on your PC every few seconds. Play a
 battle, upgrade a mini or buy something, and it shows up within a few seconds. You don't need to keep the window in
-front of you, since the tracker keeps running in the tray and the window catches up whenever you open it. What happens
+front of you: the tracker can keep running in the tray, and the window catches up whenever you open it. What happens
 in the background (reading the save, backups, updates) is explained in [How the tracker works](HOW-IT-WORKS.md).
 
 - [The top bar](#the-top-bar)
@@ -35,7 +35,7 @@ The second row holds the status and the buttons:
 | **⚙ Settings** | Start with Windows and notifications ([below](#settings)) |
 | **🐞 Report a problem** | Tell us about a bug ([below](#report-a-problem)). A red dot means the tracker noticed an error. |
 | **Backup** | Save or restore everything you entered ([below](#backup)) |
-| **⏻ Quit** | Stops the tracker. Closing the window doesn't; the tracker keeps running in the tray, so notifications still arrive. |
+| **⏻ Quit** | Stops the tracker. Closing the window keeps it running in the tray or quits it, as you chose in **⚙ Settings**. |
 
 ## Collection
 
@@ -155,7 +155,11 @@ play without the tracker still count. Rates appear after 12 hours, charts after 
 Click **⚙ Settings**.
 
 **Start with Windows** starts the tracker in the tray when you sign in to Windows, without opening a window, so
-notifications arrive without starting it yourself. It's only in `RumbleTracker.exe`.
+notifications arrive without starting it yourself.
+
+**When I close the window** decides what the window's close button does: *Keep running in the tray*, *Quit the
+tracker*, or *Ask me*. With *Ask me*, the first close asks, and your answer becomes the setting. Both settings are only
+in `RumbleTracker.exe`.
 
 ### Notifications
 

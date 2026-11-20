@@ -18,7 +18,8 @@ are added to the history. Nothing is sent anywhere.
 
 ## The tray icon
 
-Closing the window doesn't stop the tracker; it keeps running in the tray, so notifications still arrive. Left-click
+What closing the window does is your choice in **⚙ Settings**: keep running in the tray, so notifications still
+arrive, or quit. Until you choose, closing the window asks, and your answer is saved there. Left-click
 the icon to open the window; right-click for *Open data folder* and *Quit tracker*. *Quit tracker*, **⏻ Quit** on the
 page and Windows signing out or shutting down all stop it the same way: it finishes a read in progress, writes the
 day's backup and saves everything first.
