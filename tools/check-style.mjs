@@ -1,11 +1,14 @@
-// Checks the source files against .editorconfig: lines of at most 140 characters, LF line endings, no tabs or
-// trailing spaces, and a final newline. Markdown is left out. Usage: npm run check-style
+// Checks the source files against .editorconfig: lines of at most 140 characters (120 for comments), LF line endings,
+// no tabs or trailing spaces, and a final newline. Markdown is left out. Usage: npm run check-style
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { GIT } from './git.mjs';
 
 const MAX = 140;
-const CHECKED = /^(\.github|desktop|server|test|tools|web)\/.*\.(m?js|cjs|css|html|ps1|ya?ml)$/;
+const MAX_COMMENT = 120;
+const CHECKED = /\.(m?js|cjs|css|html|ps1|ya?ml)$/;
+// a line that is only a comment: //, # (PowerShell, YAML), or a line of a /* */ or /** */ block
+const COMMENT = /^\s*(\/\/|#|\/\*|\*)/;
 
 const files = execFileSync(GIT, ['ls-files', '-co', '--exclude-standard'], { encoding: 'utf8' })
   .split('\n').filter((f) => CHECKED.test(f));
@@ -22,7 +25,9 @@ for (const f of files) {
   if (text && !text.endsWith('\n')) problems.push(`${f}: no newline at the end`);
   text.split('\n').forEach((line, i) => {
     const where = `${f}:${i + 1}`;
-    if ([...line].length > MAX) problems.push(`${where}: ${[...line].length} characters`);
+    const length = [...line].length;
+    if (length > MAX) problems.push(`${where}: ${length} characters`);
+    else if (length > MAX_COMMENT && COMMENT.test(line)) problems.push(`${where}: a ${length}-character comment`);
     if (line.includes('\t')) problems.push(`${where}: tab`);
     if (/[ \t]+$/.test(line)) problems.push(`${where}: trailing spaces`);
   });

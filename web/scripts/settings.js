@@ -1,6 +1,7 @@
 // The Settings dialog: Start with Windows and the notifications. The server keeps the settings and sends the
 // notifications, also while the page is closed.
 import { $, getJson, post, showMessage, state } from './core.js';
+import { CLOSE_CHOICES } from './lib/constants.js';
 import { esc, dateTime } from './lib/format.js';
 
 let notify = null; // { settings, types, log, pending, playing }
@@ -13,40 +14,41 @@ async function loadSettings() {
   ]);
 }
 
-function renderSettings() {
-  const dlg = $('#settingsDialog');
-  if (!notify) {
-    dlg.innerHTML = '<p>Loading…</p>';
-    return;
-  }
-  const s = notify.settings;
-  const accounts = state?.accounts || [];
-  const row = (t) => {
-    const v = s.types[t.id];
-    return `<tr>
-      <td><label class="notify-on"><input type="checkbox" data-notify-type="${t.id}" data-notify-field="on"
-        ${v.on ? 'checked' : ''}> ${esc(t.label)}</label>
-        ${t.hoursBefore ? `<span class="notify-hours">· warn <input type="number" min="1" max="72"
-          value="${v.hoursBefore}" data-notify-type="${t.id}" data-notify-field="hoursBefore"> hours before the end</span>` : ''}</td>
-      <td class="notify-play"><input type="checkbox" data-notify-type="${t.id}" data-notify-field="whenPlaying"
-        ${v.whenPlaying ? 'checked' : ''} ${v.on ? '' : 'disabled'} aria-label="Also while the game is running: ${esc(t.label)}"></td>
-    </tr>`;
-  };
-  dlg.innerHTML = `<form method="dialog" class="dialog-form">
-    <div class="dialog-head"><h2>Settings</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
-    <h3>General</h3>
-    ${general?.startWithWindows == null
+const dialogHead = '<div class="dialog-head"><h2>Settings</h2><button class="chip" value="close" aria-label="Close">✕</button></div>';
+
+/** Start with Windows and what closing the window does, which only the exe has. */
+function generalSection() {
+  const autostart = general?.startWithWindows == null
     ? '<p class="muted small">Start with Windows is available in RumbleTracker.exe.</p>'
     : `<label class="dialog-toggle"><input type="checkbox" data-setting="startWithWindows"
       ${general.startWithWindows ? 'checked' : ''}> Start with Windows</label>
       <p class="muted small">Starts in the tray when you sign in to Windows (no window), so notifications arrive
-        without opening the tracker.</p>`}
-    ${general?.closeWindow == null ? '' : `<label class="close-window">When I close the window
-      <select data-setting="closeWindow">${[['ask', 'Ask me'], ['tray', 'Keep running in the tray'], ['quit', 'Quit the tracker']]
-        .map(([v, l]) => `<option value="${v}" ${general.closeWindow === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      <p class="muted small">In the tray, notifications still arrive. "Ask me" asks once, and your answer is kept here.</p>`}
-    <span class="dialog-message small" data-setting-message></span>
-    <h3>Notifications</h3>
+        without opening the tracker.</p>`;
+  const close = general?.closeWindow == null ? '' : `<label class="close-window">When I close the window
+      <select data-setting="closeWindow">${Object.entries(CLOSE_CHOICES).map(([value, label]) =>
+        `<option value="${value}" ${general.closeWindow === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+      <p class="muted small">In the tray, notifications still arrive. "Ask me" asks once, and your answer is kept here.</p>`;
+  return `<h3>General</h3>${autostart}${close}<span class="dialog-message small" data-setting-message></span>`;
+}
+
+/** One notification type: on or off, its warning time if it has one, and whether it is sent while playing. */
+function notificationRow(t) {
+  const v = notify.settings.types[t.id];
+  const hours = t.hoursBefore ? `<span class="notify-hours">· warn <input type="number" min="1" max="72"
+    value="${v.hoursBefore}" data-notify-type="${t.id}" data-notify-field="hoursBefore"> hours before the end</span>` : '';
+  return `<tr>
+    <td><label class="notify-on"><input type="checkbox" data-notify-type="${t.id}" data-notify-field="on"
+      ${v.on ? 'checked' : ''}> ${esc(t.label)}</label>
+      ${hours}</td>
+    <td class="notify-play"><input type="checkbox" data-notify-type="${t.id}" data-notify-field="whenPlaying"
+      ${v.whenPlaying ? 'checked' : ''} ${v.on ? '' : 'disabled'} aria-label="Also while the game is running: ${esc(t.label)}"></td>
+  </tr>`;
+}
+
+function notificationsSection() {
+  const s = notify.settings;
+  const accounts = state?.accounts || [];
+  return `<h3>Notifications</h3>
     <p class="muted small">They keep coming while the tracker runs, even with this window closed.</p>
     <label class="dialog-toggle"><input type="checkbox" data-notify-field="enabled"
       ${s.enabled ? 'checked' : ''}> Send notifications</label>
@@ -56,7 +58,7 @@ function renderSettings() {
     </select></label>
     <table class="notify-table${s.enabled ? '' : ' off'}">
       <thead><tr><th></th><th title="When unticked, this isn't sent while the game is running">Also while<br>playing</th></tr></thead>
-      <tbody>${notify.types.map(row).join('')}</tbody>
+      <tbody>${notify.types.map(notificationRow).join('')}</tbody>
     </table>
     <p class="muted small">Types left unticked under "Also while playing" are skipped while the game is
       running${notify.playing ? ' (it is running now)' : ''}. Reward goals are set in an event's reward tree on the Calendar.</p>
@@ -67,83 +69,99 @@ function renderSettings() {
       <span class="muted small">held until they end${notify.pending ? ` · ${notify.pending} waiting` : ''}</span>
     </div>
     <div class="dialog-actions"><button type="button" class="button" data-notify-test>Send a test notification</button><span
-      class="dialog-message small"></span></div>
-    <h3>Recent</h3>
-    ${notify.log.length ? `<ul class="notify-log">${notify.log.map((n) =>
-      `<li><span class="muted small">${esc(dateTime(n.t))}</span> <b>${esc(n.title)}</b> <span
-      class="small">${esc(n.body)}</span>${n.delivered ? '' : ' <span class="text-warn small">(not ' +
-      'delivered)</span>'}</li>`).join('')}</ul>` : '<p class="muted small">Nothing sent yet.</p>'}
-  </form>`;
+      class="dialog-message small"></span></div>`;
 }
 
-async function saveNotifications(msg) {
-  try {
-    const r = await post('/api/notifications', { settings: notify.settings });
-    notify.settings = r.settings;
-    showMessage(msg, 'Saved.', 'good');
-  } catch (e) {
-    showMessage(msg, `Not saved. ${e.message}`, 'warn');
+/** The latest notifications sent, and whether Windows took them. */
+function recentSection() {
+  const item = (n) => `<li><span class="muted small">${esc(dateTime(n.t))}</span> <b>${esc(n.title)}</b> <span
+    class="small">${esc(n.body)}</span>${n.delivered ? '' : ' <span class="text-warn small">(not delivered)</span>'}</li>`;
+  return `<h3>Recent</h3>${notify.log.length
+    ? `<ul class="notify-log">${notify.log.map(item).join('')}</ul>` : '<p class="muted small">Nothing sent yet.</p>'}`;
+}
+
+function renderSettings() {
+  const dlg = $('#settingsDialog');
+  if (!notify) {
+    dlg.innerHTML = '<p>Loading…</p>';
+    return;
   }
+  dlg.innerHTML = `<form method="dialog" class="dialog-form">${dialogHead}${generalSection()}${notificationsSection()}
+    ${recentSection()}</form>`;
+}
+
+const notifyMessage = (dlg) => dlg.querySelector('.dialog-message:not([data-setting-message])');
+
+async function openSettings(dlg) {
+  dlg.showModal();
+  renderSettings();
+  try {
+    await loadSettings();
+    renderSettings();
+  } catch (err) {
+    dlg.innerHTML = `<form method="dialog" class="dialog-form">${dialogHead}
+      <p class="dialog-message small text-warn">${esc(err.message)}</p></form>`;
+  }
+}
+
+/** Saves Start with Windows or the close choice; on failure the field goes back to what is saved. */
+async function saveGeneral(dlg, el) {
+  const msg = dlg.querySelector('[data-setting-message]');
+  try {
+    general = await post('/api/settings', { [el.dataset.setting]: el.type === 'checkbox' ? el.checked : el.value });
+    showMessage(msg, 'Saved.', 'good');
+  } catch (err) {
+    if (el.type === 'checkbox') el.checked = !el.checked;
+    else el.value = general[el.dataset.setting];
+    showMessage(msg, `Not saved. ${err.message}`, 'warn');
+  }
+}
+
+/** Saves a notification setting; on failure the dialog goes back to what is saved. */
+async function changeNotification(dlg, el) {
+  const field = el.dataset.notifyField;
+  const saved = structuredClone(notify.settings);
+  const s = notify.settings;
+  const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+  if (el.dataset.notifyType) s.types[el.dataset.notifyType][field] = value;
+  else if (field.startsWith('quiet.')) s.quiet[field.slice('quiet.'.length)] = value;
+  else if (field === 'account') s.account = value || null;
+  else s[field] = value;
+  let result = ['Saved.', 'good'];
+  try {
+    notify.settings = (await post('/api/notifications', { settings: s })).settings;
+  } catch (err) {
+    notify.settings = saved;
+    result = [`Not saved. ${err.message}`, 'warn'];
+  }
+  // redraw first, so the message isn't replaced
+  renderSettings();
+  showMessage(notifyMessage(dlg), ...result);
+}
+
+async function sendTest(dlg) {
+  showMessage(notifyMessage(dlg), 'Sending…');
+  let result = ['Sent. Check the corner of your screen.', 'good'];
+  try {
+    await post('/api/notifications/test', {});
+  } catch (err) {
+    result = [err.message, 'warn'];
+  }
+  await loadSettings();
+  renderSettings();
+  showMessage(notifyMessage(dlg), ...result);
 }
 
 export function bindSettings() {
   const dlg = $('#settingsDialog');
-  $('#settingsButton').addEventListener('click', async () => {
-    dlg.showModal();
-    renderSettings();
-    try {
-      await loadSettings();
-      renderSettings();
-    } catch (err) {
-      dlg.innerHTML = `<form method="dialog" class="dialog-form">
-        <div class="dialog-head"><h2>Settings</h2><button class="chip" value="close" aria-label="Close">✕</button></div>
-        <p class="dialog-message small text-warn">${esc(err.message)}</p></form>`;
-    }
+  $('#settingsButton').addEventListener('click', () => openSettings(dlg));
+  dlg.addEventListener('change', (e) => {
+    if (e.target.dataset.setting) saveGeneral(dlg, e.target);
+    else if (e.target.dataset.notifyField && notify) changeNotification(dlg, e.target);
   });
-  dlg.addEventListener('change', async (e) => {
-    const el = e.target;
-    if (el.dataset.setting) {
-      const msg = dlg.querySelector('[data-setting-message]');
-      try {
-        const value = el.type === 'checkbox' ? el.checked : el.value;
-        general = await post('/api/settings', { [el.dataset.setting]: value });
-        showMessage(msg, 'Saved.', 'good');
-      } catch (err) {
-        // show what is still saved
-        if (el.type === 'checkbox') el.checked = !el.checked;
-        else el.value = general[el.dataset.setting];
-        showMessage(msg, `Not saved. ${err.message}`, 'warn');
-      }
-      return;
-    }
-    const field = el.dataset.notifyField;
-    if (!field || !notify) return;
-    const s = notify.settings;
-    const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
-    if (el.dataset.notifyType) s.types[el.dataset.notifyType][field] = value;
-    else if (field.startsWith('quiet.')) s.quiet[field.slice(6)] = value;
-    else if (field === 'account') s.account = value || null;
-    else s[field] = value;
-    await saveNotifications(dlg.querySelector('.dialog-message:not([data-setting-message])'));
-    renderSettings();
-  });
-  dlg.addEventListener('click', async (e) => {
+  dlg.addEventListener('click', (e) => {
     // a click on the backdrop closes the dialog
-    if (e.target === dlg) {
-      dlg.close();
-      return;
-    }
-    if (!e.target.closest('[data-notify-test]')) return;
-    const message = () => dlg.querySelector('.dialog-message:not([data-setting-message])');
-    showMessage(message(), 'Sending…');
-    let result = ['Sent. Check the corner of your screen.', 'good'];
-    try {
-      await post('/api/notifications/test', {});
-    } catch (err) {
-      result = [err.message, 'warn'];
-    }
-    await loadSettings();
-    renderSettings();
-    showMessage(message(), ...result);
+    if (e.target === dlg) dlg.close();
+    else if (e.target.closest('[data-notify-test]')) sendTest(dlg);
   });
 }

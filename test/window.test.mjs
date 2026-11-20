@@ -72,3 +72,42 @@ test('unknown close choices fall back to asking', () => {
   assert.deepEqual(cleanAppSettings({ closeWindow: 'later' }), { closeWindow: 'ask' });
   assert.deepEqual(cleanAppSettings(undefined), { closeWindow: 'ask' });
 });
+
+/** A watch whose question stays open until the test answers it. */
+function openQuestion() {
+  const log = { asked: 0, quit: [] };
+  let answer;
+  const ctx = { user: { appSettings: { closeWindow: 'ask' }, save: async () => {} }, bump() {}, errorLog: { add() {} } };
+  const w = createWindowWatch(ctx, {
+    ask: () => {
+      log.asked++;
+      return new Promise((r) => { answer = r; });
+    },
+    quit: (reason) => log.quit.push(reason),
+    wait: 10,
+  });
+  return { w, ctx, log, answer: (choice) => answer(choice) };
+}
+
+test('a window reopened while the question is open keeps the tracker running; the answer is still kept', async () => {
+  const q = openQuestion();
+  q.w.closed('a');
+  await settle();
+  q.w.seen('b'); // opened again from the tray
+  q.answer('quit');
+  await settle();
+  assert.equal(q.ctx.user.appSettings.closeWindow, 'quit');
+  assert.deepEqual(q.log.quit, []);
+});
+
+test('only one question is open at a time', async () => {
+  const q = openQuestion();
+  q.w.closed('a');
+  await settle();
+  q.w.closed('b');
+  await settle();
+  assert.equal(q.log.asked, 1);
+  q.answer('tray');
+  await settle();
+  assert.deepEqual(q.log.quit, []);
+});

@@ -208,7 +208,7 @@ function renderChallenges(ev) {
     if (g.kind === 'weekly') return g.challenges.length > 1 ? 'Weekly challenges' : 'Weekly challenge';
     return `Event challenges · ${g.challenges.length}`;
   };
-  return `<details class="tree-challenges" ${view.chOpen ? 'open' : ''}>
+  return `<details class="tree-challenges" ${view.challengesOpen ? 'open' : ''}>
     <summary>Challenges <span class="muted small">${count} · ${fmt(ev.challengeTickets || 0)} tickets in total</span></summary>
     ${groups.map((g) => `<h4>${head(g)}</h4><ul class="challenge-list${g.kind === 'daily'
       ? ' pool' : ''}">${g.challenges.map(item).join('')}</ul>`).join('')}
@@ -406,7 +406,7 @@ function renderCalendarTimeline(now) {
   return `<section class="panel cal-timeline">
     <div class="section-head">
       <h2 id="calendarRange">${esc(timelineRange(now))}</h2>
-      <button class="chip" data-calendar-nav="0" title="Back to today in the middle" ${off ? '' : 'disabled'}>Today</button>
+      <button class="chip" data-calendar-today title="Back to today in the middle" ${off ? '' : 'disabled'}>Today</button>
       <span class="muted small">Wednesdays are highlighted because most events start and end on one.</span>
     </div>
     <div class="cal-slide-row">
@@ -586,65 +586,82 @@ export async function renderCalendar() {
   window.scrollTo(0, scrollY);
 }
 
+/** A click picks one reward and a second click clears it; Ctrl+click adds or removes it from the picks. */
+function pickReward(el, multi) {
+  const k = el.dataset.treePick;
+  const picks = view.picks || [];
+  if (!k) view.picks = [];
+  else if (multi) view.picks = picks.includes(k) ? picks.filter((x) => x !== k) : [...picks, k];
+  else view.picks = picks.length === 1 && picks[0] === k ? [] : [k];
+  renderCalendar();
+}
+
+/** Sets or clears the reward goal of the open tree. */
+async function setGoal(button) {
+  const plan = button.dataset.treeGoal === 'set'
+    ? { cost: Number(button.dataset.treeCost), label: button.dataset.treeLabel } : null;
+  try {
+    await post('/api/plans', { account: state.account, eventId: view.tree, plan });
+  } catch (err) {
+    button.textContent = `Not saved. ${err.message}`;
+    return;
+  }
+  state.plans = { ...(state.plans || {}) };
+  if (plan) state.plans[view.tree] = plan;
+  else delete state.plans[view.tree];
+  renderCalendar();
+}
+
+/** Opens an event's reward tree, or closes it when it is already open. */
+async function toggleTree(id) {
+  view.tree = id && view.tree !== id ? id : null;
+  view.picks = [];
+  await renderCalendar();
+  if (view.tree) $('#calendarTree')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function calendarClick(e) {
+  const goal = e.target.closest('[data-tree-goal]');
+  if (goal) return setGoal(goal);
+  const reward = e.target.closest('[data-tree-pick]');
+  if (reward) return pickReward(reward, e.ctrlKey || e.metaKey);
+  const tree = e.target.closest('[data-calendar-tree]');
+  if (tree) return toggleTree(tree.dataset.calendarTree);
+  // Today brings the timeline back
+  if (e.target.closest('[data-calendar-today]')) {
+    view.offset = 0;
+    renderCalendar();
+  }
+}
+
+/** Moving the slider redraws only the timeline, so the slider keeps its grip. */
+function slideTimeline(e) {
+  if (!e.target.matches('[data-calendar-slider]')) return;
+  view.offset = Number(e.target.value);
+  const now = Date.now();
+  $('.cal-timeline .cal-body').innerHTML = renderTimelineBody(now);
+  $('#calendarRange').textContent = timelineRange(now);
+  $('.cal-timeline [data-calendar-today]').disabled = !view.offset;
+}
+
 export function bindCalendar() {
   const page = $('#tab-calendar');
-  // A click picks one reward and a second click clears it; Ctrl+click adds or removes it from the picks.
-  const pick = (el, multi) => {
-    const k = el.dataset.treePick;
-    const picks = view.picks || [];
-    if (!k) view.picks = [];
-    else if (multi) view.picks = picks.includes(k) ? picks.filter((x) => x !== k) : [...picks, k];
-    else view.picks = picks.length === 1 && picks[0] === k ? [] : [k];
-    renderCalendar();
-  };
+  page.addEventListener('click', calendarClick);
+  // rewards can be picked with the keyboard too
   page.addEventListener('keydown', (e) => {
     const el = e.target.closest?.('.tree-node[data-tree-pick]');
     if (!el || (e.key !== 'Enter' && e.key !== ' ')) return;
     e.preventDefault();
-    pick(el, e.ctrlKey || e.metaKey);
+    pickReward(el, e.ctrlKey || e.metaKey);
   });
-  page.addEventListener('click', async (e) => {
-    const goalEl = e.target.closest('[data-tree-goal]');
-    if (goalEl) {
-      const set = goalEl.dataset.treeGoal === 'set';
-      try {
-        await post('/api/plans', { account: state.account, eventId: view.tree,
-          plan: set ? { cost: Number(goalEl.dataset.treeCost), label: goalEl.dataset.treeLabel } : null });
-        state.plans = { ...(state.plans || {}) };
-        if (set) state.plans[view.tree] = { cost: Number(goalEl.dataset.treeCost), label: goalEl.dataset.treeLabel };
-        else delete state.plans[view.tree];
-        renderCalendar();
-      } catch (err) { goalEl.textContent = `Not saved. ${err.message}`; }
-      return;
-    }
-    const pickEl = e.target.closest('[data-tree-pick]');
-    if (pickEl) return pick(pickEl, e.ctrlKey || e.metaKey);
-    const treeBtn = e.target.closest('[data-calendar-tree]');
-    if (treeBtn) {
-      const id = treeBtn.dataset.calendarTree;
-      view.tree = id && view.tree !== id ? id : null;
-      view.picks = [];
-      await renderCalendar();
-      if (view.tree) $('#calendarTree')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
-    const nav = e.target.closest('[data-calendar-nav]');
-    if (!nav) return;
-    const step = Number(nav.dataset.calendarNav);
-    if (step === 0) view.offset = 0;
-    renderCalendar();
-  });
-  page.addEventListener('input', (e) => {
-    if (!e.target.matches('[data-calendar-slider]')) return;
-    view.offset = Number(e.target.value);
-    const now = Date.now();
-    $('.cal-timeline .cal-body').innerHTML = renderTimelineBody(now);
-    $('#calendarRange').textContent = timelineRange(now);
-    $('.cal-timeline [data-calendar-nav="0"]').disabled = !view.offset;
-  });
-  // Remember whether the challenge list is open across redraws.
-  page.addEventListener('toggle', (e) => { if (e.target.classList?.contains('tree-challenges')) view.chOpen = e.target.open; }, true);
-  // Refresh the countdowns, except while the slider is in use.
-  setInterval(() => { if (ui.tab === 'calendar' && !document.hidden
-    && !document.activeElement?.matches('[data-calendar-slider]')) renderCalendar(); }, 30 * SECOND);
+  page.addEventListener('input', slideTimeline);
+  // remember whether the challenge list is open across redraws
+  page.addEventListener('toggle', (e) => {
+    if (e.target.classList?.contains('tree-challenges')) view.challengesOpen = e.target.open;
+  }, true);
+  // refresh the countdowns, except while the slider is in use
+  setInterval(() => {
+    const sliding = document.activeElement?.matches('[data-calendar-slider]');
+    if (ui.tab === 'calendar' && !document.hidden && !sliding) renderCalendar();
+  }, 30 * SECOND);
 }

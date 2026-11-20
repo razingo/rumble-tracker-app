@@ -6,9 +6,8 @@ import { ISSUES_REPO, diagnostics } from '../report.mjs';
 import { buildState, liveState, resolveAccount, dataStale } from '../state.mjs';
 import { createHandlers } from './handlers.mjs';
 import { host } from '../host.mjs';
-import { MINUTE, MB } from '../../web/scripts/lib/constants.js';
+import { MINUTE, MB, CLOSE_CHOICES } from '../../web/scripts/lib/constants.js';
 import { localDay } from '../../web/scripts/lib/format.js';
-import { CLOSE_CHOICES } from '../window.mjs';
 
 // Links the exe's window may open in the default browser.
 const EXTERNAL_LINKS = [`https://github.com/${ISSUES_REPO}`, 'https://buymeacoffee.com/razingo'];
@@ -28,6 +27,9 @@ async function readBody(req, limit = 64 * 1024) {
   }
 }
 
+/** The page ID a request names (window.mjs). */
+const pageOf = async (req) => String((await readBody(req)).page || '');
+
 /** Allows `n` calls per `ms` milliseconds; allow() is false for the rest of that time. */
 const rateLimit = (n, ms) => ({
   n: 0,
@@ -42,8 +44,8 @@ const rateLimit = (n, ms) => ({
 });
 
 /**
- * deps: { scan, shutdown(reason), startUpdate(), notifier: { save, test }, gameRunning(), autostart: { get(), set(on) } | null,
- *   window: { seen(page), closed(page) } | null }.
+ * deps: { scan, shutdown(reason), startUpdate(), notifier: { save, test }, gameRunning(),
+ *   autostart: { get(), set(on) } | null, window: { seen(page), closed(page) } | null }.
  * Returns a Map of "METHOD /path" to handler(req, url).
  */
 export function createRoutes(ctx, deps) {
@@ -80,7 +82,7 @@ export function createRoutes(ctx, deps) {
     'POST /api/restore': json(h.restore, 20 * MB),
     // A page reports itself as soon as it opens, so a reload isn't taken for a closed window (window.mjs).
     'POST /api/page-opened': async (req) => {
-      deps.window?.seen(String((await readBody(req)).page || ''));
+      deps.window?.seen(await pageOf(req));
       return [200, { ok: true }];
     },
     // The automatic backups, and restoring one of them.
@@ -118,7 +120,7 @@ export function createRoutes(ctx, deps) {
       }
       if (b.closeWindow !== undefined) {
         if (!ctx.standalone) return [400, { error: 'Closing the window only matters in the RumbleTracker.exe version.' }];
-        if (!CLOSE_CHOICES.includes(b.closeWindow)) return [400, { error: 'That is not a choice for closing the window.' }];
+        if (!Object.hasOwn(CLOSE_CHOICES, b.closeWindow)) return [400, { error: 'That is not a choice for closing the window.' }];
         ctx.user.appSettings.closeWindow = b.closeWindow;
         await ctx.user.save('appSettings');
       }
@@ -177,7 +179,7 @@ export function createRoutes(ctx, deps) {
     routes.set('POST /api/update', async () => deps.startUpdate());
     // the page's window is closing (or reloading); window.mjs works out which
     routes.set('POST /api/window-closed', async (req) => {
-      deps.window?.closed(String((await readBody(req)).page || ''));
+      deps.window?.closed(await pageOf(req));
       return [200, { ok: true }];
     });
   }

@@ -459,7 +459,7 @@ function boardClick(t) {
   }
 }
 
-/** Typing in the tag box (Enter or a comma adds a tag, Backspace in an empty box removes the last), the description and searches. */
+/** Typing in the tag box (tagKey in lib/limits.js), the description and the pool searches. */
 function bindTyping(page) {
   page.addEventListener('keydown', (e) => {
     if (e.target.id !== 'armyTagInput') return;

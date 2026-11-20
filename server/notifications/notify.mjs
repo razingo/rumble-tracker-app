@@ -190,8 +190,8 @@ const CHECKS = { appUpdate, freeGift, gridRefresh, dailyReset, events, rotation:
 
 /**
  * Notifications due now: [{ type, key, title, body }]. The keys make each one go out once.
- * ctx = { now, accounts: [{ id, label, shop, currencies, units, pvp }], events, store, rules, pvp, plans, settings, multi,
- * appUpdateNeeded, newVersion }.
+ * ctx = { now, accounts: [{ id, label, shop, currencies, units, pvp }], events, store, rules, pvp, plans, settings,
+ *   multi, appUpdateNeeded, newVersion }.
  */
 export function dueNotifications(ctx) {
   const { settings } = ctx;

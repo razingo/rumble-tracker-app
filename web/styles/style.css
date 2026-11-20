@@ -291,7 +291,7 @@ button { cursor: pointer; }
 .calendar-page > .panel { margin: 0; }
 .section-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 10px; }
 .section-head h2 { margin: 0; }
-.section-head [data-calendar-nav] { padding: 3px 12px; }
+.section-head [data-calendar-today] { padding: 3px 12px; }
 .cal-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .cal-card {
   display: grid; grid-template-columns: 54px 1fr; column-gap: 12px; align-items: center;

@@ -98,7 +98,8 @@ const timeOf = (buf, f) => {
 /**
  * The shop, from StoreState:
  *  f2 x3 = G.R.I.D. rows, bottom row first; slot = { 1: mini, 2: XP boost item, 13: rarity } or empty once bought
- *  f3 = next G.R.I.D. refresh; f5 = store slots { 1: offer, 2: expires, 7: { 11: { 2: mini }, 12: { 2: tome }, 13: family }, 8: slot }
+ *  f3 = next G.R.I.D. refresh
+ *  f5 = store slots { 1: offer, 2: expires, 7: { 11: { 2: mini }, 12: { 2: tome }, 13: family }, 8: slot }
  *  f12 = limited offers { 1: offer, 2: expires }
  */
 export function parseStore(buf) {

@@ -31,7 +31,7 @@ const usePort = (p) => {
   PAGE = `http://localhost:${p}/`;
 };
 const args = new Set(process.argv.slice(2));
-// --background (used by Start with Windows) starts with the tray icon and no window. --no-browser does the same, for tests.
+// --background (used by Start with Windows) starts with only the tray icon; --no-browser does the same, for tests.
 const NO_WINDOW = args.has('--background') || args.has('--no-browser');
 // --after-update=<pid>:<port>: started by an app update; waits for the old instance (pid) to stop
 const afterUpdate = (() => {
@@ -206,7 +206,7 @@ async function openWindow() {
 
 // Closing the window
 
-/** Asks, in desktop/close-dialog.ps1, whether to keep running in the tray or quit. Resolves to 'tray', 'quit' or null. */
+/** Asks whether to keep running in the tray or quit (desktop/close-dialog.ps1). Resolves to 'tray', 'quit' or null. */
 function askOnClose() {
   return new Promise((resolve) => {
     execFile(POWERSHELL, psArgs(fs.readFileSync(path.join(APP_DIR, 'desktop', 'close-dialog.ps1'), 'utf8')),
@@ -402,7 +402,7 @@ function applyUpdate({ exe, version }) {
   });
 }
 
-/** Tray Quit or Windows shutting down: the server stops once its scan, backup and writes are done (as Quit on the page). */
+/** Quit from the tray, or Windows shutting down. As with Quit on the page, the scan and writes finish first. */
 let quitting = false;
 function quitFromTray(reason) {
   quitting = true;
@@ -413,53 +413,54 @@ function quitFromTray(reason) {
   setTimeout(() => process.exit(0), 20000).unref(); // in case the server can't finish
 }
 
-async function main() {
-  if (process.platform !== 'win32') return fatal(`${TITLE} runs on Windows only.`);
-  if (afterUpdate) await waitForExit(afterUpdate.pid);
+/**
+ * Picks the port: hands over to a tracker that already runs, or stops when every port is taken. Returns whether this
+ * instance goes on starting.
+ */
+async function claimPort() {
   const found = await findPort();
   if (found.running) {
     usePort(found.port);
-    return handOver();
+    await handOver();
+    return false;
   }
   if (!found.port) {
-    return fatal(PORTS.length === 1
+    fatal(PORTS.length === 1
       ? `Port ${PORTS[0]} (set with PORT) is already in use, so the tracker can't start.`
       : `Ports ${PORTS[0]}-${PORTS[PORTS.length - 1]} are all in use by other programs, so the tracker can't start.`);
+    return false;
   }
   usePort(found.port);
+  return true;
+}
 
-  rotateLog();
-  let app;
-  try {
-    app = unpack();
-  } catch (e) {
-    return fatal(`Could not unpack the tracker's files: ${e.message}`, { rollback: true });
-  }
-  APP_DIR = app.dir;
-
-  console.log(`${TITLE} ${app.index.version}, unpacked in ${app.dir}`);
-
+/** Another instance can start at the same time and win the port; this one then hands over to it. */
+function handOverOnPortRace() {
   process.on('uncaughtException', async (e) => {
-    if (e && e.code === 'EADDRINUSE') {
-      // Another instance started at the same time and won the port.
-      const again = await findPort();
-      if (again.running) {
-        usePort(again.port);
-        return handOver();
-      }
-      return fatal(`Port ${PORT} is already in use, so the tracker can't start.`);
+    if (e?.code !== 'EADDRINUSE') {
+      console.log(`Unexpected error: ${e?.stack || e}`);
+      return;
     }
-    console.log(`Unexpected error: ${e && e.stack || e}`);
+    const again = await findPort();
+    if (!again.running) return fatal(`Port ${PORT} is already in use, so the tracker can't start.`);
+    usePort(again.port);
+    await handOver();
   });
+}
 
-  // Resolve the browser while the server starts.
-  if (!NO_WINDOW && !args.has('--tab')) chooseBrowser().catch(() => {});
-
+/**
+ * Loads the server from the unpacked files, connected through server/host.mjs. The first start downloads the game data
+ * before the server finishes loading and serves a progress page meanwhile, so this returns as soon as the port
+ * answers. Returns whether it started.
+ */
+async function startServer(app) {
   const load = createRequire(path.join(app.dir, 'launcher-helper.cjs'))(path.join(app.dir, 'import.cjs'));
+  const failedToStart = (e) => fatal(`The tracker could not start: ${e?.message || e}`, { rollback: true });
   try {
     host = (await load(pathToFileURL(path.join(app.dir, 'server', 'host.mjs')).href)).host;
   } catch (e) {
-    return fatal(`The tracker could not start: ${e && e.message || e}`, { rollback: true });
+    failedToStart(e);
+    return false;
   }
   host.attach({
     options: { port: PORT, dataDir: DATA },
@@ -468,19 +469,19 @@ async function main() {
     takeScreenshot: () => openInDefaultBrowser('ms-screenclip:'),
     askOnClose,
   });
-  // Not awaited. On the first start the server downloads the game data before it finishes loading and serves a
-  // progress page meanwhile, so the window opens as soon as the port answers.
   let failed = false;
-  load(pathToFileURL(path.join(app.dir, 'server', 'main.mjs')).href)
-    .catch((e) => {
-      failed = true;
-      fatal(`The tracker could not start: ${e && e.message || e}`, { rollback: true });
-    });
-  if (!await waitForServer() || failed) {
-    if (!failed) fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`, { rollback: true });
-    return;
-  }
-  // It works, so the previous exe (kept since an update) and a rolled-back one are no longer needed.
+  load(pathToFileURL(path.join(app.dir, 'server', 'main.mjs')).href).catch((e) => {
+    failed = true;
+    failedToStart(e);
+  });
+  const answered = await waitForServer();
+  if (failed) return false;
+  if (!answered) fatal(`The tracker started but its page at ${PAGE} doesn't answer. See ${LOG}.`, { rollback: true });
+  return answered;
+}
+
+/** The previous exe (kept since an update) and a rolled-back one, once this version runs. */
+function removeOldExes() {
   for (const f of [OLD_EXE, FAILED_EXE]) {
     try {
       fs.rmSync(f, { force: true });
@@ -488,9 +489,29 @@ async function main() {
       // still in use, so it is removed next time
     }
   }
+}
+
+async function main() {
+  if (process.platform !== 'win32') return fatal(`${TITLE} runs on Windows only.`);
+  if (afterUpdate) await waitForExit(afterUpdate.pid);
+  if (!await claimPort()) return;
+  rotateLog();
+  let app;
+  try {
+    app = unpack();
+  } catch (e) {
+    return fatal(`Could not unpack the tracker's files: ${e.message}`, { rollback: true });
+  }
+  APP_DIR = app.dir;
+  console.log(`${TITLE} ${app.index.version}, unpacked in ${app.dir}`);
+  handOverOnPortRace();
+  // find the browser while the server starts
+  if (!NO_WINDOW && !args.has('--tab')) chooseBrowser().catch(() => {});
+  if (!await startServer(app)) return;
+  removeOldExes();
   startTray(quitFromTray);
   integrate();
-  // After an update on the same port, the open window reconnects and reloads by itself.
+  // after an update on the same port, the open window reconnects and reloads by itself
   if (afterUpdate && afterUpdate.port === PORT) return;
   await openWindow();
 }

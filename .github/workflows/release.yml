@@ -1,7 +1,8 @@
 # Builds the Windows release on GitHub's runners.
 #
 #   Push a tag v<version> (matching package.json): builds, attests and creates a draft release with the zip and
-#   SHA256SUMS.txt; the release notes start with the version's section of CHANGELOG.md. Review the draft, edit the notes, publish.
+#   SHA256SUMS.txt; the release notes start with the version's section of CHANGELOG.md. Review the draft, edit the
+#   notes, publish.
 #   Run manually (Actions > Release > Run workflow): builds and attests only; the files are a workflow artifact.
 #
 # Verify a downloaded file:  gh attestation verify RumbleTracker.exe --repo razingo/rumble-tracker-app

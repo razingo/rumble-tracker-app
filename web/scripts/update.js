@@ -52,8 +52,7 @@ export function renderUpdate() {
       const progress = pct != null ? `${pct}% (${megabytes(u.done)} of ${megabytes(u.total)} MB)` : `${megabytes(u.done || 0)} MB`;
       body = `<p>Downloading the new version… ${progress}</p>
         <div class="bar"><span style="width:${pct ?? 0}%"></span></div>`;
-    }
-    else if (u.state === 'restarting') body = '<p>Installing. The tracker restarts in a moment and this window reloads by itself.</p>';
+    } else if (u.state === 'restarting') body = '<p>Installing. The tracker restarts in a moment and this window reloads by itself.</p>';
     else {
       body = `${u.state === 'failed' ? `<p class="text-warn">The update didn't work: ${esc(u.error || 'unknown error')}</p>` : ''}
         <p>${u.auto ? 'The tracker can download and install it now, then restart. Your data is kept.'

@@ -1,7 +1,8 @@
 // PvP from the save (PvpPlayerRankState) and the matches the tracker infers from changes between scans.
 // The save has no match history or win/loss counts. Each finished match adds Victory Points (VP), base x loss for a
-// loss and base x win for a win, more on a win streak. Wins add honor and losses usually take some. So a VP change tells
-// how many wins and losses happened since the last scan, and honor breaks ties, as two losses can equal one win in VP.
+// loss and base x win for a win, more on a win streak. Wins add honor and losses usually take some. So a VP change
+// tells how many wins and losses happened since the last scan, and honor breaks ties, as two losses can equal one win
+// in VP.
 import { parseMessage, fieldsOf, findField, numberOf, readId } from '../../web/scripts/lib/protobuf.js';
 
 /** { season: save id, honor, honor2, vp } from PvpPlayerRankState, or null. honor2 is a second honor value
@@ -59,7 +60,8 @@ export function inferMatches(prev, cur, rules, maxMatches = 12) {
   search(dv, 0, []);
   if (!found.length) return null;
   const options = [...new Map(found.map((o) => [`${o.wins}/${o.losses}`, o])).values()];
-  // Rising honor means more wins than losses, falling honor the opposite; unchanged honor (at a floor or cap) says nothing.
+  // Honor that rises means more wins than losses, and falling honor the opposite. Unchanged honor, at a floor or a
+  // cap, tells nothing.
   const fits = options.filter((o) => (dh > 0 ? o.wins > 0 : dh < 0 ? o.losses > 0 : true));
   const pool = fits.length ? fits : options;
   const fewest = Math.min(...pool.map((o) => o.wins + o.losses));
@@ -88,7 +90,7 @@ export function pvpReading(prev, cur, now, rules) {
   return { ...entry, unexplained: true };
 }
 
-/** Sets ('win' | 'loss') or clears (null) the player's own result for an unexplained entry. Returns false if not allowed. */
+/** Sets the player's own result ('win' or 'loss', null to clear) for an unexplained entry. False when not allowed. */
 export function manualResult(entry, result) {
   if (!entry || !entry.unexplained || ![null, 'win', 'loss'].includes(result)) return false;
   delete entry.wins;

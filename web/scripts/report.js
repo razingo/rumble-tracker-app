@@ -54,8 +54,7 @@ function issueUrl() {
     if (firstError >= 0) {
       lines.splice(firstError, 1, ...(lines.includes('- (older errors left out)') ? [] : ['- (older errors left out)']));
       body = lines.join('\n');
-    }
-    else body = `${body.slice(0, Math.floor(body.length * 0.8))}\n…(shortened)`;
+    } else body = `${body.slice(0, Math.floor(body.length * 0.8))}\n…(shortened)`;
     url = make(title, body);
   }
   return url;

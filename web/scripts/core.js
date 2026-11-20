@@ -57,8 +57,9 @@ async function request(url, options, what) {
 /** Loads JSON. `what` names it for error messages, as in "the event schedule". */
 export const getJson = (url, what) => request(url, undefined, `load ${what}`);
 
-export const post = (url, body) => request(url, {
-  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+/** Sends JSON. With `keepalive`, the request still finishes when the page closes. */
+export const post = (url, body, { keepalive = false } = {}) => request(url, {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), keepalive,
 }, 'do that');
 
 /**

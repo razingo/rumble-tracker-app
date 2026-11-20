@@ -57,9 +57,7 @@ const PAGE_ID = crypto.randomUUID();
 /** In the exe, closing the window keeps the tracker in the tray, quits it or asks; the tracker decides which. */
 function reportWindowClosing() {
   if (!state?.standalone) return;
-  // keepalive lets the request finish after the page is gone
-  fetch('/api/window-closed', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ page: PAGE_ID }) }).catch(() => {});
+  post('/api/window-closed', { page: PAGE_ID }, { keepalive: true }).catch(() => {});
 }
 
 async function boot() {

@@ -180,7 +180,7 @@ export function allTraits() {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Whether a mini (null when unidentified) passes the filters. `skip` leaves out one group, for the counts on the filters. */
+/** Whether a mini (null when unidentified) passes the filters. `skip` leaves out one group, for the filter counts. */
 function passes(m, skip) {
   const f = view.filters;
   if (skip !== 'types' && f.types.length && !f.types.includes(m ? m.category : 'unknown')) return false;
@@ -361,7 +361,35 @@ const CLICKABLE = [
   'data-filter-type', 'data-filter-family', 'data-filter-trait', 'data-filter-clear', 'data-planner-toggle',
 ].map((a) => `[${a}]`).join(',');
 
-export function bindCollection() {
+/** Saves the filters and redraws what they affect. */
+function refilter() {
+  saveFilters();
+  renderFilters();
+  renderPlanner();
+  renderGrid();
+}
+
+/** Clicks on the filter chips, Clear filters and the planner's Show more. */
+function filterClick(e) {
+  const t = e.target.closest(CLICKABLE);
+  if (!t) return;
+  if (t.hasAttribute('data-planner-toggle')) {
+    view.planExpanded = !view.planExpanded;
+    store.set('collectionPlanExpanded', view.planExpanded);
+    return renderPlanner();
+  }
+  const group = t.dataset.filterType ? ['types', t.dataset.filterType] : t.dataset.filterFamily
+    ? ['families', t.dataset.filterFamily] : t.dataset.filterTrait ? ['traits', t.dataset.filterTrait] : null;
+  if (group) toggleIn(view.filters[group[0]], group[1]);
+  else if (t.hasAttribute('data-filter-clear')) {
+    view.filters = { types: [], families: [], traits: [], traitMode: view.filters.traitMode };
+    view.traitPickerOpen = false;
+  } else return;
+  refilter();
+}
+
+/** The Show and Sort selects above the grid. */
+function bindGridSelects() {
   $('#show').value = view.show;
   $('#sort').value = view.sort;
   $('#show').addEventListener('change', (e) => {
@@ -375,38 +403,9 @@ export function bindCollection() {
     store.set('collectionSort', view.sort);
     renderGrid();
   });
-  const refilter = () => {
-    saveFilters();
-    renderFilters();
-    renderPlanner();
-    renderGrid();
-  };
-  document.addEventListener('click', (e) => {
-    const t = e.target.closest(CLICKABLE);
-    if (!t) return;
-    if (t.hasAttribute('data-planner-toggle')) {
-      view.planExpanded = !view.planExpanded;
-      store.set('collectionPlanExpanded', view.planExpanded);
-      renderPlanner();
-    }
-    else if (t.dataset.filterType) {
-      toggleIn(view.filters.types, t.dataset.filterType);
-      refilter();
-    }
-    else if (t.dataset.filterFamily) {
-      toggleIn(view.filters.families, t.dataset.filterFamily);
-      refilter();
-    }
-    else if (t.dataset.filterTrait) {
-      toggleIn(view.filters.traits, t.dataset.filterTrait);
-      refilter();
-    }
-    else if (t.hasAttribute('data-filter-clear')) {
-      view.filters = { types: [], families: [], traits: [], traitMode: view.filters.traitMode };
-      view.traitPickerOpen = false;
-      refilter();
-    }
-  });
+}
+
+function bindTraitFilter() {
   const show = (open) => {
     view.traitPickerOpen = open;
     view.traitSearch = '';
@@ -430,4 +429,10 @@ export function bindCollection() {
     },
     search: (text) => { view.traitSearch = text; },
   });
+}
+
+export function bindCollection() {
+  bindGridSelects();
+  document.addEventListener('click', filterClick);
+  bindTraitFilter();
 }

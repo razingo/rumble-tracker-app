@@ -49,7 +49,7 @@ export function rewardPlanner(rewards) {
     requirements,
     /** The rewards, each after the ones it requires. */
     order,
-    /** The cheapest set of rewards that unlocks all of `keys`: { cost, take: [key] }; cost is Infinity if impossible. */
+    /** The cheapest rewards that unlock all of `keys`: { cost, take: [key] }, with cost Infinity when impossible. */
     cheapest: (keys) => cheapest(normalize(keys)),
   };
 }

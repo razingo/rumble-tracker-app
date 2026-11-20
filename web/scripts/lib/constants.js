@@ -6,6 +6,9 @@ export const REPO = 'razingo/rumble-tracker-app';
 export const RELEASES_URL = `https://github.com/${REPO}/releases/latest`;
 export const DEFAULT_PORT = 8765;
 
+// What closing the exe's window can do (server/window.mjs), with the Settings dialog's labels
+export const CLOSE_CHOICES = { ask: 'Ask me', tray: 'Keep running in the tray', quit: 'Quit the tracker' };
+
 export const SECOND = 1000;
 export const MINUTE = 60 * SECOND;
 export const HOUR = 60 * MINUTE;

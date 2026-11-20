@@ -3,6 +3,14 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.8.4
+
+- If you reopen the window from the tray while the "Close the tracker?" question is open, the tracker keeps running.
+  Your answer is still saved for next time.
+- Closing several tracker windows at once asks the question only once.
+- A notification setting that can't be saved now says so in ⚙ Settings, and goes back to the saved value.
+- The Quit button's tooltip says what it does.
+
 ## 0.8.3
 
 - The "Close the tracker?" question appears about a second after you close the window, instead of after several.

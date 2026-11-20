@@ -5,8 +5,8 @@ import { esc } from './lib/format.js';
 let queue = Promise.resolve(); // one dialog at a time
 
 /**
- * Shows a dialog and resolves to the value of the button pressed (null when closed with Esc).
- * `message` is plain text, where a blank line starts a new paragraph. `buttons` are [{ label, value, primary, danger }].
+ * Shows a dialog and resolves to the value of the button pressed (null when closed with Esc). `message` is plain text,
+ * where a blank line starts a new paragraph. `buttons` are [{ label, value, primary, danger }].
  */
 function showDialog({ title, message, buttons }) {
   const run = () => new Promise((resolve) => {

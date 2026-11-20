@@ -51,20 +51,22 @@ export function createScanner(ctx, { readPrefs }) {
     return acc;
   }
 
-  /** Applies one account's entries. Returns whether its state changed. */
-  async function scanAccount(id, entries, now, dirty) {
-    const { rules, pvp: pvpTable, store: storeTable } = ctx.tables;
-    const u = ctx.user;
-    let cur;
+  /** The units and currencies in the save, or null when a value was caught while the game was saving. */
+  function decodeCollection(id, entries) {
     try {
-      cur = { units: parseUnits(entries.units), currencies: parseCurrencies(entries.currencies) };
+      const collection = { units: parseUnits(entries.units), currencies: parseCurrencies(entries.currencies) };
       noteSuccess(id);
+      return collection;
     } catch (e) {
-      // Usually a value caught while the game was saving. Keep the last snapshot and try again next time.
+      // keep the last snapshot and try again next time
       noteFailure(id, `Could not decode ${accountLabel(ctx, id)}: ${e.message}`, `Could not decode an account: ${e.message}`);
-      return false;
+      return null;
     }
-    const acc = await account(id, dirty);
+  }
+
+  /** The new snapshot, the changes since the last one, and the history kept from them. Returns whether it changed. */
+  function updateCollection(acc, cur, id, now, dirty) {
+    const { rules } = ctx.tables;
     let changed = !acc.snapshot;
     const events = acc.snapshot ? diffSnapshots(acc.snapshot, cur, rules, now) : [];
     if (events.length) {
@@ -72,47 +74,56 @@ export function createScanner(ctx, { readPrefs }) {
       acc.lastChange = now;
       changed = true;
     }
-    if (updateLearned(u.learned, cur, events, rules, now)) dirty.add('learned');
+    if (updateLearned(ctx.user.learned, cur, events, rules, now)) dirty.add('learned');
     acc.snapshot = cur;
-    if (recordProgress(u.progress, id, cur, Date.parse(now), rules)) dirty.add('progress');
-    // Running events, avatars and the shop. A value caught mid-save keeps the previous one until the next scan.
+    if (recordProgress(ctx.user.progress, id, cur, Date.parse(now), rules)) dirty.add('progress');
+    return changed;
+  }
+
+  /** Running events, avatars and the shop. Returns whether any changed. */
+  function updateStore(acc, id, entries, now, dirty) {
+    let changed = false;
+    // empty: what a value the account doesn't have yet counts as
+    const replace = (key, value, empty = []) => {
+      if (JSON.stringify(value) === JSON.stringify(acc[key] ?? empty)) return false;
+      acc[key] = value;
+      changed = true;
+      return true;
+    };
+    if (entries.store && replace('activeEvents', parseActiveEvents(entries.store))) acc.activeEventsAt = now;
+    if (entries.profile) replace('ownedAvatars', parseOwnedAvatars(entries.profile));
+    const storeTable = ctx.tables.store;
+    if (storeLog && storeLog(id, storeFieldsForLog(entries.store), now,
+      (offer) => storeTable?.offers?.[offer]?.name)) dirty.add('storeChanges');
+    const shop = parseStore(entries.store);
+    if (shop && replace('shop', shop, null) && logGrid(ctx.user.gridHistory, id, shop.grid, now)) dirty.add('gridHistory');
+    if (entries.store) replace('incomeBonuses', parseIncomeBonuses(entries.store));
+    return changed;
+  }
+
+  function updatePvp(acc, id, entries, now, dirty) {
+    if (!recordPvp(ctx.user.pvpHistory, id, acc, parsePvp(entries.pvp), now, ctx.tables.pvp?.victoryPoints)) return false;
+    dirty.add('pvpHistory');
+    return true;
+  }
+
+  /** A value caught while the game was saving keeps the previous one until the next scan. */
+  const unlessMidSave = (update) => {
     try {
-      const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-      const active = parseActiveEvents(entries.store);
-      if (entries.store && !same(active, acc.activeEvents || [])) {
-        acc.activeEvents = active;
-        acc.activeEventsAt = now;
-        changed = true;
-      }
-      const avatars = parseOwnedAvatars(entries.profile);
-      if (entries.profile && !same(avatars, acc.ownedAvatars || [])) {
-        acc.ownedAvatars = avatars;
-        changed = true;
-      }
-      if (storeLog && storeLog(id, storeFieldsForLog(entries.store), now,
-        (offer) => storeTable?.offers?.[offer]?.name)) dirty.add('storeChanges');
-      const shop = parseStore(entries.store);
-      if (shop && !same(shop, acc.shop || null)) {
-        acc.shop = shop;
-        changed = true;
-        if (logGrid(u.gridHistory, id, shop.grid, now)) dirty.add('gridHistory');
-      }
-      const bonuses = parseIncomeBonuses(entries.store);
-      if (entries.store && !same(bonuses, acc.incomeBonuses || [])) {
-        acc.incomeBonuses = bonuses;
-        changed = true;
-      }
+      return update();
     } catch {
-      // caught mid-save
+      return false;
     }
-    try {
-      if (recordPvp(u.pvpHistory, id, acc, parsePvp(entries.pvp), now, pvpTable?.victoryPoints)) {
-        changed = true;
-        dirty.add('pvpHistory');
-      }
-    } catch {
-      // caught mid-save
-    }
+  };
+
+  /** Applies one account's entries. Returns whether its state changed. */
+  async function scanAccount(id, entries, now, dirty) {
+    const cur = decodeCollection(id, entries);
+    if (!cur) return false;
+    const acc = await account(id, dirty);
+    let changed = updateCollection(acc, cur, id, now, dirty);
+    if (unlessMidSave(() => updateStore(acc, id, entries, now, dirty))) changed = true;
+    if (unlessMidSave(() => updatePvp(acc, id, entries, now, dirty))) changed = true;
     if (changed) await writeJson(path.join(ctx.paths.STATE, `${id}.json`), acc);
     return changed;
   }

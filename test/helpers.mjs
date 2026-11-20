@@ -1,5 +1,5 @@
-// Shared test helpers: hand-built save values (written with lib/protobuf.js), and a tracker context in a temporary folder with
-// small made-up game tables (tests don't need the real game data).
+// Shared test helpers: hand-built save values (written with lib/protobuf.js), and a tracker context in a temporary
+// folder with small made-up game tables (tests don't need the real game data).
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';

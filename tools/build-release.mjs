@@ -134,7 +134,7 @@ function versionInfo(version, strings) {
   ]);
 }
 
-/** Replaces Node's icon and version information with desktop/icon.ico and versionInfo() via the Windows resource API. */
+/** Writes desktop/icon.ico and versionInfo() over Node's icon and version information, with Windows' resource API. */
 function setExeResources(exePath, icoPath, versionPath) {
   const script = `
 $ErrorActionPreference = 'Stop'

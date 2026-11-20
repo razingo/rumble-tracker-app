@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { writeJson } from './store.mjs';
 import { cleanSettings } from './notifications/notify.mjs';
-import { CLOSE_CHOICES } from './window.mjs';
+import { CLOSE_CHOICES } from '../web/scripts/lib/constants.js';
 
 // property -> file name
 const FILES = {
@@ -31,7 +31,7 @@ export const BACKUP_KEYS = {
 };
 
 /** App settings with unknown or missing values replaced by the defaults. */
-export const cleanAppSettings = (s) => ({ closeWindow: CLOSE_CHOICES.includes(s?.closeWindow) ? s.closeWindow : 'ask' });
+export const cleanAppSettings = (s) => ({ closeWindow: Object.hasOwn(CLOSE_CHOICES, s?.closeWindow ?? '') ? s.closeWindow : 'ask' });
 
 /** The name the user gave an account, else a short form of its ID. */
 export const accountLabel = (ctx, id) => ctx.user.names.accounts[id] || `Account …${id.slice(16, 24)}`;
