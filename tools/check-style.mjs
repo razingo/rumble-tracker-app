@@ -1,5 +1,6 @@
-// Checks the source files against .editorconfig: lines of at most 140 characters (120 for comments), LF line endings,
-// no tabs or trailing spaces, and a final newline. Markdown is left out. Usage: npm run check-style
+// Checks the source files against .editorconfig: UTF-8 without a byte-order mark, lines of at most 140 characters (120
+// for comments), LF line endings, no tabs or trailing spaces, and a final newline. Markdown is left out.
+// Usage: npm run check-style
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { GIT } from './git.mjs';
@@ -21,6 +22,7 @@ for (const f of files) {
   } catch {
     continue;
   }
+  if (text.startsWith('﻿')) problems.push(`${f}: byte-order mark`);
   if (text.includes('\r')) problems.push(`${f}: CRLF line endings`);
   if (text && !text.endsWith('\n')) problems.push(`${f}: no newline at the end`);
   text.split('\n').forEach((line, i) => {

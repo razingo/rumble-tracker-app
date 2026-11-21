@@ -5,6 +5,7 @@ import { mkdir, writeFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { sha256 } from '../datapack/datapack.mjs';
+import { readLimited } from '../download.mjs';
 import { REPO, EXE_NAME, MB } from '../../web/scripts/lib/constants.js';
 
 const MAX_ZIP = 300 * MB;
@@ -57,30 +58,8 @@ export function zipEntry(zip, name) {
 export async function downloadUpdate(app, dir, { fetchImpl = fetch, url = zipUrl(app), onProgress } = {}) {
   const r = await fetchImpl(url, { redirect: 'follow', signal: AbortSignal.timeout(10 * 60 * 1000) });
   if (!r.ok) throw new Error(`The download failed (HTTP ${r.status}).`);
-  const total = Number(r.headers?.get?.('content-length')) || 0;
-  if (total > MAX_ZIP) throw new Error('The download is larger than a tracker release can be, so it was stopped.');
-  // Read in chunks to report progress, with onProgress(bytes so far, total or 0).
-  const chunks = [];
-  let done = 0;
-  if (r.body?.getReader) {
-    const reader = r.body.getReader();
-    for (;;) {
-      const { done: end, value } = await reader.read();
-      if (end) break;
-      chunks.push(Buffer.from(value));
-      done += value.length;
-      if (done > MAX_ZIP) {
-        reader.cancel().catch(() => {});
-        throw new Error('The download is larger than a tracker release can be, so it was stopped.');
-      }
-      onProgress?.(done, total);
-    }
-  } else {
-    chunks.push(Buffer.from(await r.arrayBuffer()));
-    onProgress?.(chunks[0].length, total);
-  }
-  const zip = Buffer.concat(chunks);
-  if (zip.length > MAX_ZIP) throw new Error('The download is larger than a tracker release can be, so it was stopped.');
+  const zip = await readLimited(r, MAX_ZIP, 'The download is larger than a tracker release can be, so it was stopped.',
+    onProgress);
   if (sha256(zip) !== app.zipSha256) throw new Error('The download does not match its checksum, so it was not installed.');
   const exe = zipEntry(zip, EXE_NAME);
   if (sha256(exe) !== app.exeSha256) throw new Error('The program in the download does not match its checksum, so it was not installed.');

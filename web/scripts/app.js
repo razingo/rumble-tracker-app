@@ -202,7 +202,7 @@ function renderStatus() {
   const el = $('#status');
   if (!state) return;
   const err = state.connError || state.lastError;
-  const live = state.gameRunning === false ? `Game closed · last read ${ago(state.lastScan)}` : `Live · last scan ${ago(state.lastScan)}`;
+  const live = `${state.gameRunning === false ? 'Game closed' : 'Live'} · last read ${ago(state.lastScan)}`;
   el.className = `status${err ? ' error' : state.gameRunning === false ? ' idle' : ''}`;
   el.innerHTML = `<span class="dot"></span><span class="status-text">${err ? esc(err) : live}</span>`;
 }

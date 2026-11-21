@@ -1,6 +1,5 @@
 # Your own data when running from source (contains account IDs)
 /data/
-/backups/
 
 # Game data and art: npm run fetch-gamedata downloads it (published in razingo/rumble-tracker-data)
 /gamedata/

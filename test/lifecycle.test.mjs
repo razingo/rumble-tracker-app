@@ -4,25 +4,11 @@ import path from 'node:path';
 import { writeFile, readdir } from 'node:fs/promises';
 import { createUpdater } from '../server/update/updater.mjs';
 import { host } from '../server/host.mjs';
-import { downloadUpdate } from '../server/update/appupdate.mjs';
 import { createPackChecker } from '../server/datapack/checker.mjs';
 import { testContext } from './helpers.mjs';
 
 const app = { version: '9.9.9', zip: 'RumbleTracker-9.9.9-win-x64.zip', zipSha256: 'a'.repeat(64), exeSha256: 'b'.repeat(64) };
 const until = async (fn) => { for (let i = 0; i < 100 && !fn(); i++) await new Promise((r) => setTimeout(r, 10)); };
-
-test('download progress is reported while the zip streams in', async () => {
-  const chunks = [Buffer.alloc(100), Buffer.alloc(150)];
-  const body = new ReadableStream({ start(c) {
-    for (const x of chunks) c.enqueue(x);
-    c.close();
-  } });
-  const seen = [];
-  const fetchImpl = async () => ({ ok: true, status: 200, headers: new Headers({ 'content-length': '250' }), body });
-  // The bytes aren't a valid zip, so progress comes first and then the checksum check fails.
-  await assert.rejects(downloadUpdate(app, 'unused', { fetchImpl, onProgress: (d, t) => seen.push([d, t]) }), /checksum/);
-  assert.deepEqual(seen, [[100, 250], [250, 250]]);
-});
 
 test('the updater downloads, has the launcher install, then stops', async () => {
   const { ctx, cleanup } = await testContext({ standalone: true });

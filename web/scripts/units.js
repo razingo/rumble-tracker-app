@@ -113,7 +113,7 @@ export function remainingToLegendary(u) {
   return out;
 }
 
-// Army slots
+// Which minis fit a slot type
 
 const DMG_TAG = { AOE: 'AoE', Squad: 'Squad', OneTarget: 'One-Target' };
 

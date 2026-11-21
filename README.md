@@ -12,7 +12,7 @@ your progress over time, and optional Windows notifications.
 
 You need Windows 10 or 11 (64-bit) and Warcraft Rumble for PC, played at least once on this PC. Nothing else: no
 Node.js, no installer. The first start needs an internet connection: the tracker downloads its game data (about
-4.5 MB) before it opens.
+5 MB) before it opens.
 
 1. Open [Releases](https://github.com/razingo/rumble-tracker-app/releases/latest) and download
    `RumbleTracker-<version>-win-x64.zip`.
@@ -153,7 +153,7 @@ Environment variables for development and testing:
 
 | Folder | What |
 |---|---|
-| `server/` | The local server. `main.mjs` starts the parts and runs the timers. `host.mjs` connects it to the exe's launcher when there is one. Also the shared state (`context.mjs`), game tables (`tables.mjs`), the user's files (`userdata.mjs`, `store.mjs`), the page's state (`state.mjs`), backups, request filtering (`guard.mjs`), Start with Windows (`autostart.mjs`), what closing the window does (`window.mjs`), the problem report's details (`report.mjs`) and the Windows programs it runs (`system.mjs`) |
+| `server/` | The local server. `main.mjs` starts the parts and runs the timers. `host.mjs` connects it to the exe's launcher when there is one. Also the shared state (`context.mjs`), game tables (`tables.mjs`), the user's files (`userdata.mjs`, `store.mjs`), the page's state (`state.mjs`), backups, request filtering (`guard.mjs`), Start with Windows (`autostart.mjs`), what closing the window does (`window.mjs`), the problem report's details (`report.mjs`), downloads with a size limit (`download.mjs`) and the Windows programs it runs (`system.mjs`) |
 | `server/scan/` | Reading the save on a timer (`scanner.mjs`) and the history kept from it (`history.mjs`) |
 | `server/http/` | The HTTP server and static files (`server.mjs`), the API routes (`routes.mjs`) and the handlers that change the user's data (`handlers.mjs`) |
 | `server/update/` | In-app updates: the download and its checks (`appupdate.mjs`), and *Download now* (`updater.mjs`) |

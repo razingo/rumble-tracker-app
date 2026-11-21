@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dueNotifications, defaultSettings, cleanSettings, inQuietHours, combined } from '../server/notifications/notify.mjs';
-import { clean, createErrorLog } from '../server/report.mjs';
 
 const ctx = (extra = {}) => ({ now: Date.UTC(2026, 4, 6, 12), accounts: [], events: null, store: null, rules: null,
   plans: {}, settings: defaultSettings(), multi: false, ...extra });
@@ -37,25 +36,6 @@ test('quiet hours wrap past midnight', () => {
   assert.ok(inQuietHours(q, new Date(2026, 0, 1, 6, 59)));
   assert.ok(!inQuietHours(q, new Date(2026, 0, 1, 12, 0)));
   assert.ok(!inQuietHours({ ...q, on: false }, new Date(2026, 0, 1, 23, 30)));
-});
-
-test('reports leave out personal details', () => {
-  const s = clean('mail me at someone@example.com, save 0123456789abcdef0123456789abcdef, token eyJhbGciOiJI.eyJzdWIiOiIx.sig');
-  assert.ok(!s.includes('someone@example.com'));
-  assert.ok(!s.includes('0123456789abcdef0123456789abcdef'));
-  assert.ok(!s.includes('eyJhbGciOiJI'));
-  assert.match(s, /<email>.*<id>.*<token>/);
-});
-
-test('the error log counts repeats and cleans messages', () => {
-  const log = createErrorLog();
-  log.add('scan', 'failed for a@b.co');
-  log.add('scan', 'failed for a@b.co');
-  const [e] = log.list();
-  assert.equal(e.count, 2);
-  assert.equal(e.message, 'failed for <email>');
-  log.clear();
-  assert.equal(log.list().length, 0);
 });
 
 test('notifies about the PvP season ending soon and new modifiers', () => {

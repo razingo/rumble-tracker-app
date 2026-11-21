@@ -114,7 +114,7 @@ export function renderProgress() {
       <h2>Progress</h2>
       <span class="muted small">${since
         ? `History since ${esc(dateTime(since))}, from the game's lifetime totals: days without the tracker count too.`
-        : 'History starts with the next scan.'}
+        : 'History starts with the next read.'}
         ${enough ? '' : ' Rates appear after 12 hours, charts after two days.'}</span>
     </section>
     <div class="summary">

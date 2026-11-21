@@ -22,7 +22,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Reads the key, retrying: reg.exe fails transiently when the game rewrites its save during the read.
- * @returns {Promise<Record<string, {units?: Buffer, currencies?: Buffer}>>} keyed by account prefix
+ * @returns {Promise<Record<string, Record<string, Buffer>>>} per account prefix, the entries named in WANTED
  */
 export async function readRumblePrefs(attempts = 4) {
   for (let i = 1; ; i++) {
@@ -62,7 +62,7 @@ function queryOnce() {
         // Without the key, the game has never run on this PC.
         if (err.code === 1 && !connections) return finish(resolve, {});
         const detail = String(stderr || err.message).split(/\r?\n/).filter(Boolean).pop();
-        return finish(reject, new Error(`Could not read the game's saved data (${detail})`));
+        return finish(reject, new Error(`Could not read the game's saved data (${detail}).`));
       }
       try {
         const data = received.reduce((a, b) => (b.length > a.length ? b : a), Buffer.alloc(0));
@@ -84,8 +84,8 @@ function queryOnce() {
       });
       socket.on('error', () => {});
     });
-    server.on('error', (e) => finish(reject, new Error(`Could not read the game's saved data (${e.message})`)));
-    const timer = setTimeout(() => finish(reject, new Error("Could not read the game's saved data (timed out)")), 30 * SECOND);
+    server.on('error', (e) => finish(reject, new Error(`Could not read the game's saved data (${e.message}).`)));
+    const timer = setTimeout(() => finish(reject, new Error("Could not read the game's saved data (timed out).")), 30 * SECOND);
     server.listen(pipe, () => {
       execFile(REG, ['export', KEY, pipe, '/y'], { windowsHide: true, timeout: 25 * SECOND }, (err, stdout, stderr) => {
         exited = { err, stderr };

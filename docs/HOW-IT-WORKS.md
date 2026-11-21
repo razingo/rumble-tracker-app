@@ -19,10 +19,10 @@ are added to the history. Nothing is sent anywhere.
 ## The tray icon
 
 What closing the window does is your choice in **⚙ Settings**: keep running in the tray, so notifications still
-arrive, or quit. Until you choose, closing the window asks, and your answer is saved there. Left-click the icon to open
-the window; right-click for *Open data folder* and *Quit the tracker*. *Quit the tracker*, **⏻ Quit** on the page and
-Windows signing out or shutting down all stop it the same way: it finishes a read in progress, writes the day's backup
-and saves everything first.
+arrive, or quit. Until you choose, closing the window asks, and your answer is saved there. Left-click the icon to
+bring the window back (an open one comes to the front, as it does when you start the exe again); right-click for *Open
+data folder* and *Quit the tracker*. *Quit the tracker*, **⏻ Quit** on the page and Windows signing out or shutting
+down all stop it the same way: it finishes a read in progress, writes the day's backup and saves everything first.
 
 ## Backups
 

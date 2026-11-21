@@ -1,8 +1,8 @@
-// PvP from the save (PvpPlayerRankState) and the matches the tracker infers from changes between scans.
+// PvP from the save (PvpPlayerRankState) and the matches the tracker infers from changes between reads.
 // The save has no match history or win/loss counts. Each finished match adds Victory Points (VP), base x loss for a
 // loss and base x win for a win, more on a win streak. Wins add honor and losses usually take some. So a VP change
-// tells how many wins and losses happened since the last scan, and honor breaks ties, as two losses can equal one win
-// in VP.
+// tells how many wins and losses happened since the previous read, and honor breaks ties, as two losses can equal
+// one win in VP.
 import { parseMessage, fieldsOf, findField, numberOf, readId } from '../../web/scripts/lib/protobuf.js';
 
 /** { season: save id, honor, honor2, vp } from PvpPlayerRankState, or null. honor2 is a second honor value

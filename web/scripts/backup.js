@@ -4,6 +4,15 @@ import { forgetDraft } from './army.js';
 import { $, getJson, post, setState } from './core.js';
 import { confirmDialog, alertDialog } from './dialogs.js';
 import { esc, dateTime, shortDay, localDay } from './lib/format.js';
+
+// What each part of a backup is called after a restore (the keys of BACKUP_KEYS in server/userdata.mjs)
+const LABELS = {
+  names: 'names', talents: 'talents', army: 'army slots', armies: 'saved armies', drafts: 'the army being edited',
+  learned: 'learned game values', grid_history: 'G.R.I.D. history', pvp_history: 'PvP history',
+  notifications: 'notification settings', plans: 'reward goals', progress: 'progress history',
+  settings: 'the close-window setting',
+};
+
 /** Asks first, then restores a backup by calling restore(). `what` names it, as in "the backup from …". */
 async function restoreBackup(what, restore) {
   const message = 'This replaces what you entered (names, talents, army slots, armies, goals and settings) and the '
@@ -14,11 +23,6 @@ async function restoreBackup(what, restore) {
     forgetDraft(); // the draft comes from the restored data
     setState(null);
     await poll();
-    const LABELS = {
-      names: 'names', talents: 'talents', army: 'army slots', armies: 'saved armies', drafts: 'the army being edited',
-      learned: 'learned game values', grid_history: 'G.R.I.D. history', pvp_history: 'PvP history',
-      notifications: 'notification settings', plans: 'reward goals', progress: 'progress history',
-    };
     alertDialog(`Restored ${r.restored.map((k) => LABELS[k] || k).join(', ')}.`, { title: 'Backup restored' });
   } catch (err) {
     alertDialog(err.message, { title: 'Not restored' });

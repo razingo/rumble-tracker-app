@@ -1,10 +1,10 @@
 // Whether Warcraft Rumble is running, without starting a process per check. One PowerShell process looks every
 // 2 seconds and writes "1" or "0" when it changes. It exits with the tracker.
 import { spawn, execFile } from 'node:child_process';
-
-import { POWERSHELL, TASKLIST } from '../system.mjs';
+import { POWERSHELL, TASKLIST, powershellArgs } from '../system.mjs';
 import { host } from '../host.mjs';
 import { SECOND } from '../../web/scripts/lib/constants.js';
+
 const GAME = 'WarcraftRumble';
 
 const SCRIPT = `
@@ -26,7 +26,8 @@ while ($true) {
 export function gameRunningOnce() {
   if (process.platform !== 'win32') return Promise.resolve(false);
   return new Promise((resolve) => {
-    execFile(TASKLIST, ['/FI', `IMAGENAME eq ${GAME}.exe`, '/NH', '/FO', 'CSV'], { windowsHide: true, timeout: 10000 }, (err, out) => {
+    const args = ['/FI', `IMAGENAME eq ${GAME}.exe`, '/NH', '/FO', 'CSV'];
+    execFile(TASKLIST, args, { windowsHide: true, timeout: 10 * SECOND }, (err, out) => {
       resolve(!err && new RegExp(`${GAME}\\.exe`, 'i').test(out || ''));
     });
   });
@@ -42,7 +43,7 @@ export function watchGame(onChange, onFail = () => {}) {
   let failures = 0;
   const start = () => {
     if (process.platform !== 'win32') return;
-    const child = spawn(POWERSHELL, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', SCRIPT], {
+    const child = spawn(POWERSHELL, powershellArgs(SCRIPT), {
       windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, RT_PARENT: String(process.pid), RT_GAME: GAME },
     });
     let buf = '';

@@ -12,9 +12,9 @@ export async function firstRunDownload(ctx) {
   const status = { done: 0, total: 0, error: null };
   const page = () => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="2">
 <title>${APP_NAME}</title></head>
-<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#14162a;color:#f3e3c4;
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#161a2e;color:#f3ead6;
   font:16px/1.5 system-ui,'Segoe UI',sans-serif">
-<main style="max-width:560px;padding:24px;text-align:center"><h1 style="color:#ffd166;font-size:24px">${APP_NAME}</h1>
+<main style="max-width:560px;padding:24px;text-align:center"><h1 style="color:#ffe08a;font-size:24px">${APP_NAME}</h1>
 <p>${status.error ? esc(status.error)
     : `Downloading the game data (first start only)… ${status.total
       ? `${status.done} of ${status.total} files` : 'connecting'}`}</p></main></body></html>`;

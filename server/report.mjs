@@ -64,7 +64,7 @@ export function diagnostics({ appVersion, gameBuild, data, accounts, errors, pag
     `App version: ${appVersion || 'unknown'}`,
     `Game build (from the save): ${gameBuild || 'unknown'}`,
     `Game data: build ${data?.dataBuild || 'unknown'}, version ${data?.dataVersion || 'unknown'}${data?.pack
-      ? ' (downloaded pack)' : ' (built in)'}${data?.stale ? ', older than the game' : ''}`,
+      ? ' (downloaded pack)' : ' (from gamedata/)'}${data?.stale ? ', older than the game' : ''}`,
     `Data pack check: ${data?.packResult || data?.packError || 'not configured'}`,
     `Accounts found: ${accounts ?? 'unknown'}`,
     `System: ${os.type()} ${os.release()} ${os.arch()}, Node ${process.versions.node}${host.attached ? ' (standalone exe)' : ''}`,

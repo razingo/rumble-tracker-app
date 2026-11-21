@@ -160,7 +160,7 @@ export function renderPlanner() {
         : '';
     return planRow(u, Math.round(pct * 100), `${rarityName(u.rarity)} → ${rarityName(up.to)} · ${u.stars}/${up.stars} stars · ${costs}`,
       togo, 'stars',
-      status ? `<div class="flags" style="margin-top:4px">${status}</div>` : '');
+      status ? `<div class="flags">${status}</div>` : '');
   }).join('');
 
   const empty = (txt) => `<div class="small">${pool.length ? txt : 'No owned minis match the filters.'}</div>`;

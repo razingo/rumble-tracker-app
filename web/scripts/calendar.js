@@ -303,7 +303,7 @@ function treePath(ev, plan, look) {
   return `<div class="tree-path">
     <div><b>${title}: ${fmt(plan.cost)} tickets</b>
       <span class="muted">· ${notes.join(' · ')}</span>
-      <button class="chip small-chip" data-tree-pick="" style="margin-left:8px">Clear</button>
+      <button class="chip small-chip" data-tree-pick="">Clear</button>
       ${goalButton(ev, plan)}</div>
     <ol>${plan.path.map(item).join('')}</ol>
   </div>`;
@@ -356,7 +356,7 @@ function renderRewardTree(ev) {
     : null;
   return `<section class="panel cal-tree" id="calendarTree" style="--event-color:var(--event-${esc(ev.family)}, var(--event-default))">
     <div class="section-head"><img class="tree-head-icon" src="${eventIcon(ev)}" alt=""><h2>${esc(ev.name || ev.id)} rewards</h2>
-      <button class="chip" data-calendar-tree="" style="margin-left:auto">Close</button></div>
+      <button class="chip" data-calendar-tree="">Close</button></div>
     ${treeTotals(ev, rewards)}
     <p class="muted small">Collectable means every challenge, random dailies and weeklies at their usual
       count${ev.family === 'darkmoon' ? ', plus tickets from guild mates' : ''}.

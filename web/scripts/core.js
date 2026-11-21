@@ -121,8 +121,8 @@ export const resetTableCaches = () => { for (const fn of tableResets) fn(); };
 // The selected account and tab, kept between visits; each tab keeps its own state.
 export const ui = {
   account: store.get('account', null),
-  // The address's #tab, else the last one (tests have no location).
-  tab: ((h) => (['collection', 'army', 'armory', 'grid', 'calendar', 'pvp', 'progress'].includes(h)
+  // The address's #tab when the page has such a tab, else the last one (tests have no page or location).
+  tab: ((h) => (h && globalThis.document?.querySelector(`[data-tab="${CSS.escape(h)}"]`)
     ? h : store.get('tab', 'collection')))(globalThis.location?.hash.slice(1)),
 };
 

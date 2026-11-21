@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile, rm, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { PACK_PUBLIC_KEYS } from './pack-keys.mjs';
+import { readLimited } from '../download.mjs';
 import { SECOND, MB } from '../../web/scripts/lib/constants.js';
 
 const MAX_FILE = 8 * MB; // per file
@@ -35,9 +36,7 @@ export function newerVersion(a, b) {
 async function fetchBuf(url, limit) {
   const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30 * SECOND) });
   if (!r.ok) throw new Error(`The game data server answered HTTP ${r.status} for ${url}.`);
-  const buf = Buffer.from(await r.arrayBuffer());
-  if (buf.length > limit) throw new Error(`A game data file is larger than allowed: ${url}.`);
-  return buf;
+  return readLimited(r, limit, `A game data file is larger than allowed: ${url}.`);
 }
 
 /** The usable public keys; a malformed one is skipped. */

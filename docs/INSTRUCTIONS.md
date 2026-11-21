@@ -31,7 +31,7 @@ The second row holds the status and the buttons:
 
 | | |
 |---|---|
-| Status | *Live · last scan 5s ago* means the tracker is reading your save. *Game closed* means Warcraft Rumble isn't running, so the save can't change and the tracker waits for the game to start. Anything else is covered in [Tips](#tips). |
+| Status | *Live · last read 5 seconds ago* means the tracker is reading your save. *Game closed* means Warcraft Rumble isn't running, so the save can't change and the tracker waits for the game to start. Anything else is covered in [Tips](#tips). |
 | **☕ Buy me a coffee** | A voluntary way to support the tracker, which is free and stays free. Opens in your browser. |
 | **⚙ Settings** | Start with Windows, what closing the window does, and notifications ([below](#settings)) |
 | **🐞 Report a problem** | Tell us about a bug ([below](#report-a-problem)). A red dot means the tracker noticed an error. |

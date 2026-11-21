@@ -87,8 +87,8 @@ for (const level of ['log', 'info', 'warn', 'error']) {
 }
 
 // PowerShell helpers
-const POWERSHELL = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 const SYSTEM32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
+const POWERSHELL = path.join(SYSTEM32, 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 const psArgs = (script) => ['-NoProfile', '-NonInteractive', '-Sta', '-ExecutionPolicy', 'Bypass', '-EncodedCommand',
   Buffer.from(script, 'utf16le').toString('base64')];
 
@@ -189,8 +189,70 @@ function openInDefaultBrowser(url) {
   execFile(path.join(SYSTEM32, 'rundll32.exe'), ['url.dll,FileProtocolHandler', url], { windowsHide: true }, () => {});
 }
 
-async function openWindow() {
-  if (NO_WINDOW) return;
+// The tracker's window is a browser app window titled like the page: a visible Chromium window (Edge, Chrome, Brave,
+// Vivaldi) titled exactly TITLE; a browser tab's window has the browser's name in its title too. This brings it to the
+// front and prints "shown", or prints nothing when there is none. Windows lets a program take the foreground only
+// right after the user started or clicked it; otherwise restoring the window from minimized still brings it up.
+const SHOW_WINDOW = `
+Add-Type -TypeDefinition @'
+using System; using System.Text; using System.Runtime.InteropServices;
+public static class RtWindow {
+  delegate bool EnumProc(IntPtr hwnd, IntPtr data);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr data);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hwnd, int command);
+  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
+  public static bool Show(string title) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((hwnd, data) => {
+      var text = new StringBuilder(256);
+      var name = new StringBuilder(64);
+      GetWindowText(hwnd, text, 256);
+      GetClassName(hwnd, name, 64);
+      if (!IsWindowVisible(hwnd) || text.ToString() != title || name.ToString() != "Chrome_WidgetWin_1") return true;
+      found = hwnd;
+      return false;
+    }, IntPtr.Zero);
+    if (found == IntPtr.Zero) return false;
+    if (IsIconic(found)) ShowWindow(found, 9); // SW_RESTORE
+    if (!SetForegroundWindow(found)) {
+      ShowWindow(found, 6); // SW_MINIMIZE
+      ShowWindow(found, 9);
+    }
+    return true;
+  }
+}
+'@
+if ([RtWindow]::Show($env:RT_TITLE)) { 'shown' }
+`;
+
+/** Brings the tracker's open window to the front. Resolves to whether there was one. */
+function showOpenWindow() {
+  return new Promise((resolve) => {
+    execFile(POWERSHELL, psArgs(SHOW_WINDOW), { windowsHide: true, timeout: 15000, env: { ...process.env, RT_TITLE: TITLE } },
+      (err, out) => resolve(!err && String(out).trim() === 'shown'));
+  });
+}
+
+// A browser takes a moment to show a new window, so for a few seconds after starting one no other is started (a double
+// click on the tray icon). Requests that come while one is handled share it.
+const WINDOW_APPEARS_WITHIN = 5000; // ms
+let windowStartedAt = 0;
+let windowRequest = null;
+
+/** Brings the tracker's window to the front, or opens one when there is none. */
+function openWindow() {
+  if (NO_WINDOW) return Promise.resolve();
+  windowRequest ??= showOrStartWindow().finally(() => { windowRequest = null; });
+  return windowRequest;
+}
+
+async function showOrStartWindow() {
+  if (await showOpenWindow() || Date.now() - windowStartedAt < WINDOW_APPEARS_WITHIN) return;
+  windowStartedAt = Date.now();
   const b = args.has('--tab') ? null : await chooseBrowser();
   if (!b) return openInDefaultBrowser(PAGE);
   const profile = path.join(HOME, 'window', b.id);
@@ -304,9 +366,9 @@ async function waitForServer() {
   return false;
 }
 
-/** Opens the running instance's window (unless started in the background) and exits. */
+/** Shows the running instance's window, or opens one (unless started in the background), and exits. */
 async function handOver() {
-  console.log(`Already running${NO_WINDOW ? '' : ': opening its window'}`);
+  console.log(`Already running${NO_WINDOW ? '' : ': showing its window'}`);
   await openWindow();
   setTimeout(() => process.exit(0), 3000);
 }

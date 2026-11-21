@@ -1,5 +1,5 @@
 # Tray icon of RumbleTracker.exe (started by desktop/launcher.cjs, Windows Forms).
-# Talks to the launcher through standard output, one line each: "ready" (icon shown), "open" (open the window),
+# Talks to the launcher through standard output, one line each: "ready" (icon shown), "open" (show or open the window),
 # "quit" (Quit the tracker), "shutdown" (Windows is signing out or shutting down), "game 1" / "game 0" (whether
 # Warcraft Rumble runs; sent when it changes). Exits when the tracker process ends.
 # Environment: RT_TITLE, RT_DATA (data folder), RT_EXE (icon), RT_PARENT (tracker process id), RT_GAME (the game's
@@ -30,10 +30,24 @@ $open.Font = New-Object System.Drawing.Font($open.Font, [System.Drawing.FontStyl
 $folder = $menu.Items.Add('Open data folder')
 [void]$menu.Items.Add('-')
 $quit = $menu.Items.Add('Quit the tracker')
-$open.add_Click({ Say 'open' })
+# "open" makes the launcher bring the tracker's window to the front, or open one. Windows only lets the program the
+# user just clicked take the foreground, so this one passes that on first.
+try {
+  Add-Type -TypeDefinition @'
+using System.Runtime.InteropServices;
+public static class RtForeground {
+  [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int processId);
+}
+'@
+} catch { [Console]::Error.WriteLine("foreground: $_") }
+function Open {
+  try { [void][RtForeground]::AllowSetForegroundWindow(-1) } catch { } # ASFW_ANY
+  Say 'open'
+}
+$open.add_Click({ Open })
 $folder.add_Click({ Start-Process explorer.exe -ArgumentList ('"' + $env:RT_DATA + '"') })
 $quit.add_Click({ $tray.Visible = $false; Say 'quit'; [System.Windows.Forms.Application]::Exit() })
-$tray.add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Say 'open' } })
+$tray.add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Open } })
 $tray.ContextMenuStrip = $menu
 $tray.Visible = $true
 $parent = [int]$env:RT_PARENT

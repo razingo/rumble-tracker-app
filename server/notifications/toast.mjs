@@ -2,7 +2,7 @@
 // variables (never interpolated into the script) and XML-escaped.
 // In the exe they are sent under the tracker's own app ID, and clicking one opens the tracker (host.mjs).
 import { execFile } from 'node:child_process';
-import { POWERSHELL } from '../system.mjs';
+import { POWERSHELL, powershellArgs } from '../system.mjs';
 import { host } from '../host.mjs';
 import { APP_NAME, SECOND } from '../../web/scripts/lib/constants.js';
 
@@ -28,7 +28,7 @@ export function showToast(title, body) {
   if (process.platform !== 'win32') return Promise.resolve(false);
   const id = host.notificationIdentity();
   return new Promise((resolve) => {
-    execFile(POWERSHELL, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', SCRIPT], {
+    execFile(POWERSHELL, powershellArgs(SCRIPT), {
       windowsHide: true,
       timeout: 15 * SECOND,
       env: { ...process.env, RT_TITLE: String(title).slice(0, 120), RT_BODY: String(body).slice(0, 400),

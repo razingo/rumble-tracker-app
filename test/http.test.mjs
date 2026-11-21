@@ -111,6 +111,12 @@ test('talents, army slots, plans, drafts and saved armies are cleaned', async ()
   assert.equal((await api('POST', '/api/armies', { account: ACC, armies: Array(51).fill({}) })).status, 400);
 });
 
+test('army cleaning', () => {
+  const slugs = new Set(['a']);
+  assert.deepEqual(cleanArmy({ id: '', leader: 'x', minis: ['a'], talents: { a: 1, b: 2, c: 9 } }, slugs, { keepEmptyId: true }),
+    { id: null, name: 'Army', leader: null, minis: ['a', null, null, null, null, null], talents: { a: 1 }, description: '', tags: [] });
+});
+
 test('marks an unexplained PvP change as a win or a loss', async () => {
   assert.equal((await api('POST', '/api/pvp/result', { account: ACC, t: 'T1', result: 'win' })).status, 200);
   assert.equal(ctx.user.pvpHistory[ACC][0].wins, 1);
@@ -160,12 +166,6 @@ test('quit, update and Later work only in the exe', async () => {
   assert.equal((await api('POST', '/api/quit', {})).status, 200);
   await new Promise((r) => setTimeout(r, 300));
   assert.deepEqual(calls.quit, ['Quit from the page']);
-});
-
-test('army cleaning', () => {
-  const slugs = new Set(['a']);
-  assert.deepEqual(cleanArmy({ id: '', leader: 'x', minis: ['a'], talents: { a: 1, b: 2, c: 9 } }, slugs, { keepEmptyId: true }),
-    { id: null, name: 'Army', leader: null, minis: ['a', null, null, null, null, null], talents: { a: 1 }, description: '', tags: [] });
 });
 
 test('lists automatic backups and restores one by day', async () => {

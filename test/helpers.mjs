@@ -27,8 +27,8 @@ export const RULES = {
   currencyIds: { gold: hexId(1, 2) },
   armySlots: { count: 7, leaderSlot: 0, boostSlot: 6, tiers: [{ bonus: 0 }, { bonus: 1 }, { bonus: 2 }] },
 };
-export const MINIS = [{ slug: 'kobold-miner', name: 'Kobold Miner' }, { slug: 'footmen', name: 'Footmen' }];
-export const PVP = { victoryPoints: { base: 80, win: 2, loss: 1 } };
+const MINIS = [{ slug: 'kobold-miner', name: 'Kobold Miner' }, { slug: 'footmen', name: 'Footmen' }];
+const PVP = { victoryPoints: { base: 80, win: 2, loss: 1 } };
 
 /**
  * A context in a new temporary folder, with tables and user data loaded. `files` are extra files to create first, as

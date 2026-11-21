@@ -1,5 +1,5 @@
 // The game tables: rules, minis, events, shop and PvP data. An installed data pack (<data>/gamedata) is used before
-// the bundled gamedata/ files.
+// gamedata/, which npm run fetch-gamedata fills when running from source.
 import { stat, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { readJson, fileTimestamp } from './store.mjs';

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { deflateRawSync, crc32 } from 'node:zlib';
 import { latestAppOf, zipUrl, zipEntry, downloadUpdate } from '../server/update/appupdate.mjs';
+import { readLimited } from '../server/download.mjs';
 import { sha256 as sha } from '../server/datapack/datapack.mjs';
 
 
@@ -49,7 +50,7 @@ const exe = Buffer.from('MZ fake program '.repeat(500));
 const zipBuf = zip([['RumbleTracker-0.4.0-win-x64/README.md', Buffer.from('readme')],
   ['RumbleTracker-0.4.0-win-x64/RumbleTracker.exe', exe]]);
 const app = { version: '0.4.0', zip: 'RumbleTracker-0.4.0-win-x64.zip', zipSha256: sha(zipBuf), exeSha256: sha(exe) };
-const serve = (buf, status = 200) => async () => ({ ok: status === 200, status, arrayBuffer: async () => buf });
+const serve = (buf, status = 200) => async () => new Response(buf, { status });
 
 test('release info must be complete and consistent', () => {
   assert.deepEqual(latestAppOf({ latestApp: app }), app);
@@ -82,4 +83,25 @@ test('writes the download only when both checksums match', async () => {
   // A failed download leaves the earlier one alone.
   assert.deepEqual(await readdir(target), ['RumbleTracker-0.4.0.exe']);
   await rm(dir, { recursive: true });
+});
+
+test('a download stops once it passes its limit', async () => {
+  await assert.rejects(readLimited(new Response(Buffer.alloc(10)), 5, 'Too large.'), /Too large/);
+  // announced as too large: refused before reading
+  await assert.rejects(readLimited(new Response(Buffer.alloc(10), { headers: { 'content-length': '10' } }), 5, 'Too large.'),
+    /Too large/);
+  assert.equal((await readLimited(new Response(Buffer.alloc(5)), 5, 'Too large.')).length, 5);
+});
+
+test('download progress is reported while the zip streams in', async () => {
+  const chunks = [Buffer.alloc(100), Buffer.alloc(150)];
+  const body = new ReadableStream({ start(c) {
+    for (const x of chunks) c.enqueue(x);
+    c.close();
+  } });
+  const seen = [];
+  const fetchImpl = async () => ({ ok: true, status: 200, headers: new Headers({ 'content-length': '250' }), body });
+  // The bytes aren't a valid zip, so progress comes first and then the checksum check fails.
+  await assert.rejects(downloadUpdate(app, 'unused', { fetchImpl, onProgress: (d, t) => seen.push([d, t]) }), /checksum/);
+  assert.deepEqual(seen, [[100, 250], [250, 250]]);
 });

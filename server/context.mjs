@@ -16,8 +16,8 @@ export function createContext({ root, data, port = DEFAULT_PORT, standalone = fa
       DATA: data,
       STATE: path.join(data, 'state'),         // scan snapshots per account
       PUBLIC: path.join(root, 'web'),
-      STATIC: path.join(root, 'gamedata'),     // bundled game data, served as /static/
-      GAMEDATA: path.join(data, 'gamedata'),   // an installed data pack, used before the bundled data
+      STATIC: path.join(root, 'gamedata'),     // game data from npm run fetch-gamedata, served as /static/
+      GAMEDATA: path.join(data, 'gamedata'),   // an installed data pack, used before STATIC
       UPDATE: path.join(data, 'update'),       // a downloaded app update
       BACKUPS: path.join(data, 'backups'),     // automatic backups
     },

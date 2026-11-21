@@ -3,6 +3,18 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.9.4
+
+- The status at the top says "last read" both while the game runs and after it closes (it said "last scan" while
+  playing).
+- A game data download stops as soon as a file is larger than allowed, like the app update already did.
+- Clicking the tray icon, starting the exe again or clicking a notification brings the open window to the front (or
+  restores it when minimized) instead of opening another one.
+- The first-start download page uses the tracker's colors.
+- After restoring a backup, the list of what was restored names "the close-window setting" instead of "settings".
+- For developers: problem reports say the game data comes "from gamedata/" when no pack is installed, instead of
+  "built in".
+
 ## 0.9.3
 
 - The player guide's screenshots show the current tracker (seven were from version 0.1.0), as smaller WebP images.

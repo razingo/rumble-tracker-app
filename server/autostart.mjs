@@ -2,12 +2,13 @@
 // Running from source has no exe, so the option isn't offered there.
 import { execFile } from 'node:child_process';
 import { REG } from './system.mjs';
+import { SECOND } from '../web/scripts/lib/constants.js';
 
 const KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
 const NAME = 'RumbleCollectionTracker';
 
 const reg = (args) => new Promise((resolve) => {
-  execFile(REG, args, { windowsHide: true, timeout: 10000 }, (err, out) => resolve({ ok: !err, out: out || '' }));
+  execFile(REG, args, { windowsHide: true, timeout: 10 * SECOND }, (err, out) => resolve({ ok: !err, out: out || '' }));
 });
 
 /** The command Windows runs at sign-in. */

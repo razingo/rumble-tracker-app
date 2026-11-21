@@ -150,7 +150,7 @@ const traitRow = (name, description, icon = '') => `<div class="trait">${icon}<d
 
 function statsSection(m, level) {
   return `<h3>Stats at level <span id="levelOutput">${level}</span></h3>
-    <input type="range" min="1" max="${RULES.maxLevel}" value="${level}" data-preview-level style="width:100%">
+    <input type="range" min="1" max="${RULES.maxLevel}" value="${level}" data-preview-level>
     <table class="stats-table">${statRows(m, level)}</table>
     ${m.weakAgainst ? `<div class="small">Weak against: ${esc(m.weakAgainst)}.</div>` : ''}`;
 }
