@@ -135,43 +135,6 @@ export function parseStore(buf) {
   return { grid: { rows, refresh: timeOf(buf, findField(top, 3)) }, offers, limited };
 }
 
-/**
- * StoreState fields as JSON for the diagnostic change log, without the G.R.I.D. rows (f2). IDs are hex, times ISO
- * strings, and text is left out. Keyed by "f<n>" or "f<n>:<offer id>".
- */
-export function storeFieldsForLog(buf) {
-  if (!buf || !buf.length) return {};
-  const decode = (s, e, depth) => {
-    let f; try {
-      f = parseMessage(buf, s, e);
-    } catch {
-      return '<bytes>';
-    }
-    if (f.length === 2 && f.every((x) => x.wt === 1)) return f[0].u64.toString(16).padStart(16, '0')
-      + f[1].u64.toString(16).padStart(16, '0');
-    if (f.length === 1 && f[0].fn === 1 && f[0].wt === 1) {
-      const ms = Number(f[0].u64);
-      if (ms > 1.3e12 && ms < 2.2e12) return new Date(ms).toISOString();
-    }
-    const o = {};
-    for (const x of f) {
-      const v = x.wt === 0 ? Number(BigInt.asIntN(64, x.value)) : x.wt === 1 ? Number(x.u64) : x.wt === 5
-        ? x.u32 : depth < 6 ? decode(x.start, x.end, depth + 1) : '…';
-      const k = `f${x.fn}`;
-      o[k] = k in o ? [].concat(o[k], v) : v;
-    }
-    return o;
-  };
-  const out = {};
-  for (const f of parseMessage(buf)) {
-    if (f.fn === 2) continue; // logged separately
-    const v = f.wt === 2 ? decode(f.start, f.end, 0) : f.wt === 0 ? Number(f.value) : f.u64 ?? f.u32;
-    const id = v && typeof v === 'object' && typeof v.f1 === 'string' ? v.f1 : null; // offer id, if any
-    out[id ? `f${f.fn}:${id}` : `f${f.fn}`] = v;
-  }
-  return out;
-}
-
 /** Game build that wrote the save, from CommerceState f1.f3 ("16.1.2.119766.dp-…" -> "16.1.2.119766"). */
 export function parseGameBuild(buf) {
   if (!buf || !buf.length) return null;

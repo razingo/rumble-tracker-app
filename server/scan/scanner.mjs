@@ -3,8 +3,8 @@ import path from 'node:path';
 import { writeJson } from '../store.mjs';
 import { parsePvp } from '../game/pvp.mjs';
 import { parseUnits, parseCurrencies, parseActiveEvents, parseIncomeBonuses, parseOwnedAvatars, parseStore,
-  parseGameBuild, storeFieldsForLog, diffSnapshots, updateLearned } from '../game/model.mjs';
-import { recordProgress, logGrid, recordPvp, createStoreLog } from './history.mjs';
+  parseGameBuild, diffSnapshots, updateLearned } from '../game/model.mjs';
+import { recordProgress, logGrid, recordPvp } from './history.mjs';
 import { accountLabel } from '../userdata.mjs';
 
 const MAX_EVENTS = 500;
@@ -15,7 +15,6 @@ export const FAILS_BEFORE_ERROR = 3;
 export function createScanner(ctx, { readPrefs }) {
   const failures = new Map(); // 'read' or account id -> consecutive failures
   const status = ctx.scan;
-  const storeLog = ctx.user.storeChanges ? createStoreLog(ctx.user.storeChanges) : null;
 
   // logMessage omits user-given names, for problem reports and tracker.log
   function noteFailure(key, message, logMessage = message) {
@@ -92,9 +91,6 @@ export function createScanner(ctx, { readPrefs }) {
     };
     if (entries.store && replace('activeEvents', parseActiveEvents(entries.store))) acc.activeEventsAt = now;
     if (entries.profile) replace('ownedAvatars', parseOwnedAvatars(entries.profile));
-    const storeTable = ctx.tables.store;
-    if (storeLog && storeLog(id, storeFieldsForLog(entries.store), now,
-      (offer) => storeTable?.offers?.[offer]?.name)) dirty.add('storeChanges');
     const shop = parseStore(entries.store);
     if (shop && replace('shop', shop, null) && logGrid(ctx.user.gridHistory, id, shop.grid, now)) dirty.add('gridHistory');
     if (entries.store) replace('incomeBonuses', parseIncomeBonuses(entries.store));

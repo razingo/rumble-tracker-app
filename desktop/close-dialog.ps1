@@ -1,5 +1,5 @@
 # Asks what closing the window should do, in the page's colors. Started by desktop/launcher.cjs when the window was
-# closed and the setting is "Ask". Writes "tray" or "quit", or nothing when the dialog itself is closed.
+# closed and the setting is "Ask me". Writes "tray" or "quit", or nothing when the dialog itself is closed.
 # Environment: RT_TITLE (window title), RT_EXE (icon), RT_CHECK (build the dialog without showing it, for the tests).
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 Add-Type -TypeDefinition @'

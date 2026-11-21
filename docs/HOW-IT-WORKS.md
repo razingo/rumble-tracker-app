@@ -59,7 +59,8 @@ newer version, a pop-up offers:
 
 ## Notifications
 
-Notifications are checked every 30 seconds while the tracker runs (in the tray is enough); each is sent once.
+Notifications are checked every 30 seconds while the tracker runs (in the tray is enough); each is sent once. The
+first time the tracker runs, what is already due is only recorded, so you don't get a burst of old notifications.
 Choose them in **⚙ Settings**. Clicking one opens the tracker.
 
 ## Windows integration (RumbleTracker.exe)

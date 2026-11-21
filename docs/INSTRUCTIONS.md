@@ -185,6 +185,10 @@ one opens the tracker.
 - For an event or the PvP season ending, set how many hours before the end the notification comes.
 - Types left unticked under *Also while playing* are skipped while Warcraft Rumble is running.
 - During *Quiet hours*, notifications are held until the quiet hours end.
+- When several of one kind are due at once, they come as one notification that says how many there are and names
+  the first three.
+
+**Recent** lists the last 20 notifications sent; *(not delivered)* means Windows didn't show one.
 
 **Send a test notification** checks that Windows shows them. If nothing appears, make sure notifications for *Rumble
 Collection Tracker* (or *Windows PowerShell*, when running from source) are allowed in Windows' *Settings → System →

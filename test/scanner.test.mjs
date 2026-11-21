@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createScanner, FAILS_BEFORE_ERROR } from '../server/scan/scanner.mjs';
-import { recordProgress, logGrid, createStoreLog } from '../server/scan/history.mjs';
+import { recordProgress, logGrid } from '../server/scan/history.mjs';
 import { flushWrites } from '../server/store.mjs';
 import { testContext, unitsValue, currenciesValue, pvpValue, hexId, RULES } from './helpers.mjs';
 
@@ -124,19 +124,3 @@ test('logs the G.R.I.D. when its refresh time or items change', () => {
   assert.equal(h.a.length, 3);
 });
 
-test('the store research log records changes since the previous fields', () => {
-  const list = [];
-  const log = createStoreLog(list);
-  assert.equal(log('a', { 'offer:1': 1 }, 't0'), false);
-  assert.equal(log('a', { 'offer:1': 1 }, 't1'), false);
-  assert.equal(log('a', { 'offer:1': 2, 'offer:2': 5 }, 't2', (id) => `Offer ${id}`), true);
-  assert.deepEqual(list.map((e) => [e.key, e.before, e.after, e.offer]), [['offer:1', 1, 2, 'Offer 1'], ['offer:2', null, 5, 'Offer 2']]);
-});
-
-test('the exe keeps no store research log', async () => {
-  const { ctx, cleanup } = await testContext({ storeLog: false });
-  assert.equal(ctx.user.storeChanges, null);
-  const { scan } = createScanner(ctx, { readPrefs: async () => save() });
-  await scan();
-  await cleanup();
-});

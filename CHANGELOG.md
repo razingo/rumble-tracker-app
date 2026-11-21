@@ -3,6 +3,11 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.9.2
+
+- The player guide explains the *Recent* list in ⚙ Settings and how several notifications of one kind are combined.
+- For developers: running from source no longer writes the shop research log (`store_changes.json`); nothing read it.
+
 ## 0.9.1
 
 - When several notifications of one kind are due at once, the one notification sent for them says how many there are

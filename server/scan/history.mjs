@@ -6,7 +6,6 @@ import { pvpReading } from '../game/pvp.mjs';
 const PROGRESS_DAYS = 400;
 const GRID_HISTORY_MAX = 400;
 const MAX_PVP_LOG = 2000; // PvP readings per account (about a season of play)
-const STORE_CHANGES_MAX = 300;
 
 /**
  * Progress keeps the first sample and the latest sample of each local day,
@@ -60,24 +59,3 @@ export function recordPvp(pvpHistory, account, acc, cur, now, vpRules) {
   return true;
 }
 
-/**
- * A research log of shop record changes, without the G.R.I.D. log(account, fields, now, offerName) adds what changed
- * since the account's previous fields and returns whether it added anything.
- */
-export function createStoreLog(list) {
-  const lastFields = new Map(); // account -> fields
-  return function log(account, fields, now, offerName = () => null) {
-    const prev = lastFields.get(account);
-    lastFields.set(account, fields);
-    if (!prev) return false;
-    let added = false;
-    for (const key of new Set([...Object.keys(prev), ...Object.keys(fields)])) {
-      const before = prev[key] ?? null, after = fields[key] ?? null;
-      if (JSON.stringify(before) === JSON.stringify(after)) continue;
-      list.push({ t: now, account, key, offer: offerName(key.split(':')[1]) || null, before, after });
-      added = true;
-    }
-    if (list.length > STORE_CHANGES_MAX) list.splice(0, list.length - STORE_CHANGES_MAX);
-    return added;
-  };
-}

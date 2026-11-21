@@ -72,7 +72,7 @@ if (!(await ctx.tables.hasGameData())) {
 try {
   await ctx.tables.load();
 } catch (e) {
-  // The installed pack is damaged. Set it aside, then use the bundled tables or download the pack again.
+  // The installed pack is damaged. Set it aside, then use gamedata/ (from source) or download the pack again.
   if (!(await ctx.tables.packInstalled())) throw e;
   const moved = await ctx.tables.setPackAside();
   const msg = `The installed game data could not be read (${e.message}); it was moved to ${moved}.`;
@@ -86,7 +86,7 @@ try {
 }
 
 // The user's data
-ctx.user = await loadUserData(ctx, { storeLog: !STANDALONE });
+ctx.user = await loadUserData(ctx);
 
 // Reading the save
 // The save only changes while Warcraft Rumble runs, so it is read every SCAN_MS then, a few more times after the
@@ -188,5 +188,5 @@ server.listen(ctx.port, '127.0.0.1', () => {
   console.log(`Rumble Collection Tracker running at http://localhost:${ctx.port}`);
   console.log(`Data folder: ${ctx.paths.DATA}`);
   // Only the count, as account names are chosen by the player and the log may be attached to bug reports.
-  console.log(`Accounts found: ${ctx.accounts.size}${ctx.scan.lastErrorLog ? `  (error: ${ctx.scan.lastErrorLog})` : ''}`);
+  console.log(`Accounts found: ${ctx.accounts.size}${ctx.scan.lastErrorLog ? ` (error: ${ctx.scan.lastErrorLog})` : ''}`);
 });

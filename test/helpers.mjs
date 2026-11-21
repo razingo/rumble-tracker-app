@@ -34,7 +34,7 @@ export const PVP = { victoryPoints: { base: 80, win: 2, loss: 1 } };
  * A context in a new temporary folder, with tables and user data loaded. `files` are extra files to create first, as
  * { 'names.json': {...} } in the data folder. Returns { ctx, dir, cleanup() }.
  */
-export async function testContext({ files = {}, standalone = false, storeLog = false } = {}) {
+export async function testContext({ files = {}, standalone = false } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'rumble-ctx-'));
   const root = path.join(dir, 'app'), data = path.join(dir, 'data');
   const gd = path.join(root, 'gamedata');
@@ -51,6 +51,6 @@ export async function testContext({ files = {}, standalone = false, storeLog = f
   const ctx = createContext({ root, data, standalone, appVersion: '1.0.0' });
   ctx.tables = createTables(ctx.paths);
   await ctx.tables.load();
-  ctx.user = await loadUserData(ctx, { storeLog });
+  ctx.user = await loadUserData(ctx);
   return { ctx, dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
