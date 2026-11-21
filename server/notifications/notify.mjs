@@ -7,20 +7,36 @@ import { seasonAt, setAt, rankOf } from '../../web/scripts/lib/pvp-season.js';
 
 const GRACE = 3 * HOUR; // older occurrences (tracker not running) are not announced
 
-/** Notification types: id, label, default state, and whether sent while the game is running. */
+/**
+ * Notification types: id, label, default state, whether sent while the game is running, and `several`, the title of
+ * one notification that stands for several of the type ("12 minis are ready to upgrade").
+ */
 export const NOTIFY_TYPES = [
-  { id: 'freeGift', label: 'Free gift ready', on: true, whenPlaying: false },
-  { id: 'dailyReset', label: 'Daily shop offers reset', on: false, whenPlaying: false },
-  { id: 'gridRefresh', label: 'New G.R.I.D.', on: true, whenPlaying: false },
-  { id: 'eventStart', label: 'An event starts', on: true, whenPlaying: true },
-  { id: 'eventEnding', label: 'An event ends soon', on: true, whenPlaying: true, hoursBefore: 3 },
-  { id: 'rotation', label: 'Dungeon faction, dungeon or raid/siege changes', on: false, whenPlaying: false },
-  { id: 'upgradeReady', label: 'A mini is ready to upgrade', on: true, whenPlaying: false },
-  { id: 'planAffordable', label: 'Enough tickets for a reward goal', on: true, whenPlaying: true },
-  { id: 'pvpSeasonEnd', label: 'The PvP season ends soon', on: true, whenPlaying: true, hoursBefore: 48 },
-  { id: 'pvpModifiers', label: 'PvP modifiers change', on: false, whenPlaying: false },
-  { id: 'appUpdate', label: 'A new tracker version is available', on: true, whenPlaying: true },
+  { id: 'freeGift', label: 'Free gift ready', on: true, whenPlaying: false, several: 'free gifts are ready' },
+  { id: 'dailyReset', label: 'Daily shop offers reset', on: false, whenPlaying: false, several: 'daily shop resets' },
+  { id: 'gridRefresh', label: 'New G.R.I.D.', on: true, whenPlaying: false, several: 'new G.R.I.D.s' },
+  { id: 'eventStart', label: 'An event starts', on: true, whenPlaying: true, several: 'events have started' },
+  { id: 'eventEnding', label: 'An event ends soon', on: true, whenPlaying: true, hoursBefore: 3, several: 'events end soon' },
+  { id: 'rotation', label: 'Dungeon faction, dungeon or raid/siege changes', on: false, whenPlaying: false,
+    several: 'dungeon and raid changes' },
+  { id: 'upgradeReady', label: 'A mini is ready to upgrade', on: true, whenPlaying: false, several: 'minis are ready to upgrade' },
+  { id: 'planAffordable', label: 'Enough tickets for a reward goal', on: true, whenPlaying: true,
+    several: 'reward goals have enough tickets' },
+  { id: 'pvpSeasonEnd', label: 'The PvP season ends soon', on: true, whenPlaying: true, hoursBefore: 48,
+    several: 'PvP seasons end soon' },
+  { id: 'pvpModifiers', label: 'PvP modifiers change', on: false, whenPlaying: false, several: 'PvP modifier changes' },
+  { id: 'appUpdate', label: 'A new tracker version is available', on: true, whenPlaying: true, several: 'tracker updates' },
 ];
+
+const NAMED = 3; // a combined notification names this many, then says how many more
+
+/** One notification for several of a type: their count in the title, and what they are about in the body. */
+export function combined(type, items) {
+  const several = NOTIFY_TYPES.find((t) => t.id === type)?.several || 'notifications';
+  const names = items.slice(0, NAMED).map((n) => n.about || n.title).join(', ');
+  const more = items.length - NAMED;
+  return { type, title: `${items.length} ${several}`, body: more > 0 ? `${names} and ${more} more.` : `${names}.` };
+}
 
 export function defaultSettings() {
   return {
@@ -63,11 +79,11 @@ export function inQuietHours(quiet, now = new Date()) {
   return a <= b ? n >= a && n < b : n >= a || n < b;
 }
 
-
 const balanceOf = (a, id) => a.currencies?.find((c) => c.id === id)?.balance ?? 0;
 const isNew = (c, t) => c.now >= t && c.now - t < GRACE;
 
-// Each check below takes the context and an add(type, key, title, body) function.
+// Each check below takes the context and an add(type, key, title, body, about) function; `about` names what the
+// notification is about (a mini, an event, an account) when several are combined into one.
 
 function appUpdate(c, add) {
   if (c.appUpdateNeeded) {
@@ -84,7 +100,7 @@ function freeGift(c, add) {
     for (const o of a.shop?.offers || []) {
       if (!o.expires || !/^FreeGift_/.test(c.store?.offers?.[o.offer]?.name || '')) continue;
       if (isNew(c, Date.parse(o.expires))) add('freeGift', `freeGift:${a.id}:${o.expires}`,
-        `Free gift ready${c.who(a)}`, 'A new free gift is waiting in the shop.');
+        `Free gift ready${c.who(a)}`, 'A new free gift is waiting in the shop.', a.label);
     }
   }
 }
@@ -93,7 +109,7 @@ function gridRefresh(c, add) {
   for (const a of c.accounts) {
     const refresh = a.shop?.grid?.refresh;
     if (refresh && isNew(c, Date.parse(refresh))) add('gridRefresh', `grid:${a.id}:${refresh}`,
-      `New G.R.I.D.${c.who(a)}`, 'The G.R.I.D. has new minis.');
+      `New G.R.I.D.${c.who(a)}`, 'The G.R.I.D. has new minis.', a.label);
   }
 }
 
@@ -116,14 +132,15 @@ function events(c, add) {
     const name = r.ev.name || r.ev.id;
     if (c.on('eventStart') && isNew(c, r.start) && !told.has(`start:${name}`)) {
       told.add(`start:${name}`);
-      add('eventStart', `evStart:${r.ev.id}:${r.start}`, `${name} has started`, `It runs until ${when(r.end)}.`);
+      add('eventStart', `evStart:${r.ev.id}:${r.start}`, `${name} has started`, `It runs until ${when(r.end)}.`,
+        name);
     }
     if (c.on('eventEnding') && now < r.end && r.end - now <= lead && !told.has(`end:${name}`)) {
       told.add(`end:${name}`);
       const currency = r.ev.currency && table.currencies?.[r.ev.currency];
       const tickets = currency ? Math.max(0, ...c.accounts.map((a) => balanceOf(a, currency))) : 0;
       add('eventEnding', `evEnd:${r.ev.id}:${r.end}`, `${name} ends in ${spanWords(r.end - now)}`,
-        tickets > 0 ? `You still have ${fmt(tickets)} tickets to spend.` : `It ends ${when(r.end)}.`);
+        tickets > 0 ? `You still have ${fmt(tickets)} tickets to spend.` : `It ends ${when(r.end)}.`, name);
     }
   }
 }
@@ -167,7 +184,8 @@ function upgradeReady(c, add) {
       const ready = u.stars >= step.stars && balanceOf(a, rules.currencyIds.arcEnergy) >= step.arcEnergy
         && (!step.core || balanceOf(a, rules.currencyIds[step.core]) >= 1);
       if (ready) add('upgradeReady', `up:${a.id}:${u.id}:${u.rarity}`, `Ready to upgrade${c.who(a)}`,
-        `${u.name || u.slug} can be upgraded to ${rules.rarities[u.rarity + 1]?.name || 'the next rarity'}.`);
+        `${u.name || u.slug} can be upgraded to ${rules.rarities[u.rarity + 1]?.name || 'the next rarity'}.`,
+        `${u.name || u.slug}${c.who(a)}`);
     }
   }
 }
@@ -180,7 +198,7 @@ function planAffordable(c, add) {
       if (!ev?.currency || !plan.cost || !occurrences(ev, c.now, c.now + 1).length) continue;
       const have = balanceOf(a, c.events.currencies[ev.currency]);
       if (have >= plan.cost) add('planAffordable', `plan:${a.id}:${evId}:${plan.cost}`, `Enough tickets${c.who(a)}`,
-        `You have ${fmt(have)} tickets, enough for ${plan.label} (${fmt(plan.cost)}).`);
+        `You have ${fmt(have)} tickets, enough for ${plan.label} (${fmt(plan.cost)}).`, `${plan.label}${c.who(a)}`);
     }
   }
 }
@@ -189,7 +207,7 @@ const CHECKS = { appUpdate, freeGift, gridRefresh, dailyReset, events, rotation:
   pvpModifiers, upgradeReady, planAffordable };
 
 /**
- * Notifications due now: [{ type, key, title, body }]. The keys make each one go out once.
+ * Notifications due now: [{ type, key, title, body, about? }]. The keys make each one go out once.
  * ctx = { now, accounts: [{ id, label, shop, currencies, units, pvp }], events, store, rules, pvp, plans, settings,
  *   multi, appUpdateNeeded, newVersion }.
  */
@@ -198,7 +216,7 @@ export function dueNotifications(ctx) {
   const on = (id) => settings.enabled && !!settings.types[id]?.on;
   const c = { ...ctx, on, who: (a) => (ctx.multi ? ` (${a.label})` : '') };
   const out = [];
-  const add = (type, key, title, body) => out.push({ type, key, title, body });
+  const add = (type, key, title, body, about) => out.push({ type, key, title, body, ...(about ? { about } : {}) });
   for (const [id, check] of Object.entries(CHECKS)) {
     // The event check covers two types, each tested inside.
     if (id === 'events' ? on('eventStart') || on('eventEnding') : on(id)) check(c, add);

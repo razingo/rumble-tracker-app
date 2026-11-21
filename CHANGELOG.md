@@ -3,6 +3,13 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.9.1
+
+- When several notifications of one kind are due at once, the one notification sent for them says how many there are
+  ("12 minis are ready to upgrade") and names the first three, instead of listing all of them. For events and dungeon
+  or raid changes, it now names them.
+- A file left over from older versions (`.tray-hint-shown`) is removed from the data folder.
+
 ## 0.9.0
 
 - The tracker's icon shows in its window and browser tab again.

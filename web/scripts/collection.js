@@ -252,7 +252,7 @@ export function renderFilters() {
     </div>`;
 }
 
-/** Card frame class for the mini's family (theme-art.css). */
+/** Card frame class for the mini's family (art.css). */
 const frameCls = (m) => `frame-${String(m?.family || 'neutral').toLowerCase()}`;
 
 /** A card without levels, for a mini that is always owned or one not owned. `open` is its data attribute. */

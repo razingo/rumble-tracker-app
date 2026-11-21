@@ -1,7 +1,7 @@
 // Sends due notifications every 30 seconds. notify.mjs decides what is due and toast.mjs shows it. Each notification
 // is sent once. Quiet hours hold them until the quiet hours end; types the player doesn't want while playing are
 // skipped while the game runs.
-import { NOTIFY_TYPES, dueNotifications, inQuietHours } from './notify.mjs';
+import { combined, dueNotifications, inQuietHours } from './notify.mjs';
 import { showToast } from './toast.mjs';
 import { accountLabel, unitSlug } from '../userdata.mjs';
 import { DAY } from '../../web/scripts/lib/constants.js';
@@ -31,7 +31,7 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
       }));
     const due = dueNotifications({
       now, accounts: list, events: ctx.tables.events, store: ctx.tables.store, rules: ctx.tables.rules,
-        pvp: ctx.tables.pvp, plans: u().plans, settings,
+      pvp: ctx.tables.pvp, plans: u().plans, settings,
       multi: list.length > 1, appUpdateNeeded: ctx.dataPack.needsAppUpdate, newVersion: ctx.dataPack.newVersion,
     }).filter((n) => !log.sent[n.key]);
     if (!due.length && !(log.pending.length && !inQuietHours(settings.quiet))) return;
@@ -56,10 +56,7 @@ export function createNotifier(ctx, { gameRunning, toast = showToast }) {
     const byType = new Map();
     for (const n of batch) (byType.get(n.type) || byType.set(n.type, []).get(n.type)).push(n);
     for (const [type, items] of byType) {
-      const toSend = items.length > 2
-        ? [{ type, title: `${items.length}× ${NOTIFY_TYPES.find((t) => t.id === type)?.label || type}`,
-          body: items.map((n) => n.body.replace(/\.$/, '')).join(' · ') }]
-        : items;
+      const toSend = items.length > 2 ? [combined(type, items)] : items;
       for (const n of toSend) {
         const ok = await toast(n.title, n.body);
         log.log.push({ t: stamp, type: n.type, title: n.title, body: n.body, delivered: ok });

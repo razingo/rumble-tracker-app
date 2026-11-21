@@ -183,7 +183,7 @@ setInterval(checkDataPack, PACK_CHECK_MS);
 // What closing the app window does, in the exe only.
 const windowWatch = STANDALONE ? createWindowWatch(ctx, { ask: () => host.askOnClose(), quit: shutdown }) : null;
 
-const server = createHttpServer(ctx, { scan, shutdown, startUpdate, notifier, gameRunning, autostart, window: windowWatch });
+const server = createHttpServer(ctx, { shutdown, startUpdate, notifier, gameRunning, autostart, window: windowWatch });
 server.listen(ctx.port, '127.0.0.1', () => {
   console.log(`Rumble Collection Tracker running at http://localhost:${ctx.port}`);
   console.log(`Data folder: ${ctx.paths.DATA}`);

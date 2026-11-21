@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dueNotifications, defaultSettings, cleanSettings, inQuietHours } from '../server/notifications/notify.mjs';
+import { dueNotifications, defaultSettings, cleanSettings, inQuietHours, combined } from '../server/notifications/notify.mjs';
 import { clean, createErrorLog } from '../server/report.mjs';
 
 const ctx = (extra = {}) => ({ now: Date.UTC(2026, 4, 6, 12), accounts: [], events: null, store: null, rules: null,
@@ -79,4 +79,23 @@ test('notifies about the PvP season ending soon and new modifiers', () => {
   assert.equal(dueNotifications(ctx({ pvp, accounts, settings: s, now: Date.UTC(2026, 3, 5, 1) })).filter((n) =>
     n.type === 'pvpModifiers').length, 0);
   assert.equal(dueNotifications(ctx({ pvp, accounts })).filter((n) => n.type === 'pvpModifiers').length, 0);
+});
+
+test('several of a type become one notification that names the first three', () => {
+  const minis = ['Grommash', 'Drake', 'Ysera', 'Baron', 'Moonkin'].map((name) => ({ type: 'upgradeReady', title: 'x', about: name }));
+  assert.deepEqual(combined('upgradeReady', minis), { type: 'upgradeReady', title: '5 minis are ready to upgrade',
+    body: 'Grommash, Drake, Ysera and 2 more.' });
+  assert.equal(combined('eventStart', minis.slice(0, 3)).body, 'Grommash, Drake, Ysera.');
+  // without an about, the title stands in
+  assert.equal(combined('rotation', [{ title: 'Raid: Onyxia' }]).body, 'Raid: Onyxia.');
+});
+
+test('an upgrade notification says which mini it is about', () => {
+  const rules = { rarityUpgrade: { 0: { stars: 5, arcEnergy: 10 } }, currencyIds: { arcEnergy: 'arc' },
+    rarities: [{ name: 'Common' }, { name: 'Rare' }] };
+  const accounts = [{ id: 'a', label: 'Main', currencies: [{ id: 'arc', balance: 20 }],
+    units: [{ id: 'u', slug: 'drake', name: 'Drake', rarity: 0, stars: 5 }] }];
+  const [n] = dueNotifications(ctx({ rules, accounts }));
+  assert.equal(n.body, 'Drake can be upgraded to Rare.');
+  assert.equal(n.about, 'Drake');
 });

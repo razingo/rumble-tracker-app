@@ -7,6 +7,8 @@ import { LIMITS, cleanTags } from '../../web/scripts/lib/limits.js';
 import { APP_NAME } from '../../web/scripts/lib/constants.js';
 
 const isId = (s) => typeof s === 'string' && /^[0-9a-f]{32}$/.test(s);
+// every mini has three talents, numbered 0 to 2
+const isTalent = (v) => Number.isInteger(v) && v >= 0 && v < 3;
 
 // The page only sends these for accounts and units it shows, so they mean the page is out of date.
 const STALE = [400, { error: 'The tracker could not save this. Reload the page and try again.' }];
@@ -19,7 +21,7 @@ export function cleanArmy(a, slugs, { keepEmptyId = false } = {}) {
     name: String(a?.name || 'Army').trim().slice(0, LIMITS.armyName) || 'Army',
     leader: okSlug(a?.leader) ? a.leader : null,
     minis: Array.from({ length: 6 }, (_, i) => (okSlug(a?.minis?.[i]) ? a.minis[i] : null)),
-    talents: Object.fromEntries(Object.entries(a?.talents || {}).filter(([k, v]) => okSlug(k) && Number.isInteger(v) && v >= 0 && v < 3)),
+    talents: Object.fromEntries(Object.entries(a?.talents || {}).filter(([k, v]) => okSlug(k) && isTalent(v))),
     description: String(a?.description || '').slice(0, LIMITS.description),
     tags: cleanTags(a?.tags),
   };
@@ -57,7 +59,7 @@ export function createHandlers(ctx) {
     /** Talents the user picked for a unit: { account, unitId, picks: [0..2] }. */
     async talents({ account, unitId, picks }) {
       if (!isId(account) || !isId(unitId) || !Array.isArray(picks)) return STALE;
-      const clean = [...new Set(picks.filter((p) => Number.isInteger(p) && p >= 0 && p < 3))].sort();
+      const clean = [...new Set(picks.filter(isTalent))].sort();
       (u().talents[account] ??= {})[unitId] = clean;
       return ok('talents', { ok: true, picks: clean });
     },

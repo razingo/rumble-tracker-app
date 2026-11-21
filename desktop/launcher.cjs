@@ -480,9 +480,12 @@ async function startServer(app) {
   return answered;
 }
 
-/** The previous exe (kept since an update) and a rolled-back one, once this version runs. */
-function removeOldExes() {
-  for (const f of [OLD_EXE, FAILED_EXE]) {
+/**
+ * Files earlier versions leave behind, once this version runs: the previous exe (kept since an update), a rolled-back
+ * one, and the tray hint's marker (the hint was removed in 0.8.2).
+ */
+function removeLeftovers() {
+  for (const f of [OLD_EXE, FAILED_EXE, path.join(DATA, '.tray-hint-shown')]) {
     try {
       fs.rmSync(f, { force: true });
     } catch {
@@ -508,7 +511,7 @@ async function main() {
   // find the browser while the server starts
   if (!NO_WINDOW && !args.has('--tab')) chooseBrowser().catch(() => {});
   if (!await startServer(app)) return;
-  removeOldExes();
+  removeLeftovers();
   startTray(quitFromTray);
   integrate();
   // after an update on the same port, the open window reconnects and reloads by itself

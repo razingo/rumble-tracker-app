@@ -44,7 +44,7 @@ const rateLimit = (n, ms) => ({
 });
 
 /**
- * deps: { scan, shutdown(reason), startUpdate(), notifier: { save, test }, gameRunning(),
+ * deps: { shutdown(reason), startUpdate(), notifier: { save, test }, gameRunning(),
  *   autostart: { get(), set(on) } | null, window: { seen(page), closed(page) } | null }.
  * Returns a Map of "METHOD /path" to handler(req, url).
  */
@@ -91,10 +91,6 @@ export function createRoutes(ctx, deps) {
       const backup = await readDailyBackup(ctx.paths.BACKUPS, (await readBody(req)).day);
       if (!backup) return [404, { error: 'That backup is not there any more.' }];
       return h.restore({ backup });
-    },
-    'POST /api/scan': async () => {
-      await deps.scan();
-      return [200, { ok: true }];
     },
     'GET /api/notifications': async () => {
       const { notifySettings, sentLog } = ctx.user;

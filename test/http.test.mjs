@@ -11,7 +11,7 @@ import { testContext, hexId } from './helpers.mjs';
 
 const ACC = hexId(1, 1), UNIT = hexId(0xa, 0xb), OTHER = hexId(0xc, 0xd);
 let ctx, cleanup, server, base;
-const calls = { scan: 0, quit: [], update: 0, autostart: false, seen: [], closed: [] };
+const calls = { quit: [], update: 0, autostart: false, seen: [], closed: [] };
 
 const freePort = () => new Promise((resolve) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => {
@@ -31,7 +31,6 @@ before(async () => {
   ctx.accounts.set(ACC, { snapshot: { units: [{ id: UNIT, level: 1 }], currencies: [] }, events: [] });
   ctx.user.pvpHistory[ACC] = [{ t: 'T1', season: 's', honor: 5, vp: 50, dh: 5, dv: 50, unexplained: true }];
   server = createHttpServer(ctx, {
-    scan: async () => { calls.scan++; },
     shutdown: (reason) => calls.quit.push(reason),
     startUpdate: async () => {
       calls.update++;
@@ -180,4 +179,20 @@ test('lists automatic backups and restores one by day', async () => {
   assert.equal(ctx.user.names.accounts[ACC], 'Backed up');
   assert.equal((await api('POST', '/api/backups/restore', { day: '../names' })).status, 404);
   assert.equal((await api('POST', '/api/backups/restore', { day: '2020-01-01' })).status, 404);
+});
+
+test("opens only the tracker's own GitHub and support pages", async () => {
+  const { host } = await import('../server/host.mjs');
+  const { ISSUES_REPO } = await import('../server/report.mjs');
+  const opened = [];
+  host.attach({ options: {}, openLink: (url) => opened.push(url) });
+  const open = (url) => api('POST', '/api/open-external', { url });
+  for (const ok of [`https://github.com/${ISSUES_REPO}/issues/new?title=x`, 'https://buymeacoffee.com/razingo']) {
+    assert.equal((await open(ok)).status, 200, ok);
+  }
+  for (const refused of [
+    'https://github.com/someone-else/repo', `https://github.com/${ISSUES_REPO}-fake`, 'https://buymeacoffee.com/razingo.evil.example',
+    'file:///C:/Windows/System32/calc.exe', `https://github.com/${ISSUES_REPO}/"onload`, '',
+  ]) assert.equal((await open(refused)).status, 400, refused);
+  assert.equal(opened.length, 2);
 });
