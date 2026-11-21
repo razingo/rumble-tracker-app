@@ -1,5 +1,5 @@
-# Creates desktop/icon.ico and web/favicon.ico from gamedata/art/kobold-miner.webp: the kobold on a solid rounded
-# square inside a gold frame.
+# Creates web/favicon.ico from gamedata/art/kobold-miner.webp: the kobold on a solid rounded square inside a gold
+# frame. It is the page's icon, and the build writes it into RumbleTracker.exe.
 # Usage: powershell -ExecutionPolicy Bypass -File desktop\make-icon.ps1 [-Background '#1d2b6b'] [-Preview <png>]
 # (needs gamedata/; .webp decoding needs Windows 11 or the WebP Image Extensions). -Preview only writes a 256 px PNG.
 # PNG-encoded sizes: full portrait at 48-256 px, face crop at 16-32 px.
@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore, WindowsBase
 $root = Split-Path -Parent $PSScriptRoot
 $src = Join-Path $root 'gamedata\art\kobold-miner.webp'
-$out = Join-Path $PSScriptRoot 'icon.ico'
+$out = Join-Path $root 'web\favicon.ico'
 
 $dec = [System.Windows.Media.Imaging.BitmapDecoder]::Create([Uri]$src, 'PreservePixelFormat', 'OnLoad')
 $pbgra = [System.Windows.Media.PixelFormats]::Pbgra32
@@ -74,6 +74,4 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 foreach ($d in $pngs) { $w.Write($d) }
 $w.Flush()
 [System.IO.File]::WriteAllBytes($out, $ms.ToArray())
-# also the page's favicon, the app window's taskbar icon
-[System.IO.File]::WriteAllBytes((Join-Path $root 'web\favicon.ico'), $ms.ToArray())
 "Wrote $out ($($ms.Length) bytes, sizes $($sizes -join ', '))"

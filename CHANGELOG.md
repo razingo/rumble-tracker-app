@@ -3,6 +3,10 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.9.3
+
+- The player guide's screenshots show the current tracker (seven were from version 0.1.0), as smaller WebP images.
+
 ## 0.9.2
 
 - The player guide explains the *Recent* list in ⚙ Settings and how several notifications of one kind are combined.

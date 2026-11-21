@@ -40,7 +40,7 @@ The second row holds the status and the buttons:
 
 ## Collection
 
-![The Collection tab](screenshots/collection.png)
+![The Collection tab](screenshots/collection.webp)
 
 Your whole collection at a glance. **Recent changes** at the top lists XP gained, upgrades and currency changes as
 they happen, newest first; scroll inside the box for older ones, up to 25. Below it are your currencies as the game
@@ -68,7 +68,7 @@ Two things need you now and then:
 
 ## Army
 
-![The Army tab](screenshots/army.png)
+![The Army tab](screenshots/army.webp)
 
 Build an army of a leader and six minis from your collection, and see each mini at the level it would play at in its
 slot. Click a leader or a mini in the lists below the board, or drag it onto a slot. Drag a mini from one slot to
@@ -86,7 +86,7 @@ editing is kept automatically, even if you close the window.
 
 ## Armory
 
-![The Armory tab](screenshots/armory.png)
+![The Armory tab](screenshots/armory.webp)
 
 All your saved armies as cards, with their leader, minis and levels. Search by name, description, tag or mini, or click
 a tag to filter. Names, descriptions and tags can be edited right on the card. **Edit** opens the army on the Army tab,
@@ -94,7 +94,7 @@ a tag to filter. Names, descriptions and tags can be edited right on the card. *
 
 ## G.R.I.D.
 
-![The G.R.I.D. tab](screenshots/grid.png)
+![The G.R.I.D. tab](screenshots/grid.webp)
 
 The G.R.I.D. shop from your save: when it refreshes, your Big Red Buttons, Rare-O-Matics and Tinker's Gems, and the
 current 3×3 grid with prices, your level of each mini and what you've bought.
@@ -106,7 +106,7 @@ and **Grids seen** every grid the tracker has recorded.
 
 ## Calendar
 
-![The Calendar tab](screenshots/calendar.png)
+![The Calendar tab](screenshots/calendar.webp)
 
 Events and the shop.
 
@@ -129,7 +129,7 @@ Further down:
 
 ## PvP
 
-![The PvP tab](screenshots/pvp.png)
+![The PvP tab](screenshots/pvp.webp)
 
 The PvP season, your rank and your matches. **Rank** shows your honor and how much is left to the next rank;
 **Season** has the end date and the maps; **Modifiers** the three in play now and the next ones (they change every 3
@@ -151,7 +151,7 @@ the season ends, and what the next rank would pay.
 
 ## Progress
 
-![The Progress tab](screenshots/progress.png)
+![The Progress tab](screenshots/progress.webp)
 
 How fast you're growing, from one point per day of history. The tab shows the coins and Arc Energy you earn per day,
 the stars you put into minis and the levels you gain per week. **All minis legendary** works out what every mini you
@@ -163,7 +163,7 @@ play without the tracker still count. Rates appear after 12 hours, charts after 
 
 ## Settings
 
-![The Settings dialog](screenshots/settings.png)
+![The Settings dialog](screenshots/settings.webp)
 
 Click **⚙ Settings**.
 
@@ -196,7 +196,7 @@ Notifications*. Notifications only arrive while the tracker runs, and the tray i
 
 ## Report a problem
 
-![Report a problem](screenshots/report.png)
+![Report a problem](screenshots/report.webp)
 
 Found a bug, or something's wrong or missing? Click **🐞 Report a problem**, describe it and click **Open on GitHub**.
 Your browser opens a new issue, already filled in, which you check and submit there. That needs a free GitHub account;

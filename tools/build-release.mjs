@@ -134,7 +134,7 @@ function versionInfo(version, strings) {
   ]);
 }
 
-/** Writes desktop/icon.ico and versionInfo() over Node's icon and version information, with Windows' resource API. */
+/** Writes web/favicon.ico and versionInfo() over Node's icon and version information, with Windows' resource API. */
 function setExeResources(exePath, icoPath, versionPath) {
   const script = `
 $ErrorActionPreference = 'Stop'
@@ -217,7 +217,7 @@ await writeFile(path.join(BUILD, 'version.bin'), versionInfo(version, {
   ProductName: APP_NAME,
   ProductVersion: version,
 }));
-setExeResources(path.join(OUT, EXE_NAME), path.join(DESKTOP, 'icon.ico'), path.join(BUILD, 'version.bin'));
+setExeResources(path.join(OUT, EXE_NAME), path.join(ROOT, 'web', 'favicon.ico'), path.join(BUILD, 'version.bin'));
 const exe = await readFile(path.join(OUT, EXE_NAME));
 // Mark the exe as a GUI program (no console window). Subsystem is at e_lfanew + 4 + 20 + 68.
 const pe = exe.readUInt32LE(0x3c);

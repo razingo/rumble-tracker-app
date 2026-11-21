@@ -95,7 +95,6 @@ export function buildState(ctx, account) {
     savedArmies: (account && u.armies[account]) || [],
     armyTags: tagList((account && u.armies[account]) || []),
     draft: (account && u.drafts[account]) || null,
-    learned: u.learned,
     standalone: ctx.standalone,
     appVersion: ctx.appVersion,
   };
