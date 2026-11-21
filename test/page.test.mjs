@@ -146,6 +146,7 @@ test('formats numbers, dates, durations and day keys in en-US', () => {
   assert.equal(plural(1, 'mini'), '1 mini');
   assert.equal(plural(1200, 'army', 'armies'), '1,200 armies');
   assert.equal(megabytes(3 * 1024 * 1024), '3.0');
+  assert.equal(ago(Date.now() - 100), 'just now');
   assert.equal(ago(Date.now() - 5 * 1000), '5 seconds ago');
   assert.equal(ago(Date.now() - MINUTE), '1 minute ago');
   assert.equal(ago(Date.now() - 3 * HOUR), '3 hours ago');

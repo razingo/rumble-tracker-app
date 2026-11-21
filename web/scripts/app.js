@@ -11,7 +11,7 @@ import { $, store, getJson, post, openExternal, RULES, ALWAYS_OWNED, state, dirt
 import { confirmDialog, alertDialog } from './dialogs.js';
 import { panel, renderDrawer, bindDrawer } from './drawer.js';
 import { renderGridTab, bindGridTab } from './grid.js';
-import { SECOND, MINUTE } from './lib/constants.js';
+import { SECOND, MINUTE, SCAN_MS } from './lib/constants.js';
 import { esc, ago } from './lib/format.js';
 import { LIMITS } from './lib/limits.js';
 import { renderProgress } from './progress.js';
@@ -92,16 +92,24 @@ async function boot() {
 }
 
 // The page asks for the state every 5 seconds, every 60 seconds while its window is minimized or hidden, and every
-// second while an update downloads, so the progress bar moves.
+// second while an update downloads, so the progress bar moves. While the server reads the save (every SCAN_MS, while
+// the game runs and shortly after), it asks just after each read, so "last read" counts up from "just now".
 const POLL_MS = 5 * SECOND, POLL_HIDDEN_MS = MINUTE, POLL_UPDATE_MS = SECOND;
+const AFTER_READ_MS = 300; // the read itself takes up to about 0.1 s
 let pollTimer = null;
+function nextPollMs() {
+  if (state?.update?.state === 'downloading') return POLL_UPDATE_MS;
+  if (document.hidden) return POLL_HIDDEN_MS;
+  const wait = Date.parse(state?.lastScan || '') + SCAN_MS + AFTER_READ_MS - Date.now();
+  // when the reads stop (the game closed) or are late, the usual pace
+  return wait > 0 && wait <= SCAN_MS + AFTER_READ_MS ? wait : POLL_MS;
+}
 export function schedulePoll() {
   clearTimeout(pollTimer);
-  const ms = state?.update?.state === 'downloading' ? POLL_UPDATE_MS : document.hidden ? POLL_HIDDEN_MS : POLL_MS;
   pollTimer = setTimeout(async () => {
     await poll();
     schedulePoll();
-  }, ms);
+  }, nextPollMs());
 }
 
 // State that changes without a new revision (the server's liveState).

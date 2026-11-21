@@ -55,6 +55,7 @@ export function spanWords(ms) {
 export function ago(t) {
   if (!t) return 'never';
   const ms = Math.max(0, Date.now() - new Date(t));
+  if (ms < SECOND / 2) return 'just now';
   if (ms < MINUTE) return `${plural(Math.round(ms / SECOND), 'second')} ago`;
   if (ms < HOUR) return `${plural(Math.round(ms / MINUTE), 'minute')} ago`;
   if (ms < DAY) return `${plural(Math.round(ms / HOUR), 'hour')} ago`;

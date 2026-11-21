@@ -3,6 +3,11 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.9.6
+
+- "Last read" counts from "just now" to 5 seconds after each read of your save. Before, it could start at 4
+  seconds and reach 8, as the page asked for news at its own times.
+
 ## 0.9.5
 
 - A long account name no longer pushes the "Name this account" box out of the header.

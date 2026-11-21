@@ -14,4 +14,7 @@ export const MINUTE = 60 * SECOND;
 export const HOUR = 60 * MINUTE;
 export const DAY = 24 * HOUR;
 
+// How often the server reads the save while the game runs (server/main.mjs); the page asks right after each read.
+export const SCAN_MS = 5 * SECOND;
+
 export const MB = 1024 * 1024;

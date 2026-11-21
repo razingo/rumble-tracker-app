@@ -23,10 +23,9 @@ import { writeDailyBackup } from './backup.mjs';
 import { readAutostart, setAutostart, refreshAutostart, autostartCommand } from './autostart.mjs';
 import { createHttpServer } from './http/server.mjs';
 import { createWindowWatch } from './window.mjs';
-import { DEFAULT_PORT, SECOND, HOUR, DAY } from '../web/scripts/lib/constants.js';
+import { DEFAULT_PORT, SECOND, HOUR, DAY, SCAN_MS } from '../web/scripts/lib/constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SCAN_MS = 5 * SECOND; // while the game runs
 const SCANS_AFTER_EXIT = 6; // the game may still write its save while closing
 const NOTIFY_MS = 30 * SECOND;
 const PACK_CHECK_MS = 6 * HOUR;
