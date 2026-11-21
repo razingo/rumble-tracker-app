@@ -33,12 +33,12 @@ Firefox only, the tracker opens as a normal browser tab.
 
 ### The tray icon
 
-The first time you close the window, the tracker asks whether to keep running in the tray or quit, and remembers
-your answer (you can change it in **⚙ Settings**). In the tray it runs as an icon in the taskbar's notification area
-(click **^** if it's hidden), so notifications still arrive. Click the icon to bring the window back, or right-click it
-for *Open data folder* and *Quit the tracker*. **⏻ Quit** at the top of the page stops it too, and starting the exe
-again while it runs just shows the window. To start it whenever you sign in to Windows, tick *Start with Windows* in
-**⚙ Settings**.
+The first time you close the window, the tracker asks whether to keep running in the tray or quit, and remembers your
+answer (you can change it in **⚙ Settings**). In the tray it runs as an icon in the taskbar's notification area (click
+**^** if it's hidden), so notifications still arrive. Click the icon to bring the window back, or right-click it for
+*Open data folder* and *Quit the tracker*. **⏻ Quit** at the top of the page stops it too, and starting the exe again
+while it runs just shows the window (with a normal browser tab instead, it opens the page again). To start it whenever
+you sign in to Windows, tick *Start with Windows* in **⚙ Settings**.
 
 ### "Windows protected your PC"
 
