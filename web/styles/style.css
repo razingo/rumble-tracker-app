@@ -117,7 +117,9 @@ button { cursor: pointer; }
 }
 .account { display: flex; gap: 8px; align-items: center; }
 .account label { color: var(--muted); }
-#accountLabel { width: 150px; flex: 0 1 150px; min-width: 80px; }
+/* A long account name shrinks the select once the name box has given way (flex-shrink 1000) to its minimum */
+#account { flex: 0 1 auto; min-width: 120px; }
+#accountLabel { width: 150px; flex: 0 1000 150px; min-width: 80px; }
 .status { margin-left: auto; color: var(--muted); font-size: 13px; }
 .status.error { color: var(--warn); }
 .status.error .dot { background: var(--warn); }

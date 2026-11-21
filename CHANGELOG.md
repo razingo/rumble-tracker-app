@@ -3,6 +3,10 @@
 What changed in each release of Rumble Collection Tracker. The release workflow copies a version's section into its
 GitHub release notes.
 
+## 0.9.5
+
+- A long account name no longer pushes the "Name this account" box out of the header.
+
 ## 0.9.4
 
 - The status at the top says "last read" both while the game runs and after it closes (it said "last scan" while
